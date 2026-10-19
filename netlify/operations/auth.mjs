@@ -1,11 +1,15 @@
-// Clerk is the sole authentication authority. No cookie or client role is trusted here.
-export class AuthError extends Error {
-  constructor(code, message, status = 401) { super(message); this.name = 'AuthError'; Object.assign(this, {code, status}); }
-}
+// Provider selection is server controlled. Legacy Clerk remains for migration tests only.
+import {AuthError,roles} from './permissions.mjs';
+export {AuthError,requireAdmin,requireStaff} from './permissions.mjs';
 const deny = () => { throw new AuthError('sign_in_required', 'Please sign in again to continue.'); };
 const unavailable = () => { throw new AuthError('auth_unavailable', 'Account access is temporarily unavailable.', 503); };
 
 export async function authenticate(request, {env = process.env, client} = {}) {
+  if(env.AUTH_PROVIDER==='workos'||(!env.AUTH_PROVIDER&&!env.CLERK_SECRET_KEY)){
+    const {authenticateWorkos}=await import('./workos-auth.mjs');
+    return authenticateWorkos(request,{env,client});
+  }
+  if(env.AUTH_PROVIDER&&env.AUTH_PROVIDER!=='clerk')unavailable();
   let origin;
   try {
     const configured = new URL(env.SITE_ORIGIN);
@@ -44,6 +48,7 @@ export async function authenticate(request, {env = process.env, client} = {}) {
     const mfa = user.twoFactorEnabled === true && Number.isFinite(secondFactorAge) && secondFactorAge >= 0 && secondFactorAge <= 10;
     return Object.freeze({userId: user.id, sessionId: session.id, email: primary.emailAddress.trim().toLowerCase(),
       displayName: [user.firstName, user.lastName].filter(value => typeof value === 'string').join(' ').slice(0, 160),
+      role: roles.includes(user.privateMetadata?.role)?user.privateMetadata.role:'customer',
       admin: user.privateMetadata?.role === 'admin', mfa, mfaEnrolled:user.twoFactorEnabled===true});
   } catch (error) {
     if (error instanceof AuthError) throw error;
@@ -51,10 +56,4 @@ export async function authenticate(request, {env = process.env, client} = {}) {
     if (error?.status === 404 || error?.status === 401 || error?.status === 403) deny();
     unavailable();
   }
-}
-
-export function requireAdmin(principal) {
-  if (!principal?.admin) throw new AuthError('admin_required', 'Administrator access is required.', 403);
-  if (!principal.mfa) {const error=new AuthError('mfa_required', 'Enroll MFA in your secure profile and verify a second factor within the last 10 minutes to continue.', 403);error.reverify=principal.mfaEnrolled===true;throw error;}
-  return principal;
 }

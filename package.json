@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:commerce": "vite --mode commerce --host 127.0.0.1",
     "prebuild": "node scripts/netlify-build-guard.mjs",
-    "build": "vite build && node scripts/prepare-security-headers.mjs && node scripts/prepare-sites-build.mjs",
+    "build": "vite build && node scripts/protect-source-maps.mjs && node scripts/prepare-security-headers.mjs && node scripts/prepare-sites-build.mjs",
     "preview": "vite preview",
     "test:sites": "node --test tests/sites-worker.test.mjs",
     "test:commerce": "node --test tests/commerce.test.mjs tests/storefront.test.mjs",
@@ -18,9 +18,14 @@
     "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate-commerce.mjs",
     "catalog:sync": "node --env-file-if-exists=.env.local scripts/sync-stripe-test-catalog.mjs",
     "check:launch": "node scripts/check-launch.mjs",
+    "check:predeploy": "node scripts/check-launch.mjs --phase=predeploy",
     "orders:recover": "node --env-file-if-exists=.env.local scripts/recover-commerce.mjs",
     "dev:simulation": "node scripts/dev-simulation.mjs",
-    "test:postgres": "node --env-file-if-exists=.env.local --test tests/postgres-real.integration.mjs tests/operations-postgres.integration.mjs"
+    "test:postgres": "node --env-file-if-exists=.env.local --test tests/postgres-real.integration.mjs tests/operations-postgres.integration.mjs",
+    "test:coverage": "node scripts/run-coverage.mjs",
+    "test:inventory": "node scripts/test-inventory.mjs",
+    "test:e2e": "node scripts/run-browser-qa.mjs",
+    "test:mutations": "node scripts/run-mutation-checks.mjs"
   },
   "dependencies": {
     "@clerk/backend": "3.23.2",
@@ -29,7 +34,11 @@
     "@fontsource/anton": "^5.3.0",
     "@fontsource/barlow": "^5.3.0",
     "@fontsource/barlow-condensed": "^5.3.0",
+    "@sentry/node": "11.8.0",
+    "@sentry/react": "11.8.0",
     "@vitejs/plugin-react": "5.0.4",
+    "@workos-inc/node": "11.0.0",
+    "jose": "6.2.12",
     "pg": "^8.23.1",
     "react": "19.2.6",
     "react-dom": "19.2.6",
@@ -38,6 +47,15 @@
     "vite": "6.4.4"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.9"
+    "@electric-sql/pglite": "^0.5.9",
+    "@playwright/test": "1.64.1",
+    "@sentry/vite-plugin": "11.8.0",
+    "@vitest/browser-playwright": "4.1.12",
+    "@vitest/coverage-v8": "4.1.12",
+    "c8": "12.0.0",
+    "istanbul-lib-coverage": "3.2.2",
+    "istanbul-lib-report": "3.0.1",
+    "istanbul-reports": "3.2.0",
+    "vitest": "4.1.12"
   }
 }

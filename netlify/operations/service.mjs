@@ -1,6 +1,7 @@
+import {inventoryPolicy,madeToOrder,publicAvailableQuantity} from '../commerce/inventory.mjs';
 import {randomUUID,createHash} from 'node:crypto';
 import {CommerceError,createCommerceService} from '../commerce/service.mjs';
-import {requireAdmin} from './auth.mjs';
+import {requirePermission,roleOf,permissionsFor,staffActions,employeeTransitions} from './permissions.mjs';
 import {enqueueLifecycle} from './lifecycle.mjs';
 import {deliverLifecycleEmails,retryRecordedEmail} from '../commerce/order-email.mjs';
 import {recordMarketingConsent,getMarketingPreference} from './marketing.mjs';
@@ -21,8 +22,17 @@ function initialFulfillment(order){return order.fulfillmentStatus&&Object.hasOwn
 function audit(state,principal,action,target,metadata,now){const id=randomUUID();state.audit[id]={id,actor:principal.userId,action,target,createdAt:now,metadata};return id;}
 function orderByNumber(state,number){if(!text(number,60))fail('not_found','Order not found.',404);const order=Object.values(state.orders).find(o=>o.orderNumber===number);if(!order)fail('not_found','Order not found.',404);return order;}
 const cleanItems=items=>items.map(({variantId,name,size,quantity,unitPriceCents,lineTotalCents})=>({variantId,name,size,quantity,unitPriceCents,lineTotalCents}));
+const shippingAddress=address=>Object.fromEntries(['line1','line2','city','state','postal_code','country'].filter(k=>typeof address?.[k]==='string').map(k=>[k,address[k].slice(0,200)]));
+function employeeProjection(state,order){
+ const base=projection(state,order,false);
+ return {orderNumber:order.orderNumber,status:order.status,fulfillmentStatus:base.fulfillmentStatus,version:version(order),createdAt:order.createdAt,
+  shippingName:order.shippingName,shippingAddress:shippingAddress(order.shippingAddress),
+  items:order.items.map(({variantId,name,size,quantity})=>({variantId,name,size,quantity})),timeline:base.timeline,
+  allowedTransitions:(fulfillmentTransitions[base.fulfillmentStatus]||[]).filter(s=>employeeTransitions.includes(s)),
+  shipments:base.shipments.map(p=>({...p,items:(p.items||[]).map(({variantId,quantity})=>({variantId,quantity})),shipmentId:Object.values(state.shipments).find(s=>s.orderId===order.id&&s.packageNumber===p.packageNumber)?.id}))};
+}
 function projection(state,order,admin){
- const shipments=Object.values(state.shipments).filter(s=>s.orderId===order.id).map(s=>({...admin?{shipmentId:s.id}:{},packageNumber:s.packageNumber,carrier:s.carrier,service:s.service,status:s.status,trackingNumber:s.trackingNumber,trackingUrl:s.trackingUrl,version:version(s),items:s.items,weightOz:s.weightOz,dimensions:s.dimensions,createdAt:s.createdAt,shippedAt:s.shippedAt,deliveredAt:s.deliveredAt}));
+ const shipments=Object.values(state.shipments).filter(s=>s.orderId===order.id).map(s=>({...admin?{shipmentId:s.id,packedByUserId:s.packedByUserId,packedAt:s.packedAt,createdByUserId:s.createdByUserId,trackingEnteredByUserId:s.trackingEnteredByUserId}:{},packageNumber:s.packageNumber,carrier:s.carrier,service:s.service,status:s.status,trackingNumber:s.trackingNumber,trackingUrl:s.trackingUrl,version:version(s),items:s.items,weightOz:s.weightOz,dimensions:s.dimensions,createdAt:s.createdAt,shippedAt:s.shippedAt,deliveredAt:s.deliveredAt}));
  const history=Object.values(state.audit).filter(a=>a.target===order.orderNumber);
  const timeline=history.filter(a=>['fulfillment','shipment-status','payment'].includes(a.action)).map(a=>({status:a.metadata.next,previousStatus:a.metadata.previous,createdAt:a.createdAt,source:a.metadata.source||'garage'}));
  if(order.paidAt&&!timeline.some(e=>e.status==='paid'))timeline.unshift({status:'paid',createdAt:order.paidAt,source:'verified-payment'});
@@ -33,10 +43,30 @@ function projection(state,order,admin){
 }
 export function createOperationsService({repository,stripe,env={},now=()=>new Date(),send=deliverLifecycleEmails,retryEmail=retryRecordedEmail}){
  const timestamp=()=>now().toISOString();
- async function read(principal,{admin=false,orderNumber,search='',page=1,status='',fulfillmentStatus='',customer='',dateFrom='',dateTo='',sort='newest',shipmentStatus=''}={}){
-  if(admin)requireAdmin(principal);
+ async function authorize(principal,permission){
+  try{return requirePermission(principal,permission);}catch(error){
+   if(principal?.userId)await repository.transaction(s=>audit(s,principal,'authorization-denied','staff',{permission,code:error.code,sessionHash:createHash('sha256').update(String(principal.sessionId||'')).digest('hex')},timestamp()));
+   throw error;
+  }
+ }
+ async function read(principal,{admin=false,staff=false,orderNumber,search='',page=1,status='',fulfillmentStatus='',customer='',dateFrom='',dateTo='',sort='newest',shipmentStatus=''}={}){
+  if(admin)await authorize(principal,'administration');
+  else if(staff)await authorize(principal,'staff-read');
   if(!principal?.userId||!principal.email)fail('unauthorized','Sign in with a verified email.',401);
   return repository.transaction(s=>{
+   const sessionHash=principal.sessionId?createHash('sha256').update(String(principal.sessionId)).digest('hex'):null;
+   if(admin||staff){
+    if(sessionHash&&!Object.values(s.audit).some(a=>a.action==='staff-session'&&a.actor===principal.userId&&a.metadata.sessionHash===sessionHash))audit(s,principal,'staff-session','staff',{sessionHash,role:roleOf(principal)},timestamp());
+    audit(s,principal,orderNumber?'staff-order-opened':'staff-queue-viewed',orderNumber||'fulfillment-queue',{sessionHash,role:roleOf(principal)},timestamp());
+   }
+   if(staff&&!admin){
+    let orders=Object.values(s.orders).filter(paid);const term=String(search).toLowerCase().slice(0,100);
+    orders=orders.filter(o=>(!orderNumber||o.orderNumber===orderNumber)&&(!term||`${o.orderNumber} ${o.shippingName||''}`.toLowerCase().includes(term))&&(!status||o.status===status)&&(!fulfillmentStatus||initialFulfillment(o)===fulfillmentStatus)&&(!dateFrom||o.createdAt.slice(0,10)>=dateFrom)&&(!dateTo||o.createdAt.slice(0,10)<=dateTo)&&(!shipmentStatus||Object.values(s.shipments).some(p=>p.orderId===o.id&&p.status===shipmentStatus)));
+    if(orderNumber&&!orders.length)fail('not_found','Order not found.',404);
+    orders.sort((a,b)=>sort==='oldest'?a.createdAt.localeCompare(b.createdAt):b.createdAt.localeCompare(a.createdAt));const total=orders.length,pageNumber=Math.max(1,Math.min(100000,Number.isSafeInteger(Number(page))?Number(page):1));
+    const overview=Object.fromEntries(['received','making','packing','ready_to_ship','shipped','delivered','on_hold'].map(k=>[k,Object.values(s.orders).filter(o=>paid(o)&&initialFulfillment(o)===k).length]));
+    return {role:roleOf(principal),permissions:permissionsFor(principal),overview,orders:orders.slice((pageNumber-1)*25,pageNumber*25).map(o=>employeeProjection(s,o)),pagination:{page:pageNumber,total,pageSize:25}};
+   }
    let profile=s.profiles[principal.userId];
    if(!profile)profile=s.profiles[principal.userId]={id:principal.userId,marketingConsent:false,createdAt:timestamp()};
    if(profile.deletionRequestedAt&&!admin)fail('deletion_pending','Account deletion review is in progress. Contact support for help.',403);
@@ -44,8 +74,8 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
    for(const o of Object.values(s.orders))if(!o.customerUserId&&o.customerEmail?.toLowerCase()===principal.email.toLowerCase()&&paid(o)){
     o.customerUserId=principal.userId;audit(s,principal,'order-claimed',o.orderNumber,{method:'verified-primary-email'},timestamp());
    }
-   if(admin&&!Object.values(s.audit).some(a=>a.action==='admin-session'&&a.metadata.sessionHash===createHash('sha256').update(principal.sessionId).digest('hex')))
-    audit(s,principal,'admin-session','operations',{sessionHash:createHash('sha256').update(principal.sessionId).digest('hex')},timestamp());
+   if(admin&&sessionHash&&!Object.values(s.audit).some(a=>a.action==='admin-session'&&a.actor===principal.userId&&a.metadata.sessionHash===sessionHash))
+    audit(s,principal,'admin-session','operations',{sessionHash},timestamp());
    let orders=Object.values(s.orders).filter(o=>admin||o.customerUserId===principal.userId);
    if(orderNumber){orders=orders.filter(o=>o.orderNumber===orderNumber);if(!orders.length)fail('not_found','Order not found.',404);}
    if(admin){const term=String(search).toLowerCase().slice(0,100);orders=orders.filter(o=>(!term||`${o.orderNumber} ${o.customerEmail||''} ${o.shippingName||''}`.toLowerCase().includes(term))&&(!status||o.status===status)&&(!fulfillmentStatus||initialFulfillment(o)===fulfillmentStatus)&&(!customer||(o.customerEmail||'').toLowerCase().includes(customer.toLowerCase()))&&(!dateFrom||o.createdAt.slice(0,10)>=dateFrom)&&(!dateTo||o.createdAt.slice(0,10)<=dateTo)&&(!shipmentStatus||Object.values(s.shipments).some(p=>p.orderId===o.id&&p.status===shipmentStatus)));}
@@ -63,7 +93,7 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
    const supportTickets=Object.values(s.supportTickets).filter(t=>admin||t.userId===principal.userId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,100).map(({id,userId,customerEmail,note,...ticket})=>({...ticket,...admin?{customerEmail,note}:{}}));
    profile.marketingConsent=getMarketingPreference(s,principal.email).subscribed;
    for(const failure of failures)failure.safeMessage??=failure.type==='email'?'A recorded email needs safe retry or delivery review.':failure.type==='inventory'?failure.reason:'A verified webhook needs Stripe reconciliation.';
-   return {supportTickets,profile:{displayName:principal.displayName,email:principal.email,verified:true,marketingConsent:profile.marketingConsent,marketingSuppressed:getMarketingPreference(s,principal.email).suppressed,deletionRequestedAt:profile.deletionRequestedAt},orders:orders.map(o=>projection(s,o,admin)),pagination:{page:pageNumber,total,pageSize:25},...(admin?{overview:{paid:all.filter(o=>['paid','fulfilled'].includes(o.status)).length,received:all.filter(o=>paid(o)&&initialFulfillment(o)==='received').length,...Object.fromEntries(['making','packing','ready_to_ship','shipped','delivered','on_hold'].map(k=>[k,all.filter(o=>paid(o)&&initialFulfillment(o)===k).length])),lowInventory:variants.filter(v=>v.availableQuantity<=lowThreshold).length,soldOut:variants.filter(v=>v.active&&v.availableQuantity===0).length,needsAttention:failures.length,failedEmails:failures.filter(e=>e.type==='email').length,webhookFailures:failures.filter(e=>e.type==='webhook').length},variants:variants.map(({id,productId,sku,name,size,availableQuantity,reservedQuantity,soldQuantity,active,version=0})=>({id,variantId:id,productId,sku,name,size,availableQuantity,reservedQuantity,soldQuantity,active,version,lowStock:active&&availableQuantity>0&&availableQuantity<=lowThreshold})),audit:Object.values(s.audit).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,250),failures}:{} )};
+   return {role:roleOf(principal),permissions:permissionsFor(principal),supportTickets,profile:{displayName:principal.displayName,email:principal.email,verified:true,marketingConsent:profile.marketingConsent,marketingSuppressed:getMarketingPreference(s,principal.email).suppressed,deletionRequestedAt:profile.deletionRequestedAt},orders:orders.map(o=>projection(s,o,admin)),pagination:{page:pageNumber,total,pageSize:25},...(admin?{overview:{paid:all.filter(o=>['paid','fulfilled'].includes(o.status)).length,received:all.filter(o=>paid(o)&&initialFulfillment(o)==='received').length,...Object.fromEntries(['making','packing','ready_to_ship','shipped','delivered','on_hold'].map(k=>[k,all.filter(o=>paid(o)&&initialFulfillment(o)===k).length])),lowInventory:variants.filter(v=>!madeToOrder(v)&&v.availableQuantity<=lowThreshold).length,soldOut:variants.filter(v=>!madeToOrder(v)&&v.active&&v.availableQuantity===0).length,needsAttention:failures.length,failedEmails:failures.filter(e=>e.type==='email').length,webhookFailures:failures.filter(e=>e.type==='webhook').length},variants:variants.map(v=>({id:v.id,variantId:v.id,productId:v.productId,sku:v.sku,name:v.name,size:v.size,inventoryPolicy:inventoryPolicy(v),availableQuantity:publicAvailableQuantity(v),reservedQuantity:v.reservedQuantity,soldQuantity:v.soldQuantity,active:v.active,version:version(v),lowStock:!madeToOrder(v)&&v.active&&v.availableQuantity>0&&v.availableQuantity<=lowThreshold})),audit:Object.values(s.audit).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,250),failures}:{} )};
   });
  }
  async function mutate(principal,input){
@@ -81,7 +111,10 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
    else {p.deletionRequestedAt??=timestamp();p.marketingConsent=false;recordMarketingConsent(s,{email:principal.email,consent:false,source:'account-preferences',policyVersion:'prelaunch-v1',actorUserId:principal.userId,now:now()});}
    audit(s,principal,input.action,'account',{marketingConsent:p.marketingConsent},timestamp());return {saved:true};
   });
-  requireAdmin(principal);
+  await authorize(principal,staffActions.includes(input.action)?input.action==='packing-slip'?'packing-slip':'fulfillment':'administration');
+  if(roleOf(principal)==='employee'&&((input.action==='transition'&&(!employeeTransitions.includes(input.status)||input.note!==undefined))||(input.action==='shipment-status'&&!['packed','shipped','delivered'].includes(input.status))||(['shipment','shipment-update'].includes(input.action)&&input.note!==undefined))){
+   await repository.transaction(s=>audit(s,principal,'authorization-denied','staff',{permission:'fulfillment-exception',code:'admin_required'},timestamp()));fail('admin_required','Administrator access is required for this exception.',403);
+  }
   if(input.action==='reconcile'){
    schema(input,['orderNumber']);const order=await repository.transaction(s=>orderByNumber(s,input.orderNumber));if(!order.sessionId||!stripe)fail('reconciliation_required','An operator must locate the original checkout in Stripe. No stock was released.',409);
    let session;try{session=await stripe.checkout.sessions.retrieve(order.sessionId);}catch{fail('provider_unavailable','Stripe is unavailable. No order or stock change was confirmed.',503);}
@@ -98,12 +131,24 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
   }
   const result=await repository.transaction(s=>{
    const time=timestamp();
+   if(input.action==='packing-slip'){
+    schema(input,['orderNumber'],['shipmentId']);const o=orderByNumber(s,input.orderNumber);if(!fulfillable(o)||['cancelled','on_hold'].includes(initialFulfillment(o)))fail('not_ready','A paid order that is not refunded, cancelled or on hold is required for a packing slip.',409);
+    let items=o.items,packageNumber;
+    if(input.shipmentId!==undefined){const p=record(s.shipments,input.shipmentId);if(!p||p.orderId!==o.id)fail('not_found','Package not found.',404);packageNumber=p.packageNumber;
+     const allocated=Object.values(s.shipmentItems).filter(i=>i.shipmentId===p.id);if(!allocated.length)fail('invalid_package','Package allocations need review.',409);
+     const quantities=new Map();for(const item of allocated){if(!Number.isSafeInteger(item.quantity)||item.quantity<1)fail('invalid_package','Package allocations need review.',409);quantities.set(item.variantId,(quantities.get(item.variantId)||0)+item.quantity);}
+     items=[...quantities].map(([variantId,quantity])=>{const line=o.items.find(i=>i.variantId===variantId);const total=Object.values(s.shipmentItems).filter(i=>s.shipments[i.shipmentId]?.orderId===o.id&&i.variantId===variantId).reduce((n,i)=>n+i.quantity,0);if(!line||!Number.isSafeInteger(total)||total>line.quantity)fail('invalid_package','Package allocations need review.',409);return {...line,quantity};});
+    }
+    audit(s,principal,'packing-slip-generated',o.orderNumber,{packageNumber:packageNumber||null},time);
+    return {packingSlip:{brand:'DualBoreMedia',website:'dualboremedia.com',orderNumber:o.orderNumber,orderDate:o.createdAt,shipTo:{name:o.shippingName,address:shippingAddress(o.shippingAddress)},...(packageNumber?{packageNumber}:{}),items:items.map(({name,size,quantity})=>({name,size,quantity}))}};
+   }
    if(input.action==='support-status'){
     schema(input,['ticketNumber','status','note','expectedVersion']);const t=Object.values(s.supportTickets).find(t=>t.ticketNumber===input.ticketNumber);if(!t)fail('not_found','Request not found.',404);checkVersion(t,input.expectedVersion);if(!['open','resolved'].includes(input.status)||!text(input.note))fail('invalid_support','Choose a status and include an internal note.');audit(s,principal,'support-status',t.ticketNumber,{previous:t.status,next:input.status,note:input.note},time);t.status=input.status;t.note=input.note;t.version++;t.updatedAt=time;return {saved:true};
    }
    if(input.action==='inventory'){
     schema(input,['variantId','availableQuantity','active','reason','expectedVersion']);const v=record(s.variants,input.variantId);if(!v)fail('not_found','Variant not found.',404);checkVersion(v,input.expectedVersion);
     if(!Number.isSafeInteger(input.availableQuantity)||input.availableQuantity<0||input.availableQuantity>100000||typeof input.active!=='boolean'||!text(input.reason,300))fail('invalid_stock','Enter valid stock and a reason.');
+    if(madeToOrder(v)&&input.availableQuantity!==0)fail('invalid_stock','Made-to-order products do not have finished stock counts. Use zero and control availability with the active switch.');
     audit(s,principal,'inventory',v.sku,{previous:{availableQuantity:v.availableQuantity,active:v.active},next:{availableQuantity:input.availableQuantity,active:input.active},reason:input.reason},time);v.availableQuantity=input.availableQuantity;v.active=input.active;v.version=version(v)+1;return {saved:true};
    }
    if(input.action==='note'){
@@ -129,18 +174,31 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
     if(input.weightOz!==undefined&&(!Number.isFinite(input.weightOz)||input.weightOz<=0||input.weightOz>10000))fail('invalid_weight','Use a positive package weight.');
     if(input.dimensions!==undefined&&(!input.dimensions||Object.keys(input.dimensions).sort().join()!=='height,length,width'||!Object.values(input.dimensions).every(n=>Number.isFinite(n)&&n>0&&n<=200)))fail('invalid_dimensions','Use positive length, width and height in inches.');
     if(input.note!==undefined&&!text(input.note))fail('invalid_note','Enter a valid note.');
-    const id=randomUUID(),shipment={id,packageNumber:'PKG-'+randomUUID().slice(0,8).toUpperCase(),orderId:o.id,status:'draft',version:0,carrier:input.carrier,service:input.service,trackingNumber:input.trackingNumber,trackingUrl:url,items:input.items,createdAt:time,...(input.weightOz?{weightOz:input.weightOz}:{}),...(input.dimensions?{dimensions:input.dimensions}:{})};s.shipments[id]=shipment;
+    const id=randomUUID(),shipment={id,packageNumber:'PKG-'+randomUUID().slice(0,8).toUpperCase(),orderId:o.id,status:'draft',version:0,carrier:input.carrier,service:input.service,trackingNumber:input.trackingNumber,trackingUrl:url,items:input.items,createdAt:time,createdByUserId:principal.userId,trackingEnteredByUserId:principal.userId,...(input.weightOz?{weightOz:input.weightOz}:{}),...(input.dimensions?{dimensions:input.dimensions}:{})};s.shipments[id]=shipment;
     for(const item of input.items){const iid=randomUUID();s.shipmentItems[iid]={id:iid,shipmentId:id,...item};}
     audit(s,principal,'shipment-created',o.orderNumber,{packageNumber:shipment.packageNumber,note:input.note||''},time);return {saved:true,shipmentId:id};
+   }
+   if(input.action==='shipment-update'){
+    schema(input,['shipmentId','carrier','service','trackingNumber','trackingUrl','expectedVersion'],['items']);const p=record(s.shipments,input.shipmentId);if(!p)fail('not_found','Package not found.',404);checkVersion(p,input.expectedVersion);const o=s.orders[p.orderId];
+    if(!fulfillable(o)||!['draft','packed'].includes(p.status)||['cancelled','on_hold'].includes(initialFulfillment(o)))fail('not_ready','Only unshipped packages on active paid orders can be edited.',409);
+    if(!text(input.carrier,80)||!text(input.service,80)||!text(input.trackingNumber,120))fail('invalid_shipment','Enter the carrier, service and tracking number.');const url=safeTrackingUrl(input.trackingUrl);
+    if(input.items!==undefined){
+     if(p.status!=='draft'||!Array.isArray(input.items)||!input.items.length||input.items.length>15)fail('invalid_shipment','Edit item allocations only while the package is a draft.');const seen=new Set();
+     for(const item of input.items){if(!item||Object.keys(item).sort().join()!=='quantity,variantId'||seen.has(item.variantId)||!Number.isSafeInteger(item.quantity)||item.quantity<1)fail('invalid_shipment','Choose valid package quantities.');seen.add(item.variantId);const line=o.items.find(l=>l.variantId===item.variantId),allocated=Object.values(s.shipmentItems).filter(i=>i.shipmentId!==p.id&&s.shipments[i.shipmentId]?.orderId===o.id&&i.variantId===item.variantId).reduce((n,i)=>n+i.quantity,0);if(!line||allocated+item.quantity>line.quantity)fail('over_allocated','Package quantities exceed this order.',409);}
+     for(const [id,item] of Object.entries(s.shipmentItems))if(item.shipmentId===p.id)delete s.shipmentItems[id];
+     for(const item of input.items){const id=randomUUID();s.shipmentItems[id]={id,shipmentId:p.id,...item};}p.items=input.items;
+    }
+    Object.assign(p,{carrier:input.carrier,service:input.service,trackingNumber:input.trackingNumber,trackingUrl:url,version:version(p)+1,updatedAt:time,trackingEnteredByUserId:principal.userId});
+    audit(s,principal,'shipment-updated',o.orderNumber,{packageNumber:p.packageNumber,version:p.version,itemsChanged:input.items!==undefined},time);return {saved:true};
    }
    if(input.action==='shipment-status'){
     schema(input,['shipmentId','status','expectedVersion'],['confirmed']);const p=record(s.shipments,input.shipmentId);if(!p)fail('not_found','Package not found.',404);checkVersion(p,input.expectedVersion);const o=s.orders[p.orderId];if(!fulfillable(o)||['cancelled','on_hold'].includes(initialFulfillment(o)))fail('not_ready','This order cannot be shipped.',409);
     if(!({draft:['packed'],packed:['shipped'],shipped:['delivered'],delivered:[]})[p.status]?.includes(input.status))fail('invalid_transition','That package transition is not allowed.',409);
     if(input.status==='shipped'&&initialFulfillment(o)!=='ready_to_ship'&&initialFulfillment(o)!=='shipped')fail('not_ready','Mark the order ready to ship first.',409);
     if(input.status==='delivered'&&input.confirmed!==true)fail('confirmation_required','Confirm that delivery was actually recorded.');
-    const previous=p.status;p.status=input.status;p.version=version(p)+1;p[`${input.status}At`]=time;
-    const tid=randomUUID();s.trackingEvents[tid]={id:tid,shipmentId:p.id,status:p.status,source:'manual-admin',createdAt:time};
-    audit(s,principal,'shipment-status',o.orderNumber,{previous,next:p.status,packageNumber:p.packageNumber,source:'manual-admin'},time);
+    const previous=p.status;p.status=input.status;p.version=version(p)+1;p[`${input.status}At`]=time;if(input.status==='packed')p.packedByUserId=principal.userId;
+    const source=roleOf(principal)==='admin'?'manual-admin':'manual-employee';const tid=randomUUID();s.trackingEvents[tid]={id:tid,shipmentId:p.id,status:p.status,source,actorUserId:principal.userId,createdAt:time};
+    audit(s,principal,'shipment-status',o.orderNumber,{previous,next:p.status,packageNumber:p.packageNumber,source},time);
     const packages=Object.values(s.shipments).filter(x=>x.orderId===o.id);
     const fullyAllocated=o.items.every(line=>Object.values(s.shipmentItems).filter(i=>s.shipments[i.shipmentId]?.orderId===o.id&&i.variantId===line.variantId).reduce((n,i)=>n+i.quantity,0)===line.quantity);
     if(fullyAllocated&&packages.every(x=>x.status==='delivered'))o.fulfillmentStatus='delivered';

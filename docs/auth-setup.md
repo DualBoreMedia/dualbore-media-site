@@ -1,5 +1,13 @@
 # Managed accounts and administrator verification
 
+## Current target: WorkOS AuthKit
+
+The October 15 owner correction selects WorkOS AuthKit evaluation/migration instead of a paid Clerk upgrade. Read [the provider decision](auth-provider-decision.md) for the $0 use case, hosted domain, cookie/PKCE integration, staff organization MFA policy and remaining real-provider checks. No deployment is authorized and payments remain false. Configure AUTH_PROVIDER=workos and VITE_AUTH_PROVIDER=workos consistently. Staff/admin memberships must be explicitly granted in the private staff organization; customer signup never grants either role. Actual hosted verification, recovery, revocation and MFA are not yet demonstrated.
+
+## Historical Clerk compatibility path
+
+The following describes retained legacy code and tests only. Do not upgrade Clerk, configure new Clerk production access or treat this legacy guide as the selected production setup.
+
 Clerk supplies authentication, verified email, passwordless sign-in, recovery, session expiration and MFA. The React SDK supplies its managed account controls; the backend SDK verifies signed session tokens. No application password storage, password hashing, custom JWT implementation or browser-provided role is used.
 
 ## Required owner configuration

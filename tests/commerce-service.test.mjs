@@ -257,3 +257,16 @@ test('local simulated paid orders never send real email even when provider confi
  await deliverOrderEmails({repository:f.repository,orderId:id,env:{RESEND_API_KEY:'synthetic',RESEND_FROM:'test@example.invalid'},fetchImpl:async()=>{calls++;throw new Error('No external call allowed');}});
  assert.equal(calls,0);
 });
+
+test('verified charge reference is persisted idempotently without altering payment or exposing provider IDs',async()=>{
+ const f=await fixture(),session=await f.start();
+ const charge={id:'evt_ChargeReference',type:'charge.succeeded',livemode:false,data:{object:{id:'ch_Reference',payment_intent:'pi_test',livemode:false,paid:true,currency:'usd',amount:3940}}};
+ await assert.rejects(f.service.webhook(charge),{code:'unknown_order'});
+ await f.service.webhook(await f.event(session));
+ await f.service.webhook(charge);await f.service.webhook(charge);
+ const state=await f.state(),order=Object.values(state.orders)[0];assert.equal(order.chargeId,'ch_Reference');assert.equal(order.paymentIntentId,'pi_test');assert.equal(order.status,'paid');
+ assert.equal(state.variants['e92-tee-m'].soldQuantity,1);
+ const publicOrder=await f.service.status(session.sessionId,session.orderAccessToken);assert.equal(publicOrder.chargeId,undefined);assert.equal(publicOrder.paymentIntentId,undefined);
+ await assert.rejects(f.service.webhook({...charge,id:'evt_Mismatch',data:{object:{...charge.data.object,id:'ch_Other'}}}),{code:'payment_reference_mismatch'});
+ await assert.rejects(f.service.webhook({...charge,id:'evt_Live',livemode:true}),{code:'invalid_event'});
+});

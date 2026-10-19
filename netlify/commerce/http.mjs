@@ -1,10 +1,18 @@
+import {inventoryPolicy,madeToOrder,publicAvailableQuantity} from './inventory.mjs';
 import {commerceRuntime,loopback} from './runtime.mjs';
 import {CommerceError} from './service.mjs';
 import {operationLog} from '../operations/log.mjs';
+import {observeHttp,reportUnexpected,requestContext} from '../observability/index.mjs';
+import {serverErrorReporter} from '../observability/server.mjs';
+import {workosCookie,readCookie} from '../operations/workos-auth.mjs';
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"};
 const json=(body,status=200)=>Response.json(body,{status,headers});
 export async function readBounded(request,max=8192){let length=0;const chunks=[];const reader=request.body?.getReader();if(!reader)return Buffer.alloc(0);while(true){const {done,value}=await reader.read();if(done)break;length+=value.length;if(length>max){await reader.cancel();throw new CommerceError('too_large','Request too large.',413);}chunks.push(value);}return Buffer.concat(chunks);}
 export async function commerceHttp(request,{env=process.env,runtime=commerceRuntime,clientIp='unavailable'}={}){
+ const reporter=await serverErrorReporter(env);
+ return observeHttp(r=>commerceHandler(r,{env,runtime,clientIp,reporter}),{scope:'commerce',env,reporter})(request);
+}
+async function commerceHandler(request,{env,runtime,clientIp,reporter}){
  const url=new URL(request.url),route=url.pathname.split('/').at(-1);
  const live=env.COMMERCE_ENVIRONMENT==='production';
  if(live&&(url.origin!==env.SITE_ORIGIN||url.protocol!=='https:'))return json({error:'Not available.'},404);
@@ -19,7 +27,7 @@ export async function commerceHttp(request,{env=process.env,runtime=commerceRunt
   if(route==='catalog'){
    if(request.method!=='GET')return json({error:'Use GET.'},405);
    if(!live||env.PAYMENTS_ENABLED!=='true'||env.LIVE_CATALOG_APPROVED!=='true')return json({enabled:false,variants:[]});
-   const variants=await r.repository.transaction(s=>Object.values(s.variants).filter(v=>v.active&&v.liveStripePriceId&&Number.isSafeInteger(v.productionPriceCents)&&v.productionPriceCents>0).map(v=>({id:v.id,productId:v.productId,name:v.name,size:v.size,sku:v.sku,unitAmount:v.productionPriceCents,available:v.availableQuantity>0})));
+   const variants=await r.repository.transaction(s=>Object.values(s.variants).filter(v=>v.active&&v.liveStripePriceId&&Number.isSafeInteger(v.productionPriceCents)&&v.productionPriceCents>0).map(v=>({id:v.id,productId:v.productId,name:v.name,size:v.size,sku:v.sku,unitAmount:v.productionPriceCents,inventoryPolicy:inventoryPolicy(v),availableQuantity:publicAvailableQuantity(v),available:madeToOrder(v)||v.availableQuantity>0})));
    return json({enabled:true,mode:'production',shippingCents:Number(env.SHIPPING_RATE_CENTS),variants});
   }
   if(route==='webhook'){
@@ -62,9 +70,9 @@ export async function commerceHttp(request,{env=process.env,runtime=commerceRunt
    const {consumeLimit}=await import('../operations/http.mjs');
    if(!await consumeLimit(r.repository,clientIp,'checkout-ip',{limit:30}))return json({error:'Too many checkout attempts. Wait a moment and try again.',code:'rate_limited'},429);
    if(!await consumeLimit(r.repository,request.headers.get('Idempotency-Key')||'missing-key','checkout-request',{limit:12}))return json({error:'Too many checkout attempts. Wait a moment and try again.',code:'rate_limited'},429);
-   let customer;if(request.headers.has('Authorization')){const {authenticate}=await import('../operations/auth.mjs');try{customer=await authenticate(request,{env});}catch{return json({error:'Sign in again with a verified email or use guest checkout.',code:'sign_in_required'},401);}}
+   let customer;if(request.headers.has('Authorization')||env.AUTH_PROVIDER==='workos'&&(readCookie(request,workosCookie)||readCookie(request,'dbm-local-session'))){const {authenticate}=await import('../operations/auth.mjs');try{customer=await authenticate(request,{env});}catch{return json({error:'Sign in again with a verified email or use guest checkout.',code:'sign_in_required'},401);}}
    return json({...await r.service.checkout(input,{requestKey:request.headers.get('Idempotency-Key'),quoteToken:request.headers.get('X-Cart-Quote'),customer}),mock:r.mock===true});
   }
   return json({error:'Not found.'},404);
- }catch(e){return json({error:e instanceof CommerceError?e.message:'Test commerce is unavailable. Your cart is saved.',code:e instanceof CommerceError?e.code:'unavailable',...(e instanceof CommerceError?e.details:{})},e instanceof CommerceError?e.status:503);}
+ }catch(e){await reportUnexpected(e,{scope:'commerce'},{env,reporter});return json({error:e instanceof CommerceError?e.message:'The garage store is temporarily unavailable. Your cart is saved.',code:e instanceof CommerceError?e.code:'unavailable',reference:requestContext().requestId,...(e instanceof CommerceError?e.details:{})},e instanceof CommerceError?e.status:503);}
 }

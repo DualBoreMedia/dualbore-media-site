@@ -36,7 +36,7 @@ test('Postgres migrations, normalized persistence, reload, uniqueness and rollba
   const pool = { connect: async () => client };
   try {
     await runMigrations(pool); await runMigrations(pool);
-    assert.equal((await database.query('SELECT count(*)::int AS n FROM commerce_migrations')).rows[0].n, 3);
+    assert.equal((await database.query('SELECT count(*)::int AS n FROM commerce_migrations')).rows[0].n, 4);
     const repository = createPostgresRepository(pool);
     await repository.transaction(state => {
       state.variants[variant.id] = structuredClone(variant);
@@ -44,7 +44,7 @@ test('Postgres migrations, normalized persistence, reload, uniqueness and rollba
       state.reservations.r1 = { id: 'r1', orderId: 'o1', sessionId: 'cs_test_1', variantId: variant.id, quantity: 1, status: 'reserved', expiresAt: now, createdAt: now, releasedAt: null, convertedAt: null };
       state.events.e1 = { id: 'e1', type: 'checkout.session.completed', createdAt: now, processedAt: null, status: 'processing' };
       state.emails.mail1 = { id: 'mail1', orderId: 'o1', emailType: 'confirmation', provider: 'resend', providerMessageId: null, status: 'pending', attemptCount: 0, lastError: null, createdAt: now, sentAt: null };
-      state.orders.o1.accessTokenHash = 'opaque-hash';
+      state.orders.o1.accessTokenHash = 'opaque-hash';state.orders.o1.chargeId='ch_PersistedReference';
       state.emails.mail1.leaseToken = 'lease-1';
     });
     const loaded = await createPostgresRepository(pool).transaction(state => state);
@@ -52,7 +52,7 @@ test('Postgres migrations, normalized persistence, reload, uniqueness and rollba
     assert.equal(loaded.reservations.r1.quantity, 1);
     assert.equal(loaded.events.e1.type, 'checkout.session.completed');
     assert.equal(loaded.emails.mail1.status, 'pending');
-    assert.equal(loaded.orders.o1.accessTokenHash, 'opaque-hash');
+    assert.equal(loaded.orders.o1.accessTokenHash, 'opaque-hash');assert.equal(loaded.orders.o1.chargeId,'ch_PersistedReference');assert.equal((await database.query('SELECT stripe_charge_id FROM orders')).rows[0].stripe_charge_id,'ch_PersistedReference');
     assert.equal(loaded.emails.mail1.leaseToken, 'lease-1');
     assert.equal((await database.query('SELECT sku_snapshot FROM order_items')).rows[0].sku_snapshot, variant.sku);
     await assert.rejects(repository.transaction(state => { state.variants[variant.id].availableQuantity = -1; }));

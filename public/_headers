@@ -8,6 +8,12 @@
 /admin*
   X-Robots-Tag: noindex, nofollow
   Cache-Control: no-store
+/staff*
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+/api/auth/*
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
 /account*
   X-Robots-Tag: noindex, nofollow
   Cache-Control: no-store

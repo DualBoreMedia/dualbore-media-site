@@ -1,8 +1,9 @@
 User-agent: *
 Allow: /
+Disallow: /staff
 Disallow: /admin
 Disallow: /account
 Disallow: /order/
 Disallow: /unsubscribe
 Disallow: /api/
-Sitemap: https://dualbore-media-site.netlify.app/sitemap.xml
+Sitemap: https://dualboremedia.com/sitemap.xml

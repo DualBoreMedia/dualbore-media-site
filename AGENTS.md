@@ -20,6 +20,32 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Controlling correction: authentication, testing and no deployment, October 15, 2026
+
+- Deployment is NOT authorized, even if all readiness checks pass. Do not merge main, trigger any Netlify deployment or enable production payments. PAYMENTS_ENABLED remains false. Transactional email activation stays gated pending final verification and explicit authorization. This supersedes every conditional deployment permission below.
+- Do not upgrade Clerk or purchase recurring authentication charges. Evaluate WorkOS AuthKit first using official current pricing, organization MFA policies and production terms; use its ordinary hosted domain and free branding. Compare Better Auth as fallback, using official password/TOTP/session implementations and existing PostgreSQL. Do not weaken staff MFA or persist refresh tokens in browser localStorage to avoid a paid custom domain.
+- Ohio/government registration is deferred by the owner. Do not attempt government sign-in or wait on that task during current engineering work; tax readiness remains a launch blocker.
+- Measure lines/statements/functions/branches and enforce meaningful coverage thresholds in CI. Test counts alone are insufficient. Real Postgres, rendered E2E, permission/revocation/IDOR checks, structured redacted correlation logs, frontend error boundaries, monitored backend exceptions, release/source-map verification and actionable Needs Attention remain required. Do not report monitoring delivery or managed provider behavior as verified using mocks.
+
+### Historical conditional production completion authorization, October 15, 2026: superseded
+
+- Preserve the current local worktree. The earlier conditional authorization is superseded by the controlling correction above. Deployment is NOT authorized even if every gate passes. Do not merge main, trigger Netlify deployments or enable payments; wait for the owner's later explicit final deployment instruction.
+- Initial deployment keeps payments and transactional email false. Verify production and signed live webhook delivery, then activate transactional email with controlled delivery verification. Live payments activate last. Never purchase a recurring service or upgrade without showing exact plan/cost and obtaining approval.
+- DualBoreMedia operates, makes, packs and ships apparel at 55 Union St, Hartford, OH 43013, United States. The domain dualboremedia.com is owned at Porkbun. Canonical https://dualboremedia.com; www redirects to apex.
+- All current 15 variants are made to order. Preserve future finite stock mode. Tee $30, each crewneck $50, USD, USA only; reliable calculated shipping or $9.95 flat fallback. No false stock scarcity.
+- Owner answered 3 days to ship and revised voluntary size-exchange REQUEST window to 30 calendar days after delivery. Items unused/unworn/unwashed/undamaged/original condition; customer pays both shipping legs, disclosed before acceptance. Define a reasonable approved-return mailing deadline (current draft: 14 calendar days after approval). Seller errors/defects/nonconformity retain applicable remedies and seller-paid correction shipping.
+- Individual Clerk customer/employee/admin accounts, private server role metadata, staff MFA and least privilege are mandatory. No staff/admin links in customer navigation. Packing slips are staff-authorized, order/package specific, contain no prices/provider IDs/notes, and require print QA.
+- Ohio vendor registration and tax configuration are required. Human completes government authentication/identity/attestations/signature/payment. Never request SSN/FEIN/password/MFA in chat.
+- Run required CodeRabbit uncommitted review before any commit, fix valid Critical/Major issues and rerun; committed/base review follows. Development commits contain [skip netlify]. No force push/history rewrite without specific approval.
+
+### Latest production setup authorization, October 14, 2026
+
+- Complete real provider setup and pre-deployment validation, then STOP. Do not deploy, merge main, trigger a production build, enable payments or enable transactional email. The controlling October 15 correction above confirms no deployment is authorized; any intervening conditional permission is superseded.
+- The owner approved $30 USD for the E92 tee, $50 USD for each crewneck, sizes S/M/L/XL/2XL, and reliable calculated USA shipping or a $9.95 flat fallback. Sandbox prices and $7 shipping remain test-only. Do not guess stock, tax registrations, legal identity/address, processing time, return terms, support email or domain ownership.
+- Keep PAYMENTS_ENABLED=false and TRANSACTIONAL_EMAILS_ENABLED=false. The dedicated check:predeploy gate may defer deployed webhook verification; all other requirements remain mandatory. The default check:launch activation gate remains strict. Never mark evidence true without verification.
+- Feature freeze: provider setup, launch blockers, security, QA and targeted fixes only. Source-only development commits retain [skip netlify]. Independent CI must not deploy. Do not rewrite history or force-push without separate approval.
+- Ask the owner to complete passwords, MFA, OAuth consent, business verification and purchases at their exact blocking step. Domain/paid-service purchases need prior approval. Continue unrelated setup while waiting.
+
 ### Latest pre-deployment production-build authorization
 
 - Preserve current local work on codex/commerce-test-foundation. The user now authorizes managed Clerk accounts, MFA administration, production-shaped commerce/fulfillment/support, production resource structure and tested source-only pushes with [skip netlify]. This supersedes older sandbox-only implementation restrictions below, never deployment/main merge/public live payments/marketing broadcasts.

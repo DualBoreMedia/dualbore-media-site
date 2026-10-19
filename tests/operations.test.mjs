@@ -112,3 +112,24 @@ test('late pending refund API response cannot undo confirmed webhook state',asyn
  await repository.transaction(s=>{s.refundRequests[requestKey].status='succeeded';s.refundRequests[requestKey].refundId='re_Verified';s.orders.o1.refundedCents=1000;});
  resolve({id:'re_Verified',currency:'usd',payment_intent:'pi_test',amount:1000,status:'pending'});assert.deepEqual(await work,{saved:true});assert.equal(await repository.transaction(s=>s.refundRequests[requestKey].status),'succeeded');
 });
+
+test('split package packing attribution comes from authenticated staff and remains private and historical',async()=>{
+ const {service,repository}=setup();
+ for(const [i,status]of ['making','packing','ready_to_ship'].entries())await service.mutate(admin,{action:'transition',orderNumber:'DBM-TEST',status,expectedVersion:i});
+ const employee={userId:'workos:packer-two',role:'employee',email:'packer@example.invalid',mfa:true,sessionId:'packer-session'};
+ const input={action:'shipment',orderNumber:'DBM-TEST',carrier:'USPS',service:'Ground',trackingNumber:'TEST123',trackingUrl:'https://tools.usps.com/',items:[{variantId:'tee-m',quantity:1}]};
+ const a=await service.mutate(admin,input),b=await service.mutate(employee,input);
+ await assert.rejects(service.mutate(employee,{action:'shipment-status',shipmentId:a.shipmentId,status:'packed',expectedVersion:0,packedByUserId:'spoofed'}),{code:'invalid_input'});
+ for(const [shipmentId,principal]of [[a.shipmentId,admin],[b.shipmentId,employee]])await service.mutate(principal,{action:'shipment-status',shipmentId,status:'packed',expectedVersion:0});
+ await service.mutate(employee,{action:'shipment-status',shipmentId:a.shipmentId,status:'shipped',expectedVersion:1});
+ const state=await repository.transaction(s=>s);
+ assert.equal(state.shipments[a.shipmentId].packedByUserId,admin.userId);
+ assert.equal(state.shipments[b.shipmentId].packedByUserId,employee.userId);
+ assert.ok(state.shipments[a.shipmentId].packedAt);
+ assert.equal(state.shipments[b.shipmentId].createdByUserId,employee.userId);
+ assert.equal(state.shipments[b.shipmentId].trackingEnteredByUserId,employee.userId);
+ assert.ok(Object.values(state.trackingEvents).every(e=>[admin.userId,employee.userId].includes(e.actorUserId)));
+ const history=Object.values(state.audit).filter(e=>e.action==='shipment-status'&&e.metadata.next==='packed');assert.deepEqual(history.map(e=>e.actor),[admin.userId,employee.userId]);
+ const adminOrder=(await service.read(admin,{admin:true,orderNumber:'DBM-TEST'})).orders[0];assert.equal(adminOrder.shipments[0].packedByUserId,admin.userId);
+ const customerOrder=(await service.read(customer)).orders[0];assert.equal(customerOrder.shipments[0].packedByUserId,undefined);
+});

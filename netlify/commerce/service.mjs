@@ -1,4 +1,5 @@
 import {createHash,randomUUID,randomBytes,timingSafeEqual} from 'node:crypto';
+import {inventoryPolicy,madeToOrder} from './inventory.mjs';
 import {validateItems} from '../../src/commerce/catalog.js';
 import {deliverOrderEmails,deliverShipmentEmail} from './order-email.mjs';
 import {enqueueLifecycle} from '../operations/lifecycle.mjs';
@@ -17,7 +18,7 @@ export function createCommerceService({repository,stripe,env={},now=Date.now}) {
  if(live?(!/^https:\/\//.test(origin)||new URL(origin).origin!==origin):!/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin))throw new Error('Configure a valid store origin.');
  const shipping=live?Number(env.SHIPPING_RATE_CENTS||0):Number(env.TEST_SHIPPING_RATE_CENTS||700);
  if(!Number.isSafeInteger(shipping)||shipping<0||shipping>100000)throw new Error('Invalid test shipping.');
- const settle=(state,order,status)=>{for(const r of Object.values(state.reservations).filter(r=>r.orderId===order.id&&r.status==='reserved')){const v=state.variants[r.variantId];if(!v||v.reservedQuantity<r.quantity)bad('inventory_integrity','Inventory reconciliation required.',409);v.reservedQuantity-=r.quantity;r.status=status;if(status==='sold'){v.soldQuantity+=r.quantity;r.convertedAt=iso(now);}else{v.availableQuantity+=r.quantity;r.releasedAt=iso(now);}}};
+ const settle=(state,order,status)=>{for(const r of Object.values(state.reservations).filter(r=>r.orderId===order.id&&r.status==='reserved')){const v=state.variants[r.variantId];if(!v||v.reservedQuantity<r.quantity)bad('inventory_integrity','Inventory reconciliation required.',409);v.reservedQuantity-=r.quantity;r.status=status;if(status==='sold'){v.soldQuantity+=r.quantity;r.convertedAt=iso(now);}else{if(!madeToOrder(r))v.availableQuantity+=r.quantity;r.releasedAt=iso(now);}}};
  const view=o=>({orderNumber:o.orderNumber,status:o.status,items:o.items.map(({variantId,name,size,quantity,unitPriceCents,lineTotalCents})=>({variantId,name,size,quantity,unitPriceCents,lineTotalCents})),subtotalCents:o.subtotalCents,shippingCents:o.shippingCents,taxCents:o.taxCents,totalCents:o.totalCents});
  const inFlightCheckouts=new Map();
  async function checkout(input,options={}) {
@@ -42,14 +43,14 @@ export function createCommerceService({repository,stripe,env={},now=Date.now}) {
   let work=await repository.transaction(state=>{
    const existing=Object.values(state.orders).find(o=>o.requestKey===requestKey);
    if(existing){if(existing.cartHash!==cartHash)bad('request_conflict','This request belongs to a different cart.',409);if(existing.sessionUrl)return {order:existing,reused:true};if(existing.status!=='checkout_pending')bad('checkout_failed','Start a new checkout request.',409);if(existing.checkoutLeaseToken&&Date.parse(existing.checkoutLeaseUntil)>now())bad('checkout_in_progress','Checkout is already starting. Retry this request shortly.',409);existing.checkoutLeaseToken=attemptToken;existing.checkoutLeaseUntil=leaseUntil;return{order:existing,recovery:true};}
-   const lines=items.map(i=>{const v=state.variants[i.variantId];if(!v?.active)bad('inactive_variant','A selected design is no longer available.',409);if(v.availableQuantity<i.quantity)bad('insufficient_stock','A selected size has insufficient stock. Update your cart.',409);const priceId=live?v.liveStripePriceId:v.stripePriceId,amount=live?v.productionPriceCents:v.priceCents;if(!priceId||!Number.isSafeInteger(amount)||amount<1)bad('catalog_not_synced','The approved catalog is not configured.',503);return {...i,sku:v.sku,name:v.name,size:v.size,unitPriceCents:amount,lineTotalCents:amount*i.quantity,stripePriceId:priceId};});
+   const lines=items.map(i=>{const v=state.variants[i.variantId];if(!v?.active)bad('inactive_variant','A selected design is no longer available.',409);if(!madeToOrder(v)&&v.availableQuantity<i.quantity)bad('insufficient_stock','A selected size has insufficient stock. Update your cart.',409);const priceId=live?v.liveStripePriceId:v.stripePriceId,amount=live?v.productionPriceCents:v.priceCents;if(!priceId||!Number.isSafeInteger(amount)||amount<1)bad('catalog_not_synced','The approved catalog is not configured.',503);return {...i,sku:v.sku,name:v.name,size:v.size,unitPriceCents:amount,lineTotalCents:amount*i.quantity,stripePriceId:priceId};});
    const hash=digest(JSON.stringify(lines));
    if((live||lines.some(l=>l.unitPriceCents!==3000))&&quoteToken!==hash)bad('cart_changed','Review the current prices before checkout.',409,{quoteToken:hash,lines:lines.map(({stripePriceId,...line})=>line)});
    const id=randomUUID();const order={id,isTest:!live,testProvider:env.COMMERCE_MOCK==='true'?'mock':'stripe',orderNumber:'DBM-'+randomBytes(6).toString('hex').toUpperCase(),requestKey,cartHash,accessTokenHash:digest(accessToken),status:'checkout_pending',currency:'usd',subtotalCents:lines.reduce((s,l)=>s+l.lineTotalCents,0),shippingCents:shipping,taxCents:null,totalCents:null,items:lines,createdAt:iso(now),expiresAt:new Date(now()+35*60*1000).toISOString(),sessionId:null,customerEmail:null,fulfillmentStatus:'received',refundStatus:'none',refundedCents:0,stripeRefundIds:[]};
    state.orders[id]=order;
    if(customer?.userId&&customer.email){order.verifiedCustomerCandidate={userId:customer.userId,email:customer.email};}
    order.checkoutLeaseToken=attemptToken;order.checkoutLeaseUntil=leaseUntil;
-   for(const line of lines){const v=state.variants[line.variantId];v.availableQuantity-=line.quantity;v.reservedQuantity+=line.quantity;const rid=randomUUID();state.reservations[rid]={id:rid,orderId:id,sessionId:null,variantId:line.variantId,quantity:line.quantity,status:'reserved',expiresAt:order.expiresAt,createdAt:order.createdAt};}
+   for(const line of lines){const v=state.variants[line.variantId];if(!madeToOrder(v))v.availableQuantity-=line.quantity;v.reservedQuantity+=line.quantity;const rid=randomUUID();state.reservations[rid]={id:rid,orderId:id,sessionId:null,variantId:line.variantId,quantity:line.quantity,inventoryPolicy:inventoryPolicy(v),status:'reserved',expiresAt:order.expiresAt,createdAt:order.createdAt};}
    return{order};
   });
   const order=work.order;
@@ -77,6 +78,20 @@ export function createCommerceService({repository,stripe,env={},now=Date.now}) {
  }
  async function webhook(event){
   if(!event||event.livemode!==live||!/^evt_[A-Za-z0-9_]+$/.test(event.id||'')||typeof event.type!=='string')bad('invalid_event','Invalid payment event.');
+  // Charge IDs are durable receipt lookup keys, never public receipt URLs.
+  // Checkout remains the authority for payment state and inventory settlement.
+  if(event.type==='charge.succeeded'){
+   const charge=event.data?.object;
+   if(!charge||charge.livemode!==live||charge.paid!==true||charge.currency!=='usd'||!/^ch_[A-Za-z0-9]+$/.test(charge.id||'')||typeof charge.payment_intent!=='string')bad('invalid_event','Invalid payment reference event.');
+   await repository.transaction(s=>{
+    if(s.events[event.id]?.status==='processed')return;
+    const o=Object.values(s.orders).find(x=>x.paymentIntentId===charge.payment_intent);
+    if(!o||!paid(o))bad('unknown_order','Payment reference awaits checkout reconciliation.',409);
+    if(charge.amount!==o.totalCents||(o.chargeId&&o.chargeId!==charge.id))bad('payment_reference_mismatch','Payment reference needs reconciliation.',409);
+    o.chargeId=charge.id;
+    s.events[event.id]={id:event.id,type:event.type,orderId:o.id,status:'processed',createdAt:iso(now),processedAt:iso(now)};
+   });return {received:true};
+  }
   if(['refund.created','refund.updated','refund.failed'].includes(event.type)){
    const object=event.data?.object;if(!object||object.currency!=='usd'||!/^re_[A-Za-z0-9]+$/.test(object.id||''))bad('invalid_event','Invalid refund event.');
    if(object.status!=='succeeded'){if(['failed','canceled'].includes(object.status))await repository.transaction(s=>{for(const r of Object.values(s.refundRequests))if(r.refundId===object.id||r.id===object.metadata?.dbm_request_id){if(r.status!=='succeeded'){r.status='failed';r.refundId=object.id;}}});return {ignored:true};}

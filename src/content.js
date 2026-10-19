@@ -53,3 +53,9 @@ export const merch = [
   { id: 'sv1000s-silhouette', name: 'SV1000S Silhouette Crewneck', detail: 'SV1000S · Side profile', image: '/assets/IMG_5078.jpg', type: 'Crewneck', notes: 'A high-contrast side-profile silhouette of the SV1000S with the DualBore Media wordmark below.' },
 ];
 export const previewSizes = ['S', 'M', 'L', 'XL', '2XL'];
+export const madeToOrder = {
+  label: 'Made to order',
+  processing: 'Made to order. Ships within 3 days after payment is confirmed. Carrier transit time is additional.',
+  returns: 'No change-of-mind returns or refunds. Incorrect, defective or materially nonconforming orders remain eligible for appropriate remedies.',
+  exchanges: 'Request a voluntary size exchange within 30 calendar days of delivery. Items must be unused, unworn, unwashed, undamaged and in original condition. You pay both return and replacement shipping.',
+};

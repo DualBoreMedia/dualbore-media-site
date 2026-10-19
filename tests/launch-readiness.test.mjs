@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {checkLaunch,requiredDeclarations,runLaunchCheck} from '../scripts/check-launch.mjs';
-const configuration={policyText:'Final approved customer policies.',catalogText:'Reviewed catalog.',declarations:requiredDeclarations.map(name=>`${name}=`).join('\n'),env:{STRIPE_SECRET_KEY:'sk_live_placeholder-for-test',STRIPE_WEBHOOK_SECRET:'mock',DATABASE_URL:'postgresql://mock',RESEND_API_KEY:'mock',RESEND_FROM:'orders@business.org',STORE_COUNTRY:'US',STORE_CURRENCY:'usd',SHIPPING_RATE_CENTS:'700',SHIPPING_CONFIGURATION_APPROVED:'true',BUSINESS_LEGAL_NAME:'Reviewed Company',BUSINESS_POSTAL_ADDRESS:'Reviewed postal address',SUPPORT_EMAIL:'support@business.org',POLICIES_APPROVED:'true',LIVE_CATALOG_APPROVED:'true',TAX_CONFIGURATION_APPROVED:'true',RESEND_DOMAIN_VERIFIED:'true',RESEND_REPLY_TO:'support@business.org',CLERK_SECRET_KEY:'sk_live_unit_fixture',CLERK_PUBLISHABLE_KEY:'pk_live_unit_fixture',CLERK_FRONTEND_ORIGIN:'https://clerk.business.org',SECURITY_REVIEW_PASSED:'true',REQUIRED_TESTS_PASSED:'true',MIGRATIONS_VERIFIED:'true',MARKETING_SUPPRESSION_VERIFIED:'true',FRONTEND_PRODUCTION_QA_VERIFIED:'true',PAYMENTS_ENABLED:'true',TRANSACTIONAL_EMAILS_ENABLED:'true',COMMERCE_ENVIRONMENT:'production',AUTH_PRODUCTION_VERIFIED:'true',ADMIN_MFA_VERIFIED:'true',PRODUCTION_DATABASE_VERIFIED:'true',DATABASE_BACKUP_RESTORE_VERIFIED:'true',STRIPE_WEBHOOK_VERIFIED:'true',RESEND_DELIVERY_VERIFIED:'true',PROCESSING_TIME_APPROVED:'true',RETURN_WINDOW_APPROVED:'true',RETENTION_POLICY_APPROVED:'true',SUPPORT_WORKFLOW_APPROVED:'true',LIVE_INVENTORY_APPROVED:'true'}};
+const configuration={policyText:'Final approved customer policies.',catalogText:'Reviewed catalog.',declarations:requiredDeclarations.map(name=>`${name}=`).join('\n'),env:{STRIPE_SECRET_KEY:'sk_live_placeholder-for-test',STRIPE_WEBHOOK_SECRET:'mock',DATABASE_URL:'postgresql://mock',RESEND_API_KEY:'mock',RESEND_FROM:'orders@business.org',STORE_COUNTRY:'US',STORE_CURRENCY:'usd',SHIPPING_RATE_CENTS:'995',SHIPPING_CONFIGURATION_APPROVED:'true',BUSINESS_LEGAL_NAME:'Reviewed Company',BUSINESS_POSTAL_ADDRESS:'Reviewed postal address',SUPPORT_EMAIL:'support@business.org',POLICIES_APPROVED:'true',LIVE_CATALOG_APPROVED:'true',TAX_CONFIGURATION_APPROVED:'true',RESEND_DOMAIN_VERIFIED:'true',RESEND_REPLY_TO:'support@business.org',AUTH_PROVIDER:'workos',WORKOS_API_KEY:'fixture-server-key',WORKOS_CLIENT_ID:'client_fixture',WORKOS_COOKIE_PASSWORD:'fixture-only-32-character-session-secret',WORKOS_STAFF_ORGANIZATION_ID:'org_fixture',WORKOS_STAFF_MFA_POLICY_VERIFIED:'true',WORKOS_PRODUCTION_VERIFIED:'true',COVERAGE_THRESHOLDS_PASSED:'true',ERROR_MONITORING_VERIFIED:'true',SOURCEMAPS_VERIFIED:'true',CORRELATION_REDACTION_VERIFIED:'true',BROWSER_E2E_VERIFIED:'true',SECURITY_REVIEW_PASSED:'true',REQUIRED_TESTS_PASSED:'true',MIGRATIONS_VERIFIED:'true',MARKETING_SUPPRESSION_VERIFIED:'true',FRONTEND_PRODUCTION_QA_VERIFIED:'true',PAYMENTS_ENABLED:'true',TRANSACTIONAL_EMAILS_ENABLED:'true',COMMERCE_ENVIRONMENT:'production',AUTH_PRODUCTION_VERIFIED:'true',ADMIN_MFA_VERIFIED:'true',STAFF_MFA_VERIFIED:'true',PACKING_SLIP_QA_VERIFIED:'true',CODERABBIT_REVIEW_PASSED:'true',GITHUB_CI_VERIFIED:'true',OHIO_TAX_REGISTRATION_VERIFIED:'true',PRODUCTION_DATABASE_VERIFIED:'true',DATABASE_BACKUP_RESTORE_VERIFIED:'true',STRIPE_WEBHOOK_VERIFIED:'true',RESEND_DELIVERY_VERIFIED:'true',PROCESSING_TIME_APPROVED:'true',RETURN_WINDOW_APPROVED:'true',RETENTION_POLICY_APPROVED:'true',SUPPORT_WORKFLOW_APPROVED:'true',LIVE_INVENTORY_APPROVED:'true'}};
 test('launch checks explicitly approved configuration without performing deployment',()=>{assert.equal(checkLaunch(configuration).ready,true);});
 test('launch validator blocks legal placeholders and test-only catalogs',()=>{
   for(const policyText of ['TODO business address','Draft for review','This is not an approved customer policy','Return policy pending']) assert.equal(checkLaunch({...configuration,policyText}).ready,false);
@@ -12,4 +12,21 @@ test('launch validator catches missing declarations, test secret, shipping and b
 });
 test('current local site remains blocked from launch with safe diagnostics',async()=>{
   const result=await runLaunchCheck({env:{}});assert.equal(result.ready,false);assert.ok(result.blockers.length>5);assert.ok(!JSON.stringify(result).includes('postgresql://'));
+});
+
+test('predeployment permits disabled switches and defers only deployed webhook verification',()=>{
+  const env={...configuration.env,PAYMENTS_ENABLED:'false',TRANSACTIONAL_EMAILS_ENABLED:'false'};
+  delete env.STRIPE_WEBHOOK_SECRET; delete env.STRIPE_WEBHOOK_VERIFIED;
+  assert.equal(checkLaunch({...configuration,env,phase:'predeploy'}).ready,true);
+  assert.equal(checkLaunch({...configuration,env}).ready,false);
+  for(const key of ['STAFF_MFA_VERIFIED','PACKING_SLIP_QA_VERIFIED','CODERABBIT_REVIEW_PASSED','GITHUB_CI_VERIFIED','OHIO_TAX_REGISTRATION_VERIFIED','ADMIN_MFA_VERIFIED','AUTH_PRODUCTION_VERIFIED','PRODUCTION_DATABASE_VERIFIED','DATABASE_BACKUP_RESTORE_VERIFIED','RESEND_DELIVERY_VERIFIED','LIVE_INVENTORY_APPROVED','POLICIES_APPROVED','TAX_CONFIGURATION_APPROVED','WORKOS_STAFF_MFA_POLICY_VERIFIED','WORKOS_PRODUCTION_VERIFIED','COVERAGE_THRESHOLDS_PASSED','ERROR_MONITORING_VERIFIED','SOURCEMAPS_VERIFIED','CORRELATION_REDACTION_VERIFIED','BROWSER_E2E_VERIFIED']) {
+    assert.equal(checkLaunch({...configuration,env:{...env,[key]:'false'},phase:'predeploy'}).ready,false,key);
+  }
+});
+
+test('predeployment rejects enabled switches, missing secrets and unknown phases',()=>{
+  const env={...configuration.env,PAYMENTS_ENABLED:'false',TRANSACTIONAL_EMAILS_ENABLED:'false'};
+  for(const key of ['PAYMENTS_ENABLED','TRANSACTIONAL_EMAILS_ENABLED'])assert.equal(checkLaunch({...configuration,env:{...env,[key]:'true'},phase:'predeploy'}).ready,false,key);
+  for(const key of ['STRIPE_SECRET_KEY','DATABASE_URL','RESEND_API_KEY','WORKOS_API_KEY'])assert.equal(checkLaunch({...configuration,env:{...env,[key]:''},phase:'predeploy'}).ready,false,key);
+  assert.equal(checkLaunch({...configuration,phase:'skip-checks'}).ready,false);
 });

@@ -1,4 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
+import {reportUnexpected,structuredLog} from '../observability/index.mjs';
+import {serverErrorReporter} from '../observability/server.mjs';
+const deliveryFailure=async(error,env)=>reportUnexpected(error,{scope:'transactional-email',provider:'resend'},{env,reporter:await serverErrorReporter(env)});
 
 const leaseMs = 60_000;
 const idempotencyWindowMs = 23 * 60 * 60 * 1000;
@@ -81,6 +84,8 @@ async function sendType({repository,orderId,type,eventId,env,fetchImpl,now}) {
     if(!row || row.leaseToken!==token) return;
     Object.assign(row,{status:status==='sent'?'sent':retryable?'queued':'failed',lastError,providerMessageId,uncertain:row.uncertain || uncertain,leaseToken:null,leaseExpiresAt:null,sentAt:status==='sent'?now().toISOString():null,retryAfter:status!=='sent'?new Date(timestamp+Math.min(60_000*2**Math.min(claim.attemptCount-1,6),3_600_000)).toISOString():null});
   });
+  structuredLog(status==='sent'?'email.sent':'email.failed',{scope:'transactional-email',provider:'resend',operation:type},{env,level:status==='sent'?'info':'error'});
+  if(status!=='sent')await deliveryFailure(Object.assign(new Error('Transactional delivery needs review'),{code:'email_delivery_failed',status:503}),env);
   return {type,status:status==='sent'?'sent':retryable?'retry-queued':'failed'};
 }
 
@@ -89,7 +94,7 @@ export async function deliverLifecycleEmails({repository,orderId,env={},fetchImp
     const events=await repository.transaction(s=>Object.values(s.emails).filter(e=>e.orderId===orderId&&e.emailType.startsWith('lifecycle-')));
     const results=[];for(const e of events)results.push(await sendType({repository,orderId,type:e.emailType,eventId:e.id,env,fetchImpl,now}));
     return results;
-  }catch{return [{status:'storage-or-order-unavailable'}];}
+  }catch(error){await deliveryFailure(error,env);return [{status:'storage-or-order-unavailable'}];}
 }
 export async function retryRecordedEmail({repository,eventId,env={},fetchImpl=fetch,now=()=>new Date()}) {
   const event=await repository.transaction(s=>s.emails[eventId]);
@@ -104,10 +109,10 @@ export async function deliverOrderEmails({repository,orderId,env={},fetchImpl=fe
     const results=[];
     for(const type of ['customer-confirmation','merchant-notification']) results.push(await sendType({repository,orderId,type,env,fetchImpl,now}));
     return {status:'processed',results};
-  } catch {return {status:'storage-or-order-unavailable',results:[]};}
+  } catch(error) {await deliveryFailure(error,env);return {status:'storage-or-order-unavailable',results:[]};}
 }
 
 export async function deliverShipmentEmail({repository,orderId,env={},fetchImpl=fetch,now=()=>new Date()}) {
   try{return await sendType({repository,orderId,type:'customer-shipment',env,fetchImpl,now});}
-  catch{return {type:'customer-shipment',status:'storage-or-order-unavailable'};}
+  catch(error){await deliveryFailure(error,env);return {type:'customer-shipment',status:'storage-or-order-unavailable'};}
 }

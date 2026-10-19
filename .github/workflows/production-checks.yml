@@ -1,0 +1,135 @@
+name: Production checks
+
+on:
+  push:
+    branches: [main, codex/commerce-test-foundation]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engineering:
+    name: Build, tests and client security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PAYMENTS_ENABLED: 'false'
+      TRANSACTIONAL_EMAILS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:inventory
+      - name: Critical business-condition mutation spot checks
+        run: npm run test:mutations
+      - name: Unit, commerce, auth, operations and security regressions with coverage gate
+        run: npm run test:coverage
+      - run: npm run test:sites
+      - run: npm run test:client-secrets
+      - run: npm audit --audit-level=high
+      - name: Retain measured coverage and static inventory even when the gate fails
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-and-inventory
+          path: |
+            test-results/coverage/
+            test-results/coverage-policy.json
+            test-results/inventory/
+            test-results/mutations/
+          retention-days: 7
+
+  postgres:
+    name: Real PostgreSQL migrations, transactions and concurrency
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: dbm_sandbox
+          POSTGRES_USER: dbm_ci
+          POSTGRES_PASSWORD: disposable-ci-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U dbm_ci -d dbm_sandbox"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://dbm_ci:disposable-ci-only@127.0.0.1:5432/dbm_sandbox
+      DBM_REAL_POSTGRES_TEST: 'true'
+      PAYMENTS_ENABLED: 'false'
+      TRANSACTIONAL_EMAILS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:postgres
+
+  browser:
+    name: Rendered storefront and staff QA (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      QA_BROWSERS: ${{ matrix.browser }}
+      PAYMENTS_ENABLED: 'false'
+      TRANSACTIONAL_EMAILS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm exec -- playwright install --with-deps ${{ matrix.browser }}
+      - run: npm run build
+      - run: npm run test:e2e
+      - name: Retain synthetic screenshots, failure trace and browser report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-${{ matrix.browser }}
+          path: test-results/browser/
+          retention-days: 7
+
+  launch-readiness:
+    name: Strict pre-deployment readiness
+    needs: [engineering, postgres, browser]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      # Intentionally fails while production configuration and evidence are absent.
+      # Never substitute test credentials, blanket attestations or continue-on-error.
+      # Production credentials must not be added to pull-request/untrusted jobs.
+      - run: npm run check:predeploy
