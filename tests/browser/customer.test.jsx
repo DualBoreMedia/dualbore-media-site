@@ -185,6 +185,33 @@ test('public garage tabs, filters, details and waitlist remain usable without ch
   await page.getByRole('button',{name:'Close navigation overlay'}).click();
 });
 
+test('public merchandise quick view stays a design preview without active purchase-policy promises',async()=>{
+  window.history.replaceState(null,'','/');mount(<App/>);
+  await page.getByRole('tab',{name:/Drop 01 Merch|Garage Merch/}).click();
+  await page.getByRole('button',{name:/Quick View E92 Coupe/}).click();
+  const dialog=page.getByRole('dialog');
+  await expect.element(dialog.getByText(/Design preview\. No orders or payments are being accepted\./)).toBeVisible();
+  await expect.element(dialog.getByText(/Ships within 3 days|No change-of-mind returns|30 calendar days of delivery/)).not.toBeInTheDocument();
+  await expect.element(dialog.getByRole('link',{name:/Shipping and processing|Returns and size exchanges/})).not.toBeInTheDocument();
+});
+
+test('signed-out customer account does not promise guest checkout while orders are paused',async()=>{
+  mount(<OperationsApp auth={{isLoaded:true,isSignedIn:false}}/>);
+  await expect.element(page.getByRole('heading',{name:'Welcome to your garage'})).toBeVisible();
+  await expect.element(page.getByText(/guest checkout is always available/i)).not.toBeInTheDocument();
+  await expect.element(page.getByText(/Orders are currently paused/i)).toBeVisible();
+});
+
+test('video player avoids autoplay for reduced-motion visitors and uses a clear YouTube label',async()=>{
+  vi.stubGlobal('matchMedia',vi.fn(()=>({matches:true,media:'(prefers-reduced-motion: reduce)',addEventListener:vi.fn(),removeEventListener:vi.fn()})));
+  window.history.replaceState(null,'','/#vault');mount(<App/>);
+  await page.getByRole('button',{name:/Play The N54 single-turbo/}).first().click();
+  const player=page.getByTitle(/The N54 single-turbo/);
+  await expect.element(player).toBeVisible();
+  await expect.element(player).toHaveAttribute('src',expect.stringContaining('autoplay=0'));
+  await expect.element(page.getByRole('link',{name:/Watch .* on YouTube/})).toHaveTextContent('Watch on YouTube');
+});
+
 test('public policy pages disclose prelaunch status and keep purchase controls absent',async()=>{
   for(const policy of ['shipping','returns','privacy','terms','contact']){
     mount(<StorePage page={policy} draft onBrowse={()=>{}}/>);

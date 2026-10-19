@@ -81,16 +81,18 @@ export async function processSubmission(event, {
   log = (code, details = {}) => console.warn('[drop-waitlist-email]', code, details),
 } = {}) {
   const submission = validateSubmission(event);
-  if(env('COMMERCE_ENVIRONMENT')==='production'&&env('TRANSACTIONAL_EMAILS_ENABLED')!=='true')return {status:'disabled'};
+  const production=env('COMMERCE_ENVIRONMENT')==='production';
+  if(production&&env('DROP_WAITLIST_ENABLED')!=='true')return {status:'disabled'};
   if (submission.status !== 'valid') {
     if (submission.status === 'invalid') log('invalid_submission');
     return { status: submission.status };
   }
-  if(env('DATABASE_URL')&&env('COMMERCE_ENVIRONMENT')==='production')try{
+  if(env('DATABASE_URL')&&production)try{
     const {commerceRuntime}=await import('../commerce/runtime.mjs');const {recordMarketingConsent}=await import('../operations/marketing.mjs');
     const settings=Object.fromEntries(['DATABASE_URL','SITE_ORIGIN','COMMERCE_ENVIRONMENT','PAYMENTS_ENABLED','TRANSACTIONAL_EMAILS_ENABLED'].map(key=>[key,env(key)]));
     const {repository}=await commerceRuntime(settings);await repository.transaction(s=>recordMarketingConsent(s,{email:submission.email,consent:true,source:'drop-waitlist',policyVersion:'prelaunch-v1'}));
   }catch{log('consent_persistence_unavailable');}
+  if(production&&env('MARKETING_EMAILS_ENABLED')!=='true')return {status:'recorded'};
   const key = env('RESEND_API_KEY');
   const settings = { from: env('RESEND_FROM'), replyTo: env('RESEND_REPLY_TO'), notifyTo: env('RESEND_NOTIFY_TO') };
   const missing = ['RESEND_API_KEY', 'RESEND_FROM'].filter(name => !env(name));

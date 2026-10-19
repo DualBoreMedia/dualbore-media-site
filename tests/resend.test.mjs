@@ -38,6 +38,24 @@ test('only the intended verified form event is handled; there is no public fetch
   }
 });
 
+test('production waitlist stays paused independently of transactional order email',async()=>{
+  const context=setup({env:key=>({COMMERCE_ENVIRONMENT:'production',PAYMENTS_ENABLED:'false',TRANSACTIONAL_EMAILS_ENABLED:'true',DROP_WAITLIST_ENABLED:'false',...settings})[key]});
+  assert.deepEqual(await processSubmission(event,context.options),{status:'disabled'});
+  assert.equal(context.sent.length,0);
+});
+
+test('production waitlist confirmation has its own marketing-email switch',async()=>{
+  const context=setup({env:key=>({COMMERCE_ENVIRONMENT:'production',PAYMENTS_ENABLED:'false',TRANSACTIONAL_EMAILS_ENABLED:'false',DROP_WAITLIST_ENABLED:'true',MARKETING_EMAILS_ENABLED:'false',...settings})[key]});
+  assert.deepEqual(await processSubmission(event,context.options),{status:'recorded'});
+  assert.equal(context.sent.length,0);
+});
+
+test('production marketing confirmation can be enabled without enabling transactional order email',async()=>{
+  const context=setup({env:key=>({COMMERCE_ENVIRONMENT:'production',PAYMENTS_ENABLED:'false',TRANSACTIONAL_EMAILS_ENABLED:'false',DROP_WAITLIST_ENABLED:'true',MARKETING_EMAILS_ENABLED:'true',...settings})[key]});
+  assert.deepEqual(await processSubmission(event,context.options),{status:'sent'});
+  assert.equal(context.sent.length,1);
+});
+
 for (const [label, change] of [
   ['missing consent', { consent: '' }], ['invalid email', { email: 'bad-email' }],
   ['multiple recipient injection', { email: 'a@example.com,b@example.com' }],

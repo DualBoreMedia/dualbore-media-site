@@ -61,8 +61,14 @@ const browserOnlyJsCoverage = incompatibleShared.filter(entry => entry.file.star
 const negativeMapColumns = manifest.reduce((sum, entry) => sum + entry.nodeNegativeColumns + entry.browserNegativeColumns, 0);
 const unmappedBranches = manifest.reduce((sum, entry) => sum + entry.nodeUnmappedBranchLocations + entry.browserUnmappedBranchLocations, 0);
 console.log(`Coverage source inventory: ${manifest.length} files, ${incompatibleShared.length} incompatible overlapping maps kept authoritative per file.`);
-if (negativeMapColumns) console.warn(`Source-map diagnostic: ${negativeMapColumns} V8-to-Istanbul source locations have negative columns; line mappings remain valid and these reports are never merged.`);
-if (unmappedBranches) console.warn(`Source-map diagnostic: ${unmappedBranches} branch arms have no source location; affected reports remain authoritative per file and are never merged.`);
+if (negativeMapColumns) {
+  console.error(`Coverage mapping integrity failed: ${negativeMapColumns} V8-to-Istanbul source locations have negative columns. Counters remain unmerged across incompatible maps, but this coverage result is not eligible to pass CI.`);
+  process.exitCode = 1;
+}
+if (unmappedBranches) {
+  console.error(`Coverage mapping integrity failed: ${unmappedBranches} Chromium branch arms have no source location. The missing arms are retained in coverage, and this result is not eligible to pass CI.`);
+  process.exitCode = 1;
+}
 if (browserOnlyJsCoverage.length) {
   console.log('Shared frontend JavaScript executed in Chromium but retained Node-authoritative counters because source maps differ:', browserOnlyJsCoverage.map(entry => entry.file).join(', '));
 }

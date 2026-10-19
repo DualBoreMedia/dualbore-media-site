@@ -57,6 +57,7 @@ try {
       // clears sensitive UI. This expected denial is retained, not hidden.
       if (opened.url() === baseUrl + '/__qa/error-boundary' && /DBM_SYNTHETIC_BOUNDARY_EXCEPTION|error occurred in the <Broken>|recreate this component tree/i.test(entry.text)) expectedConsole.push({...entry, reason: 'Deliberate synthetic render exception'});
       else if (entry.text.includes('404') && /^http:\/\/127\.0\.0\.1:\d+\/api\/operations/.test(entry.url)) expectedConsole.push({...entry, reason: 'Verified revoked-access denial'});
+      else if (/powerPreference option is currently ignored when calling requestAdapter\(\) on Windows/.test(entry.text)) expectedConsole.push({...entry, reason: 'Chromium Windows WebGPU adapter warning from the local browser runtime'});
       else consoleIssues.push(entry);
     }));
     await context.tracing.start({screenshots: true, snapshots: true, sources: false});
@@ -76,7 +77,7 @@ try {
       const publicPage = await context.newPage();
       publicPage.setDefaultTimeout(10000);
       const viewportResults = [];
-      for (const width of [320, 375, 390, 414, 768, 1024, 1440]) {
+      for (const width of [320, 375, 390, 414, 701, 768, 1024, 1100, 1440]) {
         await publicPage.setViewportSize({width, height: 900});
         const response = await publicPage.goto(`${publicBaseUrl}/`);
         if (!response?.ok()) throw Error(`Public site returned ${response?.status()} at ${width}px`);
@@ -84,21 +85,48 @@ try {
         if (!/DualBore Media \| Garage Builds, Films & Merch/.test(await publicPage.title())) throw Error('Public site page title is incorrect');
         const layout = await publicPage.evaluate(() => ({width: innerWidth, documentWidth: document.documentElement.scrollWidth, bodyWidth: document.body.scrollWidth}));
         if (layout.documentWidth > width || layout.bodyWidth > width) throw Error(`Public site overflows horizontally at ${width}px: ${JSON.stringify(layout)}`);
+        const navigation = await publicPage.evaluate(() => {
+          const header = document.querySelector('.header').getBoundingClientRect();
+          const garage = document.querySelector('.header-meta .text-link');
+          const garageRect = garage.getBoundingClientRect();
+          const brand = document.querySelector('.brand').getBoundingClientRect();
+          const wordmark = document.querySelector('.brand strong');
+          const wordmarkRect = wordmark.getBoundingClientRect();
+          return {garageVisible: getComputedStyle(garage).display !== 'none' && garageRect.width > 0, garageWithinHeader: garageRect.left >= header.left && garageRect.right <= header.right, brandWithinViewport: brand.left >= 0 && brand.right <= innerWidth, wordmarkWithinViewport: wordmarkRect.left >= brand.left && wordmarkRect.right <= innerWidth, wordmark: wordmark.innerText};
+        });
+        if ([701, 768, 1024, 1100].includes(width) && (!navigation.garageVisible || !navigation.garageWithinHeader)) throw Error(`My Garage is not reachable in the primary header at ${width}px: ${JSON.stringify(navigation)}`);
+        if (width === 320 && (!navigation.brandWithinViewport || !navigation.wordmarkWithinViewport || navigation.wordmark !== 'DUALBOREMEDIA')) throw Error(`Brand logo or complete wordmark is clipped at 320px: ${JSON.stringify(navigation)}`);
+        const formRoute = await publicPage.goto(`${publicBaseUrl}/__forms.html`);
+        if (!formRoute?.ok() || await publicPage.locator('form[name="drop-waitlist"]').count()) throw Error('The paused Netlify Drop 01 detector is still published');
+        await publicPage.goto(publicBaseUrl + '/');
+        await publicPage.getByRole('heading', {name: /Four platforms/}).waitFor();
         const visualAssets = await publicPage.evaluate(async () => {
           await document.fonts.ready;
           const visibleImages = [...document.images].filter(image => image.getClientRects().length > 0);
           return {visibleImages: visibleImages.length, brokenVisibleImages: visibleImages.filter(image => image.complete && image.naturalWidth === 0).map(image => image.currentSrc || image.src), interLoaded: document.fonts.check('400 14px Inter'), tekoLoaded: document.fonts.check('600 24px Teko')};
         });
         if (visualAssets.brokenVisibleImages.length) throw Error(`Visible public images failed at ${width}px: ${visualAssets.brokenVisibleImages.join(', ')}`);
-        viewportResults.push({width, identity: await publicPage.title(), layout, visualAssets});
+        viewportResults.push({width, identity: await publicPage.title(), layout, navigation, visualAssets});
         if ([375, 1440].includes(width)) await publicPage.screenshot({path: `${output}/${name}-public-${width}.png`, fullPage: true});
         if (width === 390) {
+          await publicPage.emulateMedia({reducedMotion: 'reduce'});
           await publicPage.getByRole('tab').filter({hasText: 'Video Vault'}).click();
+          await publicPage.getByRole('button', {name: /Play The N54 single-turbo/}).first().click();
+          const frame = publicPage.locator('.video-player iframe');
+          await frame.waitFor();
+          if (new URL(await frame.getAttribute('src')).searchParams.get('autoplay') === '1') throw Error('Video autoplay ignored reduced-motion preference');
+          await publicPage.getByText('Watch on YouTube', {exact: true}).waitFor();
+          await publicPage.keyboard.press('Escape');
           await publicPage.getByRole('tab').filter({hasText: 'Garage Merch'}).click();
           await publicPage.getByText(/Orders aren’t open yet/).waitFor();
           await publicPage.getByRole('button', {name: /Join Drop Alert for E92/}).click();
           await publicPage.getByText(/signups are not open yet/i).waitFor();
           if (await publicPage.getByRole('dialog').locator('form').count()) throw Error('Public Drop Alert collected personal information while privacy readiness is blocked');
+          const quickView = publicPage.getByRole('button', {name: /Quick View E92 Coupe/});
+          await publicPage.getByRole('button', {name: 'Close details'}).click();
+          await quickView.click();
+          const merchCopy = await publicPage.getByRole('dialog').innerText();
+          if (/Ships within 3 days|No change-of-mind returns|30 calendar days of delivery|Made-to-order policies/i.test(merchCopy)) throw Error('Public Coming Soon dialog presents purchase policies as active offers');
           await publicPage.keyboard.press('Escape');
           for (const route of ['shipping', 'returns', 'privacy', 'terms', 'contact']) {
             await publicPage.goto(`${publicBaseUrl}/${route}`);

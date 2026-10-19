@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
-import {mkdtempSync, mkdirSync, rmSync, writeFileSync} from 'node:fs';
+import {mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {spawnSync} from 'node:child_process';
 import test from 'node:test';
+import {fileURLToPath} from 'node:url';
 import {combineCoverageReports, expectedCoverageSources} from '../scripts/coverage-merge.mjs';
 
 let root;
@@ -119,4 +121,31 @@ test('source inventory excludes only the configured runner helpers', () => {
   writeFileSync(path.join(root, 'scripts', 'run-coverage.mjs'), 'export default 1;\n');
   writeFileSync(path.join(root, 'scripts', 'meaningful.mjs'), 'export default 2;\n');
   assert.deepEqual(expectedCoverageSources(root, ['scripts/run-coverage.mjs']), ['netlify/functions/endpoint.mjs', 'scripts/meaningful.mjs', 'src/example.js']);
+});
+
+test('Node coverage fixture records known counts and detects the V8 else-arm source-map offset defect',()=>{
+  const repository=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+  const directory=mkdtempSync(path.join(os.tmpdir(),'dbm-known-coverage-'));
+  try{
+    const run=spawnSync(process.execPath,[
+      path.join(repository,'node_modules','c8','bin','c8.js'),
+      '--all','--include=coverage-fixtures/coverage-known.mjs','--reporter=json','--reporter=json-summary',
+      `--reports-dir=${path.join(directory,'report')}`,process.execPath,'coverage-fixtures/coverage-known.mjs',
+    ],{cwd:repository,encoding:'utf8',env:Object.fromEntries(Object.entries(process.env).filter(([key])=>key!=='NODE_V8_COVERAGE'))});
+    assert.equal(run.status,0,run.stderr||run.stdout);
+    const summary=JSON.parse(readFileSync(path.join(directory,'report','coverage-summary.json'),'utf8')).total;
+    assert.deepEqual(Object.fromEntries(['lines','statements','functions','branches'].map(key=>[key,[summary[key].covered,summary[key].total]])),{
+      lines:[4,5],statements:[4,5],functions:[1,1],branches:[2,3],
+    });
+    const report=JSON.parse(readFileSync(path.join(directory,'report','coverage-final.json'),'utf8'));
+    const coverage=Object.values(report).find(entry=>entry.path.replaceAll('\\','/').endsWith('coverage-fixtures/coverage-known.mjs'));
+    assert.ok(coverage,'known source must be present in the runner report');
+    const negative=[];
+    for(const map of [coverage.statementMap,coverage.branchMap,coverage.fnMap])for(const entry of Object.values(map)){
+      const locations=[...(entry.locations||[]),entry.start?entry:null,entry.loc,entry.decl].filter(Boolean);
+      for(const location of locations)for(const point of [location.start,location.end])if(point?.column<0)negative.push(point);
+    }
+    assert.deepEqual(negative,[{line:3,column:-1},{line:3,column:-1}], 'c8/V8 maps the unexecuted return arm to an invalid negative column');
+    assert.deepEqual(coverage.b,{0:[1],1:[1],2:[0]},'a true-only input must leave the false return uncovered');
+  }finally{rmSync(directory,{recursive:true,force:true});}
 });
