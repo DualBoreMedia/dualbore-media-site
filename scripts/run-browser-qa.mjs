@@ -1,5 +1,5 @@
 import {chromium, firefox, webkit} from '@playwright/test';
-import {createServer} from 'vite';
+import {createServer, preview} from 'vite';
 import react from '@vitejs/plugin-react';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
@@ -14,6 +14,9 @@ const output = resolve('test-results/browser');
 const fixtures = 'test-results/browser-fixtures';
 await mkdir(output, {recursive: true});
 await mkdir(fixtures, {recursive: true});
+const publicPreview = await preview({preview: {host: '127.0.0.1', port: Number(process.env.PUBLIC_QA_PORT || 4198), strictPort: true}});
+const publicAddress = publicPreview.httpServer.address();
+const publicBaseUrl = `http://127.0.0.1:${publicAddress.port}`;
 const auth = `const auth={isLoaded:true,isSignedIn:true,getToken:async()=> 'synthetic-test-token',signOut:()=>{},user:{}};`;
 for (const [name, component, extra] of [['staff', 'StaffApp', ''], ['admin', 'OperationsApp', 'admin={true}']]) {
   await writeFile(`${fixtures}/${name}.jsx`, `import React from 'react';import {createRoot} from 'react-dom/client';import '../../src/styles.css';import App from '../../src/operations/${component}.jsx';${auth}createRoot(document.getElementById('root')).render(<App ${extra} auth={auth}/>);`);
@@ -70,6 +73,49 @@ try {
       staff.method = `Rendered ${name}, real operations service with memory repository and injected principal; real hosted authentication/MFA not verified`;
       page = await context.newPage(); page.setDefaultTimeout(10000); page.setDefaultNavigationTimeout(30000);
       const storefront = await runMadeToOrderBrowserChecks({page, baseUrl, adminPreviewPath: '/__qa/admin'});
+      const publicPage = await context.newPage();
+      publicPage.setDefaultTimeout(10000);
+      const viewportResults = [];
+      for (const width of [320, 375, 390, 414, 768, 1024, 1440]) {
+        await publicPage.setViewportSize({width, height: 900});
+        const response = await publicPage.goto(`${publicBaseUrl}/`);
+        if (!response?.ok()) throw Error(`Public site returned ${response?.status()} at ${width}px`);
+        await publicPage.getByRole('heading', {name: /Four platforms/}).waitFor();
+        if (!/DualBore Media \| Garage Builds, Films & Merch/.test(await publicPage.title())) throw Error('Public site page title is incorrect');
+        const layout = await publicPage.evaluate(() => ({width: innerWidth, documentWidth: document.documentElement.scrollWidth, bodyWidth: document.body.scrollWidth}));
+        if (layout.documentWidth > width || layout.bodyWidth > width) throw Error(`Public site overflows horizontally at ${width}px: ${JSON.stringify(layout)}`);
+        const visualAssets = await publicPage.evaluate(async () => {
+          await document.fonts.ready;
+          const visibleImages = [...document.images].filter(image => image.getClientRects().length > 0);
+          return {visibleImages: visibleImages.length, brokenVisibleImages: visibleImages.filter(image => image.complete && image.naturalWidth === 0).map(image => image.currentSrc || image.src), interLoaded: document.fonts.check('400 14px Inter'), tekoLoaded: document.fonts.check('600 24px Teko')};
+        });
+        if (visualAssets.brokenVisibleImages.length) throw Error(`Visible public images failed at ${width}px: ${visualAssets.brokenVisibleImages.join(', ')}`);
+        viewportResults.push({width, identity: await publicPage.title(), layout, visualAssets});
+        if ([375, 1440].includes(width)) await publicPage.screenshot({path: `${output}/${name}-public-${width}.png`, fullPage: true});
+        if (width === 390) {
+          await publicPage.getByRole('tab').filter({hasText: 'Video Vault'}).click();
+          await publicPage.getByRole('tab').filter({hasText: 'Garage Merch'}).click();
+          await publicPage.getByText(/Orders aren’t open yet/).waitFor();
+          await publicPage.getByRole('button', {name: /Join Drop Alert for E92/}).click();
+          await publicPage.getByText(/signups are not open yet/i).waitFor();
+          if (await publicPage.getByRole('dialog').locator('form').count()) throw Error('Public Drop Alert collected personal information while privacy readiness is blocked');
+          await publicPage.keyboard.press('Escape');
+          for (const route of ['shipping', 'returns', 'privacy', 'terms', 'contact']) {
+            await publicPage.goto(`${publicBaseUrl}/${route}`);
+            await publicPage.locator('main').getByRole('heading').first().waitFor();
+            const copy = await publicPage.locator('main').innerText();
+            if (/\[(?:VERIFIED|POLICY|CARRIER)|draft for review|not an approved customer policy/i.test(copy)) throw Error(`Public ${route} page exposed internal draft markers`);
+            if (!/not accepting (?:orders|purchases)/i.test(copy)) throw Error(`Public ${route} page does not clearly state that orders are closed`);
+          }
+          for (const route of ['account', 'staff', 'admin']) {
+            await publicPage.goto(`${publicBaseUrl}/${route}`);
+            await publicPage.locator('main').waitFor();
+            const body = await publicPage.locator('main').innerText();
+            if (/Fulfillment workspace|Needs attention|Admin dashboard/i.test(body)) throw Error(`Unconfigured /${route} route exposed a privileged workspace`);
+          }
+        }
+      }
+      await publicPage.close();
       await page.screenshot({path: `${output}/${name}-success.png`, fullPage: true});
       page = await context.newPage();
       await page.goto(baseUrl + '/__qa/error-boundary');
@@ -83,7 +129,7 @@ try {
       if (!await page.getByRole('button', {name: 'Reload the garage', exact: true}).evaluate(element => element === document.activeElement)) throw Error('Error fallback control not keyboard accessible');
       await page.screenshot({path: `${output}/${name}-error-boundary.png`, fullPage: true});
       if (consoleIssues.length) throw Error('Unexplained browser console warnings/errors: ' + consoleIssues.map(issue => issue.text).join('\n'));
-      results.push({browser: name, status: 'passed', staff, storefront, errorBoundary: {safeFallback: true, referenceCorrelatedWithReporterFixture: true, actualMonitoringDelivery: false}, consoleIssues, expectedConsole});
+      results.push({browser: name, status: 'passed', staff, storefront, publicWebsite: {baseUrl: publicBaseUrl, viewports: viewportResults, dropAlertClosedWithoutCollectingData: true, policyAndAccountRoutesChecked: true}, errorBoundary: {safeFallback: true, referenceCorrelatedWithReporterFixture: true, actualMonitoringDelivery: false}, consoleIssues, expectedConsole});
       await context.tracing.stop();
     } catch (error) {
       if (page) await page.screenshot({path: `${output}/${name}-failure.png`, fullPage: true}).catch(() => {});
@@ -99,6 +145,7 @@ try {
   await writeFile(`${output}/results.json`, JSON.stringify({baseUrl, providerEvidence: false, results}, null, 2));
   for (const result of results) if (result.browser) await writeFile(`${output}/${result.browser}-results.json`, JSON.stringify(result, null, 2));
   await writeFile(`${output}/index.html`, `<!doctype html><meta charset="utf-8"><title>DualBore browser QA</title><h1>Synthetic local browser QA</h1><p>Real provider enrollment/payment are not verified here.</p><pre>${JSON.stringify(results, null, 2).replaceAll('&', '&amp;').replaceAll('<', '&lt;')}</pre>`);
+  await publicPreview.close();
   await server.close();
 }
 console.log(JSON.stringify(results.map(({browser, status}) => ({browser, status})), null, 2));

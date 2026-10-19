@@ -175,7 +175,8 @@ test('public garage tabs, filters, details and waitlist remain usable without ch
   await expect.element(page.getByRole('dialog').getByText('To be confirmed')).toBeVisible();
   await page.getByRole('button',{name:'Close details'}).click();
   await page.getByRole('button',{name:/Join Drop Alert for E92/}).click();
-  await expect.element(page.getByRole('dialog').getByRole('checkbox')).not.toBeChecked();
+  await expect.element(page.getByRole('dialog').getByText(/signups are not open yet/i)).toBeVisible();
+  await expect.element(page.getByRole('dialog').getByRole('checkbox')).not.toBeInTheDocument();
   await page.getByRole('button',{name:'Close details'}).click();
   await page.getByRole('tab',{name:/About|Pit Crew/}).click();
   await expect.element(page.getByRole('heading',{name:/Two brothers/})).toBeVisible();
@@ -186,11 +187,25 @@ test('public garage tabs, filters, details and waitlist remain usable without ch
 
 test('public policy pages disclose prelaunch status and keep purchase controls absent',async()=>{
   for(const policy of ['shipping','returns','privacy','terms','contact']){
-    mount(<StorePage page={policy} onBrowse={()=>{}}/>);
+    mount(<StorePage page={policy} draft onBrowse={()=>{}}/>);
     await expect.element(page.getByText('Pre-launch draft. This page is incomplete and is not an approved customer policy.')).toBeVisible();
     await expect.element(page.getByRole('button',{name:/checkout|buy now/i})).not.toBeInTheDocument();
     root.unmount();host.remove();host=document.createElement('div');document.body.append(host);root=createRoot(host);
   }
+});
+
+test('public policy pages show safe pre-launch information without internal draft markers',async()=>{
+  for(const policy of ['shipping','returns','privacy','terms','contact']){
+    mount(<StorePage page={policy} draft={false} waitlistEnabled={false} onBrowse={()=>{}}/>);
+    await expect.element(page.getByText(/Pre-launch information \/ No orders accepted/)).toBeVisible();
+    await expect.element(page.getByText(/not accepting (orders|purchases)/i)).toBeVisible();
+    await expect.element(page.getByText(/\[VERIFIED|\[POLICY|draft for review|not an approved/i)).not.toBeInTheDocument();
+    await expect.element(page.getByRole('button',{name:/checkout|buy now/i})).not.toBeInTheDocument();
+    root.unmount();host.remove();host=document.createElement('div');document.body.append(host);root=createRoot(host);
+  }
+  mount(<StorePage page="privacy" draft={false} waitlistEnabled={false} onBrowse={()=>{}}/>);
+  await expect.element(page.getByText(/signup is temporarily closed/i)).toBeVisible();
+  await expect.element(page.getByText(/No signup will be recorded/i)).toBeVisible();
 });
 
 test('staff route refuses an unsigned or unprivileged account and packing slip omits payment details',async()=>{

@@ -1,0 +1,54 @@
+name: Live sales readiness
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_readiness_check:
+        description: Run the strict sales readiness audit only. This does not enable payments or email.
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-sales-readiness-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sales-readiness:
+    name: Strict pre-sales and activation checks
+    runs-on: ubuntu-latest
+    environment:
+      name: live-sales-readiness
+    timeout-minutes: 10
+    steps:
+      - name: Require an explicit manual audit confirmation
+        env:
+          CONFIRM_READINESS_CHECK: ${{ inputs.confirm_readiness_check }}
+        run: test "$CONFIRM_READINESS_CHECK" = "true"
+      - name: Restrict audit to the reviewed production branch
+        if: github.ref != 'refs/heads/main'
+        run: exit 1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies
+        id: install
+        run: npm ci
+      - name: Require pre-deployment infrastructure readiness
+        id: predeploy
+        run: npm run check:predeploy
+        env:
+          PAYMENTS_ENABLED: 'false'
+          TRANSACTIONAL_EMAILS_ENABLED: 'false'
+      # This still fails the workflow when strict sales prerequisites are absent.
+      # It runs after a failed pre-deployment report to show both sets of blockers.
+      - name: Require strict live-sales readiness
+        if: always() && steps.install.outcome == 'success'
+        run: npm run check:sales

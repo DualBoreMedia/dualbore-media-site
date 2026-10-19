@@ -49,7 +49,7 @@ export const readPage=()=>{
   if(Object.hasOwn(policyPages,path.slice(1)))return path.slice(1);
   return /^\/order\/(success|pending|cancel|test-checkout)$/.test(path)?path.slice(1):null;
 };
-export function StorePage({page,onBrowse}){
+export function StorePage({page,onBrowse,draft=false,waitlistEnabled=false}){
   useEffect(()=>{document.title=`${policyPages[page]?.title||'Order'} | DualBore Media`;},[page]);
   if(page?.startsWith('order/')){
     const state=page.split('/')[1];const Icon=state==='success'?FaCheck:state==='pending'?FaClock:FaArrowRotateLeft;
@@ -58,6 +58,13 @@ export function StorePage({page,onBrowse}){
       <p className="draft-note">All three order previews preserve the cart. Only a future verified paid-order response may clear purchased items.</p><div className="order-actions"><button className="button" onClick={onBrowse}>Back to Drop 01 <FaArrowRight aria-hidden="true"/></button><a className="text-link" href="/#garage">Back to the builds</a></div><div className="order-preview-links"><a href="/order/pending">Preview pending</a><a href="/order/success">Preview success</a><a href="/order/cancel">Preview cancellation</a></div><a className="order-content-link" target="_blank" rel="noopener noreferrer" aria-label="Watch the BMW N54 build on YouTube (opens in a new tab)" href="https://www.youtube.com/watch?v=LOOSFHJGUPM"><img src="/assets/n54.jpg" alt="BMW N54 single-turbo build channel thumbnail" width="480" height="360"/><span><small>The machine behind the design</small><strong>Watch the N54 build.</strong><FaYoutube aria-hidden="true"/></span></a></section>;
   }
   const policy=policyPages[page];if(!policy)return null;
+  if(!draft){
+    const privacy=page==='privacy';
+    return <article className="store-page policy-page"><span className="eyebrow">Pre-launch information / No orders accepted</span><h1>{policy.title}.</h1><p className="policy-intro">{policy.intro}</p>
+      {privacy?<><section><h2>Drop 01 interest</h2><p>{waitlistEnabled?'The Drop 01 form asks for your name, email, preferred design and size, and explicit email consent. Netlify Forms records accepted signups. This is interest only, not an order or size reservation.':'The Drop 01 signup is temporarily closed while we finish the privacy and data-request information. No signup will be recorded through this page.'}</p><p>This site is not accepting orders or payments. The complete retention, deletion and privacy contact details will be published before email signup or sales are enabled.</p></section></>:<section><h2>Before orders open</h2><p>DualBore Media is not accepting purchases or payments. We will publish complete {policy.title.toLowerCase()} information before opening orders. Nothing on this page creates an order or changes your legal rights.</p></section>}
+      <div className="order-actions"><button className="button" onClick={onBrowse}>Back to Drop 01 preview</button></div>
+    </article>;
+  }
   return <article className="store-page policy-page"><span className="eyebrow">Customer information / Draft for review</span><h1>{policy.title}.</h1><p className="policy-intro">{policy.intro}</p><p className="draft-note">Pre-launch draft. This page is incomplete and is not an approved customer policy.</p>{policy.sections.map(([heading,text])=><section key={heading}><h2>{heading}</h2><p>{text}</p></section>)}<div className="order-actions"><button className="button" onClick={onBrowse}>Back to Drop 01</button>{page==='contact'&&<a className="button" href="/account">Order, shipping, returns or account help</a>}{page==='contact'&&<a className="text-link" href={channel.community} target="_blank" rel="noopener noreferrer" aria-label="Visit the DualBore Media community on YouTube (opens in a new tab)">YouTube community <FaYoutube aria-hidden="true"/></a>}</div></article>;
 }
 export function StoreFooter({onAlert}){

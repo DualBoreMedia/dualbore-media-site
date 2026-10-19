@@ -1,10 +1,11 @@
 import {spawn} from 'node:child_process';
 import {readFile, readdir, mkdir, writeFile} from 'node:fs/promises';
-import {resolve, relative, sep} from 'node:path';
+import {resolve} from 'node:path';
 import coverageLibrary from 'istanbul-lib-coverage';
 import reportLibrary from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 import {coveragePolicy} from './coverage-policy.mjs';
+import {combineCoverageReports, expectedCoverageSources} from './coverage-merge.mjs';
 const {createCoverageMap} = coverageLibrary;
 const {createContext} = reportLibrary;
 
@@ -35,20 +36,16 @@ if (await run(['node_modules/vitest/vitest.mjs', 'run', '--config', 'vitest.brow
 
 const nodeData = JSON.parse(await readFile('test-results/coverage/coverage-final.json', 'utf8'));
 const browserData = JSON.parse(await readFile('test-results/coverage-browser/coverage-final.json', 'utf8'));
-const keyFor = path => relative(cwd, resolve(path)).split(sep).join('/');
-const nodeFiles = new Map(Object.entries(nodeData).map(([path, data]) => [keyFor(path), data]));
-const browserFiles = new Map(Object.entries(browserData).map(([path, data]) => [keyFor(path), data]));
-const combined = {};
-for (const [path, nodeCoverage] of nodeFiles) {
-  const selected = path.endsWith('.jsx') ? browserFiles.get(path) : nodeCoverage;
-  if (!selected || (path.endsWith('.jsx') && !path.startsWith('src/'))) throw new Error(`Missing matching Chromium coverage for ${path}`);
-  // Each source is included exactly once. JS shared by browser and Node stays
-  // with c8 because transformed Vitest statement maps are not interchangeable.
-  combined[selected.path] = selected;
-}
-for (const [path] of browserFiles) {
-  if (path.endsWith('.jsx') && !nodeFiles.has(path)) throw new Error(`Chromium measured an unaccounted JSX source: ${path}`);
-}
+const expectedNodeFiles = expectedCoverageSources(cwd, coveragePolicy.exclude);
+const expectedBrowserFiles = expectedNodeFiles.filter(path => path.startsWith('src/'));
+const {combined, manifest} = combineCoverageReports({
+  nodeData,
+  browserData,
+  root: cwd,
+  expectedNodeFiles,
+  expectedBrowserFiles,
+});
+await writeFile('test-results/coverage-source-authority.json', JSON.stringify(manifest, null, 2));
 const coverage = createCoverageMap(combined);
 const context = createContext({dir: 'test-results/coverage-combined', coverageMap: coverage});
 for (const kind of ['text', 'html', 'lcovonly', 'json', 'json-summary']) reports.create(kind).execute(context);
@@ -59,6 +56,16 @@ for (const key of metricKeys) {
 }
 const misses = metricKeys.filter(key => summary[key].pct < coveragePolicy[key]);
 console.log('Combined Node + Chromium coverage:', Object.fromEntries(metricKeys.map(key => [key, summary[key].pct])));
+const incompatibleShared = manifest.filter(entry => entry.maps.startsWith('incompatible'));
+const browserOnlyJsCoverage = incompatibleShared.filter(entry => entry.file.startsWith('src/') && !entry.file.endsWith('.jsx') && entry.browserExecuted);
+const negativeMapColumns = manifest.reduce((sum, entry) => sum + entry.nodeNegativeColumns + entry.browserNegativeColumns, 0);
+const unmappedBranches = manifest.reduce((sum, entry) => sum + entry.nodeUnmappedBranchLocations + entry.browserUnmappedBranchLocations, 0);
+console.log(`Coverage source inventory: ${manifest.length} files, ${incompatibleShared.length} incompatible overlapping maps kept authoritative per file.`);
+if (negativeMapColumns) console.warn(`Source-map diagnostic: ${negativeMapColumns} V8-to-Istanbul source locations have negative columns; line mappings remain valid and these reports are never merged.`);
+if (unmappedBranches) console.warn(`Source-map diagnostic: ${unmappedBranches} branch arms have no source location; affected reports remain authoritative per file and are never merged.`);
+if (browserOnlyJsCoverage.length) {
+  console.log('Shared frontend JavaScript executed in Chromium but retained Node-authoritative counters because source maps differ:', browserOnlyJsCoverage.map(entry => entry.file).join(', '));
+}
 if (misses.length) {
   console.error('Coverage below required thresholds:', misses.map(key => `${key} ${summary[key].pct}% < ${coveragePolicy[key]}%`).join(', '));
   process.exitCode = 1;

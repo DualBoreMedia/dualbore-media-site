@@ -31,3 +31,11 @@ test('public website gate rejects payment or email activation independently of s
   }
   assert.ok(checkWebsite({files: {...files, 'dist/client/_headers': ''}, env: {PAYMENTS_ENABLED: 'false', TRANSACTIONAL_EMAILS_ENABLED: 'false'}}).blockers.some(blocker => blocker.includes('security headers')));
 });
+
+test('public website gate blocks private source maps in the deployable client tree', () => {
+  const files = websiteFixture();
+  files['dist/client/assets/app.js.map'] = 'source map';
+  const result = checkWebsite({files, env: {PAYMENTS_ENABLED: 'false', TRANSACTIONAL_EMAILS_ENABLED: 'false'}});
+  assert.equal(result.ready, false);
+  assert.ok(result.blockers.some(blocker => blocker.includes('Private source map')));
+});
