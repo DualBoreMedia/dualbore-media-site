@@ -19,6 +19,8 @@
     "catalog:sync": "node --env-file-if-exists=.env.local scripts/sync-stripe-test-catalog.mjs",
     "check:launch": "node scripts/check-launch.mjs",
     "check:predeploy": "node scripts/check-launch.mjs --phase=predeploy",
+    "check:website": "node scripts/check-website.mjs",
+    "check:sales": "node scripts/check-launch.mjs",
     "orders:recover": "node --env-file-if-exists=.env.local scripts/recover-commerce.mjs",
     "dev:simulation": "node scripts/dev-simulation.mjs",
     "test:postgres": "node --env-file-if-exists=.env.local --test tests/postgres-real.integration.mjs tests/operations-postgres.integration.mjs",

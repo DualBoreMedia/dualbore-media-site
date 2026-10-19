@@ -35,11 +35,12 @@ jobs:
       - run: npm run test:inventory
       - name: Critical business-condition mutation spot checks
         run: npm run test:mutations
-      - name: Unit, commerce, auth, operations and security regressions with coverage gate
-        run: npm run test:coverage
       - run: npm run test:sites
       - run: npm run test:client-secrets
       - run: npm audit --audit-level=high
+      - run: npm exec -- playwright install --with-deps chromium
+      - name: Unit, commerce, auth, operations and security regressions with coverage gate
+        run: npm run test:coverage
       - name: Retain measured coverage and static inventory even when the gate fails
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -47,6 +48,8 @@ jobs:
           name: coverage-and-inventory
           path: |
             test-results/coverage/
+            test-results/coverage-browser/
+            test-results/coverage-combined/
             test-results/coverage-policy.json
             test-results/inventory/
             test-results/mutations/
@@ -117,9 +120,30 @@ jobs:
           path: test-results/browser/
           retention-days: 7
 
-  launch-readiness:
-    name: Strict pre-deployment readiness
+  website-readiness:
+    name: Public website configuration with commerce disabled
+    needs: [engineering, browser]
+    if: ${{ always() && needs.engineering.result == 'success' && needs.browser.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PAYMENTS_ENABLED: 'false'
+      TRANSACTIONAL_EMAILS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npm run build
+      - run: npm run check:website
+
+  sales-readiness:
+    name: Live sales activation requirements (expected blocked)
     needs: [engineering, postgres, browser]
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -132,4 +156,4 @@ jobs:
       # Intentionally fails while production configuration and evidence are absent.
       # Never substitute test credentials, blanket attestations or continue-on-error.
       # Production credentials must not be added to pull-request/untrusted jobs.
-      - run: npm run check:predeploy
+      - run: npm run check:sales

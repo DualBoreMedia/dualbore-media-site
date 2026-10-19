@@ -27,7 +27,7 @@ const server = await createServer({
     vite.middlewares.use(async (request, response, next) => {
       const name = request.url === '/.tools/operations-qa/staff.html' ? 'staff' : request.url === '/__qa/admin' ? 'admin' : request.url === '/__qa/error-boundary' ? 'error-boundary' : null;
       if (!name) return next();
-      const html = await vite.transformIndexHtml(request.url, `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0"><div id="root"></div><script type="module" src="/${fixtures}/${name}.jsx"></script></body></html>`);
+      const html = await vite.transformIndexHtml(request.url, `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/assets/favicon.svg"></head><body style="margin:0"><div id="root"></div><script type="module" src="/${fixtures}/${name}.jsx"></script></body></html>`);
       response.setHeader('Content-Type', 'text/html'); response.end(html);
     });
   }}],
@@ -89,7 +89,7 @@ try {
       if (page) await page.screenshot({path: `${output}/${name}-failure.png`, fullPage: true}).catch(() => {});
       await context.tracing.stop({path: `${output}/${name}-trace.zip`});
       const focus = page ? await page.evaluate(() => ({tag: document.activeElement?.tagName, label: document.activeElement?.getAttribute('aria-label'), text: document.activeElement?.textContent?.slice(0, 100)})).catch(() => null) : null;
-      results.push({browser: name, status: 'failed', error: String(error.message), focus});
+      results.push({browser: name, status: 'failed', error: String(error.message), focus, consoleIssues, expectedConsole});
       process.exitCode = 1;
     } finally {await browser.close();}
   }
