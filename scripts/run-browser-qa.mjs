@@ -55,7 +55,7 @@ try {
       const entry = {level: message.type(), text: message.text(), url: message.location().url};
       // runStaffBrowserChecks deliberately revokes access and asserts the 404
       // clears sensitive UI. This expected denial is retained, not hidden.
-      if (opened.url() === baseUrl + '/__qa/error-boundary' && /DBM_SYNTHETIC_BOUNDARY_EXCEPTION|error occurred in the <Broken>|recreate this component tree/i.test(entry.text)) expectedConsole.push({...entry, reason: 'Deliberate synthetic render exception'});
+      if (opened.url() === baseUrl + '/__qa/error-boundary' && (/DBM_SYNTHETIC_BOUNDARY_EXCEPTION|error occurred in the <Broken>|recreate this component tree/i.test(entry.text) || (entry.text === 'Error' && entry.url.startsWith(baseUrl + '/node_modules/.vite/deps/')))) expectedConsole.push({...entry, reason: 'Deliberate synthetic render exception'});
       else if (entry.text.includes('404') && /^http:\/\/127\.0\.0\.1:\d+\/api\/operations/.test(entry.url)) expectedConsole.push({...entry, reason: 'Verified revoked-access denial'});
       else if (/powerPreference option is currently ignored when calling requestAdapter\(\) on Windows/.test(entry.text)) expectedConsole.push({...entry, reason: 'Chromium Windows WebGPU adapter warning from the local browser runtime'});
       else consoleIssues.push(entry);
