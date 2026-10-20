@@ -1,4 +1,4 @@
-import {chromium, firefox, webkit} from '@playwright/test';
+import {chromium, firefox, webkit, expect} from '@playwright/test';
 import {createServer, preview} from 'vite';
 import react from '@vitejs/plugin-react';
 import {mkdir, writeFile} from 'node:fs/promises';
@@ -20,6 +20,12 @@ async function capturePublic(page, path) {
   for (const image of await scope.locator('img').all()) {
     if (!await image.isVisible()) continue;
     await image.scrollIntoViewIfNeeded();
+    // Firefox may reject decode() before its lazy-load request becomes active.
+    // Require a completed, usable image first, without ignoring decode failures.
+    const source = await image.getAttribute('src');
+    await expect.poll(() => image.evaluate(element => element.complete && element.naturalWidth > 0), {
+      timeout: 10000, message: 'Image did not finish loading: ' + source,
+    }).toBe(true);
     await image.evaluate(async element => {
       let timeout;
       try {
@@ -28,7 +34,7 @@ async function capturePublic(page, path) {
           new Promise((_, reject) => {timeout = setTimeout(() => reject(new Error('Image decode timed out: ' + (element.currentSrc || element.src))), 10000);}),
         ]);
       } finally {clearTimeout(timeout);}
-    });
+    }).catch(error => {throw new Error('Image decode failed for ' + source + ': ' + error.message);});
   }
   await page.evaluate(() => window.scrollTo(0, 0));
   if (modalOpen) await dialog.evaluate(element => {element.scrollTop = 0;});
