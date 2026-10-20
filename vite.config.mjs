@@ -34,7 +34,7 @@ function localCommerce(mode) {
         const path=req.originalUrl||'/api/commerce'+req.url;
         const request=new Request(`http://${host}${path}`,{method:req.method,headers:req.headers,...(['GET','HEAD'].includes(req.method)?{}:{body:Buffer.concat(chunks)})});
         const {commerceHttp}=await import('./netlify/commerce/http.mjs');
-        const response=await commerceHttp(request,{env});res.writeHead(response.status,Object.fromEntries(response.headers));res.end(await response.text());
+        const response=await commerceHttp(request,{env,clientIp:req.socket.remoteAddress||'local'});res.writeHead(response.status,Object.fromEntries(response.headers));res.end(await response.text());
       }catch{res.writeHead(503,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'Test commerce is unavailable.'}));}
     });
     server.middlewares.use('/api/cart-quote', async (req,res) => {

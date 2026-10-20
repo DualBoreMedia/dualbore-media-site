@@ -5,7 +5,7 @@ import {playwright} from '@vitest/browser-playwright';
 export default defineConfig({
   server: {host: '127.0.0.1'},
   plugins: [react()],
-  optimizeDeps: {include: ['react-icons/fa6']},
+  optimizeDeps: {include: ['react', 'react-dom/client', 'react-icons/fa6', '@clerk/react']},
   define: {__APP_RELEASE__: JSON.stringify('browser-coverage'), __APP_ENVIRONMENT__: JSON.stringify('test')},
   test: {
     include: ['tests/browser/**/*.test.jsx'],

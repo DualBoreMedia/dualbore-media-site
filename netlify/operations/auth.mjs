@@ -5,6 +5,7 @@ const deny = () => { throw new AuthError('sign_in_required', 'Please sign in aga
 const unavailable = () => { throw new AuthError('auth_unavailable', 'Account access is temporarily unavailable.', 503); };
 
 export async function authenticate(request, {env = process.env, client} = {}) {
+  if ((env.COMMERCE_ENVIRONMENT === 'production' || env.CONTEXT === 'production' || env.NODE_ENV === 'production') && env.AUTH_PROVIDER !== 'workos') unavailable();
   if(env.AUTH_PROVIDER==='workos'||(!env.AUTH_PROVIDER&&!env.CLERK_SECRET_KEY)){
     const {authenticateWorkos}=await import('./workos-auth.mjs');
     return authenticateWorkos(request,{env,client});

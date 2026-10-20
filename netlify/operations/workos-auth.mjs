@@ -1,5 +1,6 @@
 import {decodeJwt} from 'jose';
 import {AuthError} from './permissions.mjs';
+import {allWorkosPages,workosPages} from './workos-pagination.mjs';
 
 export const workosCookie='__Host-dbm-session';
 export const cookieName=env=>new URL(env.SITE_ORIGIN).protocol==='https:'?workosCookie:'dbm-local-session';
@@ -12,7 +13,7 @@ export function workosConfig(env){
 export async function workosClient(env){const {WorkOS}=await import('@workos-inc/node');return new WorkOS(env.WORKOS_API_KEY,{clientId:env.WORKOS_CLIENT_ID});}
 const denied=()=>{throw new AuthError('sign_in_required','Please sign in again to continue.');};
 // Bounded provider pagination must find the exact current record. Failure closes access.
-async function findSession(api,userId,id){let after;for(let page=0;page<10;page++){const result=await api.listSessions(userId,{limit:100,...(after?{after}:{})});const found=result.data.find(s=>s.id===id);if(found)return found;after=result.listMetadata?.after;if(!after)return null;}return null;}
+async function findSession(api,userId,id){for await(const rows of workosPages(options=>api.listSessions(userId,{...options,order:'desc'}))){const found=rows.find(s=>s.id===id);if(found)return found;}return null;}
 export async function authenticateWorkos(request,{env=process.env,client,now=Date.now()}={}){
  const config=workosConfig(env),url=new URL(request.url);
  if(url.origin!==config.origin||request.headers.has('Origin')&&request.headers.get('Origin')!==config.origin)throw new AuthError('origin_rejected','Open your account on the DualBore Media website.',403);
@@ -26,10 +27,10 @@ export async function authenticateWorkos(request,{env=process.env,client,now=Dat
   // decodeJwt follows the SDK signature/issuer/expiry verification, never replaces it.
   const claims=decodeJwt(verified.accessToken);
   if(claims.sub!==verified.user.id||claims.sid!==verified.sessionId||claims.iss!=='https://api.workos.com/'||!Number.isFinite(claims.exp)||claims.exp*1000<=now)denied();
-  const [user,session,memberships]=await Promise.all([api.getUser(claims.sub),findSession(api,claims.sub,claims.sid),env.WORKOS_STAFF_ORGANIZATION_ID?api.listOrganizationMemberships({organizationId:env.WORKOS_STAFF_ORGANIZATION_ID,userId:claims.sub,limit:100}):Promise.resolve({data:[]})]);
+  const [user,session,memberships]=await Promise.all([api.getUser(claims.sub),findSession(api,claims.sub,claims.sid),env.WORKOS_STAFF_ORGANIZATION_ID?allWorkosPages(options=>api.listOrganizationMemberships({organizationId:env.WORKOS_STAFF_ORGANIZATION_ID,userId:claims.sub,...options})):Promise.resolve([])]);
   if(user.id!==claims.sub||!session||session.userId!==user.id||session.status!=='active'||session.impersonator||!Number.isFinite(Date.parse(session.expiresAt))||Date.parse(session.expiresAt)<=now)denied();
   if(!user.emailVerified||typeof user.email!=='string'||!user.email.includes('@'))throw new AuthError('email_verification_required','Verify your email before accessing orders.',403);
-  const active=memberships.data.filter(m=>m.userId===user.id&&m.organizationId===env.WORKOS_STAFF_ORGANIZATION_ID&&m.status==='active');
+  const active=memberships.filter(m=>m.userId===user.id&&m.organizationId===env.WORKOS_STAFF_ORGANIZATION_ID&&m.status==='active');
   if(active.length>1)denied();
   const member=active[0],role=['employee','admin'].includes(member?.role?.slug)?member.role.slug:'customer';
   let mfa=false,mfaEnrolled=false;

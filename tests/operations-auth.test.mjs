@@ -20,6 +20,16 @@ function fixture() {
 }
 const authenticateWith = f => authenticate(request(), {env, client: f.client});
 
+test('production markers never select legacy Clerk or infer an authentication provider', async () => {
+  for (const marker of ['COMMERCE_ENVIRONMENT', 'CONTEXT', 'NODE_ENV']) {
+    for (const provider of [undefined, 'clerk', 'unknown']) {
+      const f = fixture();
+      await assert.rejects(authenticate(request(), {env: {...env, [marker]: 'production', AUTH_PROVIDER: provider}, client: f.client}), {code: 'auth_unavailable', status: 503});
+      assert.equal(f.calls.length, 0, 'legacy verification must not be attempted');
+    }
+  }
+});
+
 test('managed auth verifies Bearer, authorized party and current user/session on every request', async () => {
   const f = fixture();
   const identity = await authenticate(request({Cookie: '__session=forged'}), {env, client: f.client});

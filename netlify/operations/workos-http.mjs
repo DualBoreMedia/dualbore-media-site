@@ -22,7 +22,8 @@ async function handleWorkos(request,{env=process.env,client,repository,clientIp=
   if(url.origin!==config.origin||request.headers.has('Origin')&&request.headers.get('Origin')!==config.origin||request.method==='POST'&&request.headers.get('Origin')!==config.origin)return json({error:'Request origin rejected.'},403);
   callback=request.method==='GET'&&action==='callback';
   repository||=repositoryFor(env);if(!await limit(repository,clientIp,now))return json({error:'Too many attempts. Try again shortly.'},429);
-  client||=await workosClient(env);const api=client.userManagement;
+  if(!client)client=await workosClient(env);
+  const api=client.userManagement;
   if(request.method==='GET'&&action==='sign-in'){
    const staff=url.searchParams.get('staff')==='1';if(staff&&!env.WORKOS_STAFF_ORGANIZATION_ID)return json({error:'Staff sign-in is not configured.'},503);
    const pkce=await api.getAuthorizationUrlWithPKCE({provider:'authkit',clientId:config.clientId,redirectUri:config.origin+'/api/auth/callback',...(staff?{organizationId:env.WORKOS_STAFF_ORGANIZATION_ID,maxAge:0}:{}),screenHint:url.searchParams.get('signup')==='1'?'sign-up':'sign-in'});

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {deliverOrderEmails,renderOrderEmail,deliverShipmentEmail,renderShipmentEmail} from '../netlify/commerce/order-email.mjs';
+import {deliverOrderEmails,renderOrderEmail,deliverShipmentEmail,renderShipmentEmail,deliverLifecycleEmails,retryRecordedEmail} from '../netlify/commerce/order-email.mjs';
 
 const order={id:'order-1',orderNumber:'DBM-1',status:'paid',customerEmail:'customer@example.com',items:[{name:'E92 Tee',size:'M',quantity:1,unitPriceCents:3000,lineTotalCents:3000}],subtotalCents:3000,shippingCents:700,taxCents:0,totalCents:3700,currency:'usd',shippingName:'Customer',shippingAddress:{line1:'1 Example St',city:'City',state:'OH',postal_code:'12345',country:'US'}};
 const env={RESEND_API_KEY:'mock-key',RESEND_FROM:'orders@example.com'};
@@ -73,4 +73,24 @@ test('real sandbox order and shipment messages cannot be mistaken for live fulfi
  const confirmation=renderOrderEmail(sandbox);assert.match(confirmation.subject,/^\[TEST\]/);assert.match(confirmation.text,/No real payment was taken/);assert.match(confirmation.html,/Do not ship/);
  const payloads=[];await deliverOrderEmails({repository:repository(sandbox),orderId:sandbox.id,env:{...env,RESEND_NOTIFY_TO:'merchant@example.com'},fetchImpl:async(url,init)=>{payloads.push(JSON.parse(init.body));return sent();}});assert.ok(payloads.every(p=>/^\[TEST\]/.test(p.subject)));
  const shipment=renderShipmentEmail({...sandbox,status:'fulfilled',shippedAt:new Date().toISOString(),carrier:'Test carrier',trackingNumber:'TEST-NOT-A-PACKAGE',trackingUrl:'https://example.com/test'});assert.match(shipment.subject,/^\[TEST\]/);assert.match(shipment.text,/No real package was shipped/);
+});
+
+test('recorded retry handles missing events, invalid recipients and malformed provider acceptance safely',async()=>{
+ const repo=repository();assert.deepEqual(await retryRecordedEmail({repository:repo,eventId:'missing'}),{status:'not-found'});
+ repo.state.orders[order.id].customerEmail='not-an-email';let calls=0;
+ const result=await deliverOrderEmails({repository:repo,orderId:order.id,env,fetchImpl:async()=>{calls++;return sent();}});assert.equal(result.results[0].status,'recipient-invalid');assert.equal(calls,0);
+ repo.state.orders[order.id].customerEmail=order.customerEmail;
+ const invalid=await deliverOrderEmails({repository:repo,orderId:order.id,env,fetchImpl:async()=>Response.json({accepted:true})});assert.equal(invalid.results[0].status,'retry-queued');assert.equal(repo.state.emails['order-1:customer-confirmation'].lastError,'provider-response-invalid');
+ const retried=await retryRecordedEmail({repository:repo,eventId:'order-1:customer-confirmation',env,now:()=>new Date(Date.now()+61_000),fetchImpl:sent});assert.equal(retried.status,'sent');
+});
+
+test('email storage failures remain independent of order and shipment success',async()=>{
+ const broken={transaction:async()=>{throw Error('Synthetic database outage');}};
+ assert.deepEqual(await deliverLifecycleEmails({repository:broken,orderId:order.id,env}),[{status:'storage-or-order-unavailable'}]);
+ assert.deepEqual(await deliverShipmentEmail({repository:broken,orderId:order.id,env}),{type:'customer-shipment',status:'storage-or-order-unavailable'});
+});
+
+test('a superseded sending lease cannot overwrite another worker delivery result',async()=>{
+ const repo=repository();await deliverOrderEmails({repository:repo,orderId:order.id,env,fetchImpl:async()=>{repo.state.emails['order-1:customer-confirmation'].leaseToken='new-worker-token';return sent();}});
+ assert.equal(repo.state.emails['order-1:customer-confirmation'].leaseToken,'new-worker-token');assert.equal(repo.state.emails['order-1:customer-confirmation'].status,'sending');
 });

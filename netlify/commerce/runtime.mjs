@@ -7,10 +7,11 @@ import {seedTestCatalog} from './catalog.mjs';
 import {createMockStripe} from './test-stripe.mjs';
 const runtimes=new Map();
 export const loopback=url=>['127.0.0.1','localhost','[::1]'].includes(new URL(url).hostname);
+export const hostedEnvironment=env=>env.NETLIFY==='true'||['production','deploy-preview','branch-deploy'].includes(env.CONTEXT)||env.NODE_ENV==='production';
 export function testKey(key){return /^(sk|rk)_test_[A-Za-z0-9]+$/.test(key||'');}
 export async function commerceRuntime(env=process.env){
  if(env.COMMERCE_ENVIRONMENT==='production')return productionRuntime(env);
- if(env.NETLIFY==='true'||env.COMMERCE_TEST_ENABLED!=='true')throw new Error('Test checkout is not configured.');
+ if(hostedEnvironment(env)||env.COMMERCE_TEST_ENABLED!=='true')throw new Error('Test checkout is not configured.');
  if(env.COMMERCE_MOCK!=='true'&&(!testKey(env.STRIPE_SECRET_KEY)||!env.DATABASE_URL||!env.STRIPE_WEBHOOK_SECRET?.startsWith('whsec_')))throw new Error('Configure a sandbox key and local database.');
  const identity=createHash('sha256').update(JSON.stringify([env.COMMERCE_MOCK,env.DATABASE_URL,env.STRIPE_SECRET_KEY,env.STRIPE_WEBHOOK_SECRET,env.SITE_ORIGIN,env.TEST_DATABASE_DIRECTORY,env.TEST_SHIPPING_RATE_CENTS,env.STRIPE_AUTOMATIC_TAX,env.RESEND_API_KEY,env.RESEND_FROM,env.RESEND_REPLY_TO,env.RESEND_NOTIFY_TO])).digest('hex');
  if(runtimes.has(identity))return runtimes.get(identity);

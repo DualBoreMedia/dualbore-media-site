@@ -100,6 +100,21 @@ test('records branch arms with no source-map location instead of silently aligni
   assert.equal(result.manifest[0].maps, 'incompatible; counters not combined');
 });
 
+test('preserves an implicit false-path counter only when the source if has no else', () => {
+  const file = 'src/example.js';
+  writeFileSync(path.join(root, file), 'if (value) yes();\n');
+  const node = basicCoverage(file, {endColumn: 16, branchCount: 1});
+  node.branchMap[0].locations[1] = {start: {}, end: {}};
+  const result = combine({[file]: node}, {[file]: structuredClone(node)});
+  assert.equal(result.manifest[0].nodeImplicitBranchLocations, 1);
+  assert.equal(result.manifest[0].nodeUnmappedBranchLocations, 0);
+  assert.deepEqual(result.combined[path.join(root, file)].b, {0: [2, 0]});
+  writeFileSync(path.join(root, file), 'if (value) yes(); else no();\n');
+  const corrupted = combine({[file]: node}, {[file]: structuredClone(node)});
+  assert.equal(corrupted.manifest[0].nodeImplicitBranchLocations, 0);
+  assert.equal(corrupted.manifest[0].nodeUnmappedBranchLocations, 1);
+});
+
 test('rejects missing source files and files omitted from either runner inventory', () => {
   const file = 'src/example.js';
   const missing = basicCoverage('src/missing.js');
@@ -123,16 +138,29 @@ test('source inventory excludes only the configured runner helpers', () => {
   assert.deepEqual(expectedCoverageSources(root, ['scripts/run-coverage.mjs']), ['netlify/functions/endpoint.mjs', 'scripts/meaningful.mjs', 'src/example.js']);
 });
 
+test('browser-only React source remains included without a fabricated Node placeholder map', () => {
+  const file = 'src/example.jsx';
+  writeFileSync(path.join(root, file), 'export const View = () => <main>Garage</main>;\n');
+  const browser = basicCoverage(file, {endColumn: 44, functionCount: 1});
+  const result = combineCoverageReports({root, nodeData: {}, browserData: {[file]: browser}, expectedNodeFiles: [], expectedBrowserFiles: [file]});
+  assert.deepEqual(Object.keys(result.combined), [path.join(root, file)]);
+  assert.equal(result.manifest[0].authority, 'Chromium');
+  assert.equal(result.manifest[0].maps, 'single runner');
+});
+
 test('Node coverage fixture records known counts and detects the V8 else-arm source-map offset defect',()=>{
   const repository=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
   const directory=mkdtempSync(path.join(os.tmpdir(),'dbm-known-coverage-'));
   try{
+    const outer=path.join(directory,'outer-evidence');mkdirSync(outer);
+    const sentinel=path.join(outer,'preserve-existing-evidence.json');writeFileSync(sentinel,'{"evidence":"preserve"}');
     const run=spawnSync(process.execPath,[
       path.join(repository,'node_modules','c8','bin','c8.js'),
       '--all','--include=coverage-fixtures/coverage-known.mjs','--reporter=json','--reporter=json-summary',
-      `--reports-dir=${path.join(directory,'report')}`,process.execPath,'coverage-fixtures/coverage-known.mjs',
-    ],{cwd:repository,encoding:'utf8',env:Object.fromEntries(Object.entries(process.env).filter(([key])=>key!=='NODE_V8_COVERAGE'))});
+      `--reports-dir=${path.join(directory,'report')}`,`--temp-directory=${path.join(directory,'raw')}`,process.execPath,'coverage-fixtures/coverage-known.mjs',
+    ],{cwd:repository,encoding:'utf8',env:{...process.env,NODE_V8_COVERAGE:outer}});
     assert.equal(run.status,0,run.stderr||run.stdout);
+    assert.equal(readFileSync(sentinel,'utf8'),'{"evidence":"preserve"}', 'nested c8 must not clean the parent collector directory');
     const summary=JSON.parse(readFileSync(path.join(directory,'report','coverage-summary.json'),'utf8')).total;
     assert.deepEqual(Object.fromEntries(['lines','statements','functions','branches'].map(key=>[key,[summary[key].covered,summary[key].total]])),{
       lines:[4,5],statements:[4,5],functions:[1,1],branches:[2,3],

@@ -14,6 +14,7 @@ export function createStaffManagement({repository,env=process.env,client,now=()=
  const audit=(state,principal,action,target,metadata)=>{const id=randomUUID();state.audit[id]={id,actor:principal.userId,action,target,metadata,createdAt:timestamp()};};
  async function authorize(principal){try{requirePermission(principal,'staff-management');}catch(error){if(principal?.userId)await repository.transaction(s=>audit(s,principal,'authorization-denied','staff-management',{code:error.code}));throw error;}}
  async function provider(){
+  if((env.COMMERCE_ENVIRONMENT==='production'||env.CONTEXT==='production'||env.NODE_ENV==='production')&&env.AUTH_PROVIDER!=='workos')fail('staff_unavailable','Production staff management requires WorkOS.',503);
   if(env.AUTH_PROVIDER==='workos'){const {createWorkosStaffProvider}=await import('./workos-staff-provider.mjs');return createWorkosStaffProvider({env,client});}
   if(client)return client;
   if(!env.CLERK_SECRET_KEY||!env.SITE_ORIGIN)fail('staff_unavailable','Staff management is not configured.',503);
@@ -32,6 +33,7 @@ export function createStaffManagement({repository,env=process.env,client,now=()=
   if(request.action==='staff-role'){
    const user=await c.users.getUser(request.targetUserId);
    if(user.id!==request.targetUserId||role(user)!==request.role||user.banned||user.locked||user.deleted||request.role!=='customer'&&(!user.twoFactorEnabled||primary(user)?.verification?.status!=='verified'))fail('staff_reconciliation_required','The authentication provider does not confirm the intended role and enrollment. Review the account in the authentication provider first.',409);
+   if(env.AUTH_PROVIDER==='workos')await c.users.verifySessionsRevoked(request.targetUserId);
    result={saved:true,member:safeUser(user)};
   }else{
    const query=request.action==='staff-invite'?request.email:request.invitationId;

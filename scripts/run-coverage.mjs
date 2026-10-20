@@ -1,11 +1,13 @@
 import {spawn} from 'node:child_process';
-import {readFile, readdir, mkdir, writeFile} from 'node:fs/promises';
+import {readFile, readdir, mkdir, writeFile, rm} from 'node:fs/promises';
 import {resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import coverageLibrary from 'istanbul-lib-coverage';
 import reportLibrary from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 import {coveragePolicy} from './coverage-policy.mjs';
 import {combineCoverageReports, expectedCoverageSources} from './coverage-merge.mjs';
+import {convertNodeCoverage} from './coverage-node.mjs';
 const {createCoverageMap} = coverageLibrary;
 const {createContext} = reportLibrary;
 
@@ -15,29 +17,41 @@ const tests = (await readdir(new URL('../tests/', import.meta.url)))
 await mkdir('test-results', {recursive: true});
 await writeFile('test-results/coverage-policy.json', JSON.stringify(coveragePolicy, null, 2));
 
-function run(args) {
+function run(args, env = process.env) {
   return new Promise((accept, reject) => {
-    const child = spawn(process.execPath, args, {stdio: 'inherit', env: process.env});
+    const child = spawn(process.execPath, args, {stdio: 'inherit', env});
     child.once('error', reject);
     child.once('exit', code => accept(code ?? 1));
   });
 }
 
-// c8 measures native Node modules. Its --all entries for JSX are zero-fill
-// placeholders; transformed React components are measured in real Chromium.
-const nodeArgs = ['node_modules/c8/bin/c8.js'];
-for (const [key, value] of Object.entries(coveragePolicy)) {
-  if (key === 'check-coverage') continue;
-  for (const part of Array.isArray(value) ? value : [value]) nodeArgs.push('--' + key + '=' + part);
+// Collect native V8 evidence, then use the same AST-aware converter used by
+// Vitest's supported V8 provider. c8's line-based converter generated invalid
+// negative-column branch locations for this repository's ESM sources.
+const expectedSources = expectedCoverageSources(cwd, coveragePolicy.exclude);
+const expectedNodeFiles = expectedSources.filter(file => !file.endsWith('.jsx'));
+const expectedBrowserFiles = expectedSources.filter(file => file.startsWith('src/'));
+const rawDirectory = resolve('test-results/coverage-node-raw');
+await rm(rawDirectory, {recursive: true, force: true});
+await mkdir(rawDirectory, {recursive: true});
+if (await run(['--test', ...tests], {...process.env, NODE_V8_COVERAGE: rawDirectory})) process.exit(1);
+const processes = [];
+for (const file of (await readdir(rawDirectory)).filter(file => file.endsWith('.json'))) {
+  processes.push(JSON.parse(await readFile(resolve(rawDirectory, file), 'utf8')));
 }
-nodeArgs.push(process.execPath, '--test', ...tests);
-if (await run(nodeArgs)) process.exit(1);
+if (!processes.length) throw new Error('Node produced no raw V8 coverage evidence.');
+const measuredTests = new Set(processes.flatMap(process => process.result)
+  .filter(script => script.url.startsWith('file:')).map(script => resolve(fileURLToPath(script.url))));
+const missingTests = tests.filter(file => !measuredTests.has(resolve(file)));
+if (missingTests.length) throw new Error(`Node coverage evidence is missing executed test modules: ${missingTests.join(', ')}`);
+const nativeNodeData = await convertNodeCoverage({root: cwd, files: expectedNodeFiles, processes});
+await rm('test-results/coverage', {recursive: true, force: true});
+const nodeContext = createContext({dir: 'test-results/coverage', coverageMap: createCoverageMap(nativeNodeData)});
+for (const kind of ['text', 'html', 'lcovonly', 'json', 'json-summary']) reports.create(kind).execute(nodeContext);
 if (await run(['node_modules/vitest/vitest.mjs', 'run', '--config', 'vitest.browser.config.mjs'])) process.exit(1);
 
 const nodeData = JSON.parse(await readFile('test-results/coverage/coverage-final.json', 'utf8'));
 const browserData = JSON.parse(await readFile('test-results/coverage-browser/coverage-final.json', 'utf8'));
-const expectedNodeFiles = expectedCoverageSources(cwd, coveragePolicy.exclude);
-const expectedBrowserFiles = expectedNodeFiles.filter(path => path.startsWith('src/'));
 const {combined, manifest} = combineCoverageReports({
   nodeData,
   browserData,
@@ -60,7 +74,13 @@ const incompatibleShared = manifest.filter(entry => entry.maps.startsWith('incom
 const browserOnlyJsCoverage = incompatibleShared.filter(entry => entry.file.startsWith('src/') && !entry.file.endsWith('.jsx') && entry.browserExecuted);
 const negativeMapColumns = manifest.reduce((sum, entry) => sum + entry.nodeNegativeColumns + entry.browserNegativeColumns, 0);
 const unmappedBranches = manifest.reduce((sum, entry) => sum + entry.nodeUnmappedBranchLocations + entry.browserUnmappedBranchLocations, 0);
-console.log(`Coverage source inventory: ${manifest.length} files, ${incompatibleShared.length} incompatible overlapping maps kept authoritative per file.`);
+const implicitBranches = manifest.reduce((sum, entry) => sum + entry.nodeImplicitBranchLocations + entry.browserImplicitBranchLocations, 0);
+console.log(`Coverage source inventory: ${manifest.length} files, ${incompatibleShared.length} incompatible shared-source maps.`);
+console.log(`Preserved ${implicitBranches} implicit else-path counters verified against original-source if statements.`);
+if (incompatibleShared.length) {
+  console.error('Coverage mapping integrity failed: shared Node/Chromium maps disagree. Their counters were not combined.');
+  process.exitCode = 1;
+}
 if (negativeMapColumns) {
   console.error(`Coverage mapping integrity failed: ${negativeMapColumns} V8-to-Istanbul source locations have negative columns. Counters remain unmerged across incompatible maps, but this coverage result is not eligible to pass CI.`);
   process.exitCode = 1;

@@ -248,6 +248,24 @@ test('staff route refuses an unsigned or unprivileged account and packing slip o
   await expect.element(dialog.getByText('pi_private')).not.toBeInTheDocument();
   await expect.element(dialog.getByText('$30.00')).not.toBeInTheDocument();
 });
+test('packing preview traps both keyboard directions, prints, and handles Escape',async()=>{
+  const onClose=vi.fn(),onPrint=vi.fn();
+  const slip={orderNumber:'DBM-KEYBOARD',orderDate:'2026-10-18T00:00:00Z',shipTo:{name:'Synthetic Recipient',address:'Synthetic address'},items:[{name:'E92 Tee',size:'M',quantity:1}]};
+  mount(<PackingSlip slip={slip} onClose={onClose} onPrint={onPrint}/>);
+  const dialog=page.getByRole('dialog',{name:'Packing slip preview'});
+  await expect.element(dialog.getByRole('heading',{name:'DualBoreMedia',exact:true})).toHaveFocus();
+  const key=(shiftKey=false)=>document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',shiftKey,bubbles:true,cancelable:true}));
+  key(true);
+  await expect.element(dialog.getByRole('button',{name:'Print packing slip'})).toHaveFocus();
+  key();
+  await expect.element(dialog.getByRole('button',{name:'Back to order'})).toHaveFocus();
+  key(true);
+  await expect.element(dialog.getByRole('button',{name:'Print packing slip'})).toHaveFocus();
+  await dialog.getByRole('button',{name:'Print packing slip'}).click();
+  expect(onPrint).toHaveBeenCalledTimes(1);
+  document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
 test('authorized staff opens an order and prints a package-safe slip with focus restored',async()=>{
   const order={orderNumber:'DBM-QA-2',createdAt:'2026-10-18T00:00:00Z',status:'paid',fulfillmentStatus:'received',shippingName:'Synthetic Recipient',shippingAddress:{line1:'1 Test Way',city:'Test',state:'OH',postal_code:'43013',country:'US'},items:[{variantId:'e92-tee-m',name:'E92 Tee',size:'M',quantity:1}],shipments:[],version:0};
   const slip={orderNumber:order.orderNumber,orderDate:order.createdAt,shipTo:{name:order.shippingName,address:order.shippingAddress},items:order.items,paymentIntentId:'pi_never_print'};

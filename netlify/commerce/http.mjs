@@ -1,5 +1,5 @@
 import {inventoryPolicy,madeToOrder,publicAvailableQuantity} from './inventory.mjs';
-import {commerceRuntime,loopback} from './runtime.mjs';
+import {commerceRuntime,loopback,hostedEnvironment} from './runtime.mjs';
 import {CommerceError} from './service.mjs';
 import {operationLog} from '../operations/log.mjs';
 import {observeHttp,reportUnexpected,requestContext} from '../observability/index.mjs';
@@ -16,7 +16,7 @@ async function commerceHandler(request,{env,runtime,clientIp,reporter}){
  const url=new URL(request.url),route=url.pathname.split('/').at(-1);
  const live=env.COMMERCE_ENVIRONMENT==='production';
  if(live&&(url.origin!==env.SITE_ORIGIN||url.protocol!=='https:'))return json({error:'Not available.'},404);
- if(!live&&(env.NETLIFY==='true'||!loopback(request.url)||env.COMMERCE_TEST_ENABLED!=='true'))return route==='config'?json({enabled:false,mode:'test',reason:'Test checkout is not configured.',shippingCents:700}):json({error:'Not available.'},404);
+ if(!live&&(hostedEnvironment(env)||!loopback(request.url)||env.COMMERCE_TEST_ENABLED!=='true'))return route==='config'?json({enabled:false,mode:'test',reason:'Test checkout is not configured.',shippingCents:700}):json({error:'Not available.'},404);
  try{
   if(route==='config'){
    if(request.method!=='GET')return json({error:'Use GET.'},405);

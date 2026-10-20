@@ -1,5 +1,6 @@
 import {existsSync, readFileSync, readdirSync} from 'node:fs';
 import path from 'node:path';
+import {implicitIfLocations} from './coverage-node.mjs';
 
 const sourceExtensions = new Set(['.js', '.mjs', '.jsx']);
 
@@ -48,9 +49,12 @@ function validateSourceMap(data, relative, root, runner) {
   }
   if (!existsSync(mapped.absolute)) throw new Error(`${runner} mapped source is missing: ${relative}`);
 
-  const lineCount = readFileSync(mapped.absolute, 'utf8').split(/\r?\n/).length;
+  const source = readFileSync(mapped.absolute, 'utf8');
+  const lineCount = source.split(/\r?\n/).length;
+  const implicitIfs = implicitIfLocations(source);
   let negativeColumns = 0;
   let unmappedBranchLocations = 0;
+  let implicitBranchLocations = 0;
   const validate = (loc, label) => {
     validateLocation(loc, lineCount, label);
     for (const point of [loc.start, loc.end]) if (point?.column < 0) negativeColumns++;
@@ -64,7 +68,11 @@ function validateSourceMap(data, relative, root, runner) {
         validate(entry.loc, `${runner} ${relative} branch ${index}`);
         if (!Array.isArray(entry.locations)) throw new Error(`${runner} ${relative} branch ${index} has no locations.`);
         entry.locations.forEach((loc, part) => {
-          if (!validateLocation(loc, lineCount, `${runner} ${relative} branch ${index}.${part}`, true)) unmappedBranchLocations++;
+          if (!validateLocation(loc, lineCount, `${runner} ${relative} branch ${index}.${part}`, true)) {
+            if (entry.type === 'if' && part === 1 && entry.locations.length === 2
+              && implicitIfs.has(`${entry.loc.start.line}:${entry.loc.start.column}`)) implicitBranchLocations++;
+            else unmappedBranchLocations++;
+          }
           else for (const point of [loc.start, loc.end]) if (point?.column < 0) negativeColumns++;
         });
       } else if (kind === 'fnMap') {
@@ -96,7 +104,7 @@ function validateSourceMap(data, relative, root, runner) {
       }
     }
   }
-  return {negativeColumns, unmappedBranchLocations};
+  return {negativeColumns, unmappedBranchLocations, implicitBranchLocations};
 }
 
 function canonicalEntries(data, root, runner) {
@@ -178,15 +186,14 @@ export function combineCoverageReports({nodeData, browserData, root, expectedNod
 
   const combined = {};
   const manifest = [];
-  for (const file of expectedNodeFiles) {
+  for (const file of [...new Set([...expectedNodeFiles, ...expectedBrowserFiles])].sort()) {
     const nodeCoverage = node.get(file);
     const browserCoverage = browser.get(file);
     if (file.startsWith('src/') && !browserCoverage) {
       throw new Error(`Chromium coverage is missing frontend source: ${file}`);
     }
-    if (browserCoverage && !nodeCoverage) throw new Error(`Chromium measured an unaccounted source: ${file}`);
 
-    if (browserCoverage && mapsMatch(nodeCoverage, browserCoverage)) {
+    if (nodeCoverage && browserCoverage && mapsMatch(nodeCoverage, browserCoverage)) {
       combined[nodeCoverage.path] = mergeCounters(nodeCoverage, browserCoverage);
       manifest.push({
         file,
@@ -197,23 +204,27 @@ export function combineCoverageReports({nodeData, browserData, root, expectedNod
         browserNegativeColumns: browserNegativeColumns.get(file)?.negativeColumns ?? 0,
         nodeUnmappedBranchLocations: nodeNegativeColumns.get(file)?.unmappedBranchLocations ?? 0,
         browserUnmappedBranchLocations: browserNegativeColumns.get(file)?.unmappedBranchLocations ?? 0,
+        nodeImplicitBranchLocations: nodeNegativeColumns.get(file)?.implicitBranchLocations ?? 0,
+        browserImplicitBranchLocations: browserNegativeColumns.get(file)?.implicitBranchLocations ?? 0,
       });
       continue;
     }
 
-    const useBrowser = file.endsWith('.jsx');
+    const useBrowser = !nodeCoverage || file.endsWith('.jsx');
     const selected = useBrowser ? browserCoverage : nodeCoverage;
     combined[selected.path] = selected;
     manifest.push({
       file,
       authority: useBrowser ? 'Chromium' : 'Node',
-      maps: browserCoverage ? 'incompatible; counters not combined' : 'single runner',
+      maps: browserCoverage && nodeCoverage ? 'incompatible; counters not combined' : 'single runner',
       browserExecuted: browserCoverage ? Object.values(browserCoverage.s).some(count => count > 0) : false,
-      nodeExecuted: Object.values(nodeCoverage.s).some(count => count > 0),
+      nodeExecuted: nodeCoverage ? Object.values(nodeCoverage.s).some(count => count > 0) : false,
       nodeNegativeColumns: nodeNegativeColumns.get(file)?.negativeColumns ?? 0,
       browserNegativeColumns: browserNegativeColumns.get(file)?.negativeColumns ?? 0,
       nodeUnmappedBranchLocations: nodeNegativeColumns.get(file)?.unmappedBranchLocations ?? 0,
       browserUnmappedBranchLocations: browserNegativeColumns.get(file)?.unmappedBranchLocations ?? 0,
+      nodeImplicitBranchLocations: nodeNegativeColumns.get(file)?.implicitBranchLocations ?? 0,
+      browserImplicitBranchLocations: browserNegativeColumns.get(file)?.implicitBranchLocations ?? 0,
     });
   }
   return {combined, manifest};
