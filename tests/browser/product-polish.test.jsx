@@ -78,3 +78,14 @@ for(const status of [500,503])test('account refresh '+status+' shows retry inste
  vi.stubGlobal('fetch',vi.fn(async url=>url==='/api/auth/session'?Response.json({signedIn:false},{status:401}):Response.json({error:'unavailable'},{status})));root.render(<WorkosOperations/>);
  await expect.element(page.getByRole('region',{name:'Account availability'})).toBeVisible();await expect.element(page.getByRole('button',{name:'Check account access'})).toBeVisible();await expect.element(page.getByRole('link',{name:'Secure sign in'})).not.toBeInTheDocument();
 });
+
+test('organized footer provides real visitor links and restores keyboard focus when exploring every view',async()=>{
+ root.render(<App/>);const footer=page.getByRole('contentinfo');
+ const explore=footer.getByRole('navigation',{name:'Explore the garage'});
+ for(const [button,tab] of [['Video Vault',/Video Vault/],['Drop 01 Preview',/Drop 01 Merch|Garage Merch/],['Pit Crew',/Pit Crew/],['Garage Builds',/Garage Builds/]]){
+  await explore.getByRole('button',{name:button,exact:true}).click();await expect.element(page.getByRole('tab',{name:tab})).toHaveFocus();await expect.element(page.getByRole('tab',{name:tab})).toHaveAttribute('aria-selected','true');
+ }
+ const info=footer.getByRole('navigation',{name:'Customer information'});
+ for(const [label,path]of [['Privacy','privacy'],['Shipping','shipping'],['Returns & Exchanges','returns'],['Terms & Conditions','terms'],['Contact & Support','contact']])await expect.element(info.getByRole('link',{name:label,exact:true})).toHaveAttribute('href','/'+path);
+ const follow=footer.getByRole('navigation',{name:'Follow DualBore Media'});await expect.element(follow.getByRole('link',{name:/Read DualBore Media community updates/})).toHaveAttribute('href','https://www.youtube.com/@DualBoreMedia/community');await expect.element(footer.getByRole('textbox')).not.toBeInTheDocument();
+});

@@ -20,6 +20,13 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Owner screenshot refinements, October 20, 2026
+
+- Use consistent dark framing around the three authentic merchandise mockups; preserve their artwork and natural photographic backgrounds. Keep planned prices $30/$50/$50 and sizes S/M/L/XL/2XL, with no ordering or email collection.
+- Improve supporting text readability and group footer navigation into clear sections. Frame channel thumbnails without losing the motorcycle or important thumbnail text; reduce intrinsic black letterboxing where the real image permits.
+- Grok Build is no longer participating. Incorporate Gemini findings when supplied, checking them against current code rather than waiting or assuming a review exists.
+- Prepare the non-selling release independently of sales-provider activation. No main, Netlify, production-provider, live payment, transactional email or marketing changes are authorized.
+
 ### Finished product development, October 20, 2026
 
 - Refine the established public website, not only its test infrastructure: cohesive homepage, complete build/video journeys, original merchandise previews, Pit Crew and public information. Preserve the charcoal/red/cyan visual identity and real channel assets.

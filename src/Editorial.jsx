@@ -22,3 +22,16 @@ export function ProductReleaseDetails({item}){
 export function CrewPrinciples(){
  return <section className="crew-principles" aria-label="What you will find on the channel">{[[FaWrench,'Inside the garage','Parts, repairs and the work behind our project cars and motorcycles.'],[FaPlay,'Out for a ride','Two-stroke hills, V-twin POV sessions and backyard pit-bike laps.'],[FaShirt,'From machine to design','Original apparel artwork inspired by the cars and bikes we spend time with.']].map(([Icon,title,copy])=><article key={title}><Icon aria-hidden="true"/><h3>{title}</h3><p>{copy}</p></article>)}<a className="crew-follow" href={channel.community} target="_blank" rel="noopener noreferrer" aria-label="Follow DualBore Media community updates on YouTube (opens in a new tab)"><FaUsers aria-hidden="true"/> Stay in the loop between uploads <FaYoutube aria-hidden="true"/></a></section>;
 }
+
+
+export function PublicFooter({onView,policies}){
+ return <footer className="footer public-footer">
+  <div className="footer-columns">
+   <div className="footer-story"><img src="/assets/channel-logo.jpg" alt="DualBore Media Logo" width="56" height="56" loading="lazy"/><h2>Built. Ridden.<br/><span>Repeat.</span></h2><p>Two brothers. Four platforms. The work behind the ride.</p></div>
+   <nav aria-label="Explore the garage"><h3>Inside the garage</h3><button onClick={()=>onView('garage',true)}>Garage Builds</button><button onClick={()=>onView('vault',true)}>Video Vault</button><button onClick={()=>onView('merch',true)}>Drop 01 Preview</button><button onClick={()=>onView('crew',true)}>Pit Crew</button><a href="/account">My Garage</a></nav>
+   <nav aria-label="Customer information"><h3>Visitor information</h3>{Object.entries(policies).map(([path,policy])=><a key={path} href={'/'+path}>{policy.title}</a>)}</nav>
+   <nav aria-label="Follow DualBore Media"><h3>Keep up with the crew</h3><p>Watch the builds and follow what comes next. Drop 01 is coming soon.</p><a href={channel.url} target="_blank" rel="noopener noreferrer" aria-label="Open the DualBore Media YouTube channel (opens in a new tab)"><FaYoutube aria-hidden="true"/> Watch the channel <FaArrowRight aria-hidden="true"/></a><a href={channel.community} target="_blank" rel="noopener noreferrer" aria-label="Read DualBore Media community updates (opens in a new tab)">Community updates <FaArrowRight aria-hidden="true"/></a></nav>
+  </div>
+  <div className="footer-bottomline"><small>© {new Date().getFullYear()} DualBore Media</small><span>Real projects. More to come.</span></div>
+ </footer>;
+}

@@ -13,7 +13,7 @@ import {runMadeToOrderBrowserChecks} from '../tests/made-to-order.browser.mjs';
 const output = resolve('test-results/browser');
 async function capturePublic(page, path) {
   const dialog = page.locator('dialog[open]');
-  const scope = await dialog.count() ? dialog : page.locator('main');
+  const scope = await dialog.count() ? dialog : page.locator('body');
   // Full-page screenshots do not scroll lazy images into view. Exercise that
   // real loading behavior before capturing evidence, including offscreen cards.
   for (const image of await scope.locator('img').all()) {
@@ -119,9 +119,10 @@ try {
           const brand = document.querySelector('.brand').getBoundingClientRect();
           const wordmark = document.querySelector('.brand strong');
           const wordmarkRect = wordmark.getBoundingClientRect();
-          return {garageVisible: getComputedStyle(garage).display !== 'none' && garageRect.width > 0, garageWithinHeader: garageRect.left >= header.left && garageRect.right <= header.right, brandWithinViewport: brand.left >= 0 && brand.right <= innerWidth, wordmarkWithinViewport: wordmarkRect.left >= brand.left && wordmarkRect.right <= innerWidth, wordmark: wordmark.innerText};
+          return {garageVisible: getComputedStyle(garage).display !== 'none' && garageRect.width > 0, garageWithinHeader: garageRect.left >= header.left && garageRect.right <= header.right, brandWithinViewport: brand.left >= 0 && brand.right <= innerWidth, wordmarkWithinViewport: wordmarkRect.left >= brand.left && wordmarkRect.right <= innerWidth, wordmark: wordmark.innerText, subscribeLeft:document.querySelector('.header .subscribe').getBoundingClientRect().left, brandRight:brand.right, subscribeFont:getComputedStyle(document.querySelector('.header .subscribe')).fontSize};
         });
         if ([701, 768, 1024, 1100].includes(width) && (!navigation.garageVisible || !navigation.garageWithinHeader)) throw Error(`My Garage is not reachable in the primary header at ${width}px: ${JSON.stringify(navigation)}`);
+        if(width<=700&&(navigation.subscribeFont!=='0px'||navigation.subscribeLeft<navigation.brandRight))throw Error('Compact header actions overlap the brand at '+width+'px');
         if (width === 320 && (!navigation.brandWithinViewport || !navigation.wordmarkWithinViewport || navigation.wordmark !== 'DUALBOREMEDIA')) throw Error(`Brand logo or complete wordmark is clipped at 320px: ${JSON.stringify(navigation)}`);
         // The form-detector route can also be served from the browser cache.
         // A 304 is a valid cached response, but Response.ok() is false for it.
@@ -148,6 +149,12 @@ try {
           await capturePublic(publicPage, `${output}/${name}-vault-${width}.png`);
           await publicPage.getByRole('tab').filter({hasText:'Garage Merch'}).click();
           await publicPage.getByRole('button',{name:'Quick View E92 Coupe Line-Art Tee'}).waitFor();
+          const cards=await publicPage.locator('.merch-card').evaluateAll(elements=>elements.map(card=>({height:card.getBoundingClientRect().height,priceTop:card.querySelector('.merch-preview-price').getBoundingClientRect().top,quickView:getComputedStyle(card.querySelector('.quick-view-label')).opacity,qualifierFont:Number.parseFloat(getComputedStyle(card.querySelector('.merch-preview-price span')).fontSize)})));
+          if(cards.some(card=>card.quickView!=='1'||card.qualifierFont<12))throw Error('Merch details or Quick View are not consistently readable');
+          if(width>700&&(Math.max(...cards.map(c=>c.height))-Math.min(...cards.map(c=>c.height))>2||Math.max(...cards.map(c=>c.priceTop))-Math.min(...cards.map(c=>c.priceTop))>2))throw Error('Merch card heights or price rows do not align at '+width+'px: '+JSON.stringify(cards));
+          const footer=publicPage.getByRole('contentinfo');
+          for(const label of ['Explore the garage','Customer information','Follow DualBore Media'])await footer.getByRole('navigation',{name:label,exact:true}).waitFor();
+
           await capturePublic(publicPage, `${output}/${name}-merch-${width}.png`);
           await publicPage.getByRole('button',{name:'Quick View E92 Coupe Line-Art Tee'}).click();
           await publicPage.getByRole('region',{name:'Drop 01 release details'}).waitFor();
