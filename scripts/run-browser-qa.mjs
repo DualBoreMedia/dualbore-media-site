@@ -101,7 +101,9 @@ try {
         });
         if ([701, 768, 1024, 1100].includes(width) && (!navigation.garageVisible || !navigation.garageWithinHeader)) throw Error(`My Garage is not reachable in the primary header at ${width}px: ${JSON.stringify(navigation)}`);
         if (width === 320 && (!navigation.brandWithinViewport || !navigation.wordmarkWithinViewport || navigation.wordmark !== 'DUALBOREMEDIA')) throw Error(`Brand logo or complete wordmark is clipped at 320px: ${JSON.stringify(navigation)}`);
-        const formRoute = await publicPage.goto(`${publicBaseUrl}/__forms.html`);
+        // The form-detector route can also be served from the browser cache.
+        // A 304 is a valid cached response, but Response.ok() is false for it.
+        const formRoute = await publicPage.goto(`${publicBaseUrl}/__forms.html?qaViewport=${width}`);
         if (!formRoute?.ok() || await publicPage.locator('form[name="drop-waitlist"]').count()) throw Error('The paused Netlify Drop 01 detector is still published');
         await publicPage.goto(publicBaseUrl + '/');
         await publicPage.getByRole('heading', {name: /Four platforms/}).waitFor();
@@ -148,8 +150,8 @@ try {
           }
         }
       }
+      await publicPage.screenshot({path: `${output}/${name}-success.png`, fullPage: true});
       await publicPage.close();
-      await page.screenshot({path: `${output}/${name}-success.png`, fullPage: true});
       page = await context.newPage();
       await page.goto(baseUrl + '/__qa/error-boundary');
       await page.getByRole('heading', {name: 'The garage hit a snag', exact: true}).waitFor();
