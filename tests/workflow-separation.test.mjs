@@ -5,12 +5,14 @@ import test from 'node:test';
 const production = await readFile(new URL('../.github/workflows/production-checks.yml', import.meta.url), 'utf8');
 const sales = await readFile(new URL('../.github/workflows/live-sales-readiness.yml', import.meta.url), 'utf8');
 
-test('development CI requires engineering, browser and non-selling public-site checks only', () => {
+test('development CI independently runs engineering, browser and non-selling public-site checks', () => {
   assert.match(production, /push:\s*\n\s+branches:\s*\[main, codex\/commerce-test-foundation\]/);
   assert.match(production, /pull_request:/);
   assert.match(production, /run: npm run test:coverage/);
   assert.match(production, /run: npm run check:website/);
-  assert.match(production, /needs: \[engineering, browser\]/);
+  assert.match(production, /website-readiness:\s*\n\s+name: Public website configuration with commerce disabled\s*\n\s+runs-on:/);
+  assert.doesNotMatch(production, /website-readiness:[\s\S]*?\n\s+needs:/);
+  assert.match(production, /website-readiness:[\s\S]*?PAYMENTS_ENABLED: 'false'[\s\S]*?TRANSACTIONAL_EMAILS_ENABLED: 'false'/);
   assert.doesNotMatch(production, /run: npm run check:sales/);
   assert.doesNotMatch(production, /^  sales-readiness:/m);
 });

@@ -75,11 +75,16 @@ try {
       page = await context.newPage(); page.setDefaultTimeout(10000); page.setDefaultNavigationTimeout(30000);
       const storefront = await runMadeToOrderBrowserChecks({page, baseUrl, adminPreviewPath: '/__qa/admin'});
       const publicPage = await context.newPage();
+      page = publicPage;
       publicPage.setDefaultTimeout(10000);
       const viewportResults = [];
       for (const width of [320, 375, 390, 414, 701, 768, 1024, 1100, 1440]) {
         await publicPage.setViewportSize({width, height: 900});
-        const response = await publicPage.goto(`${publicBaseUrl}/`);
+        // Reusing one URL across viewport sizes allows browser caches to return
+        // 304 Not Modified. That is a successful navigation with cached content,
+        // but Playwright's Response.ok() is false for 304. Give each viewport a
+        // unique URL so this check measures a fresh public document response.
+        const response = await publicPage.goto(`${publicBaseUrl}/?qaViewport=${width}`);
         if (!response?.ok()) throw Error(`Public site returned ${response?.status()} at ${width}px`);
         await publicPage.getByRole('heading', {name: /Four platforms/}).waitFor();
         if (!/DualBore Media \| Garage Builds, Films & Merch/.test(await publicPage.title())) throw Error('Public site page title is incorrect');
@@ -163,6 +168,7 @@ try {
       if (page) await page.screenshot({path: `${output}/${name}-failure.png`, fullPage: true}).catch(() => {});
       await context.tracing.stop({path: `${output}/${name}-trace.zip`});
       const focus = page ? await page.evaluate(() => ({tag: document.activeElement?.tagName, label: document.activeElement?.getAttribute('aria-label'), text: document.activeElement?.textContent?.slice(0, 100)})).catch(() => null) : null;
+      console.error(`[browser:${name}] ${error instanceof Error ? error.name : 'Error'}: ${error instanceof Error ? error.message : String(error)}`);
       results.push({browser: name, status: 'failed', error: String(error.message), focus, consoleIssues, expectedConsole});
       process.exitCode = 1;
     } finally {await browser.close();}

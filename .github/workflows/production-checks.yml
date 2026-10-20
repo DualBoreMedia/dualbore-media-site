@@ -122,8 +122,6 @@ jobs:
 
   website-readiness:
     name: Public website configuration with commerce disabled
-    needs: [engineering, browser]
-    if: ${{ always() && needs.engineering.result == 'success' && needs.browser.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
