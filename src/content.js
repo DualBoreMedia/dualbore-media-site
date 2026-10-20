@@ -40,17 +40,17 @@ export const projects = [
 ];
 
 export const films = [
-  { id: 'LOOSFHJGUPM', duration: '18:04', title: 'The N54 single-turbo build starts here', category: 'Turbo Cars', label: 'BUILD SERIES · PART 1', image: '/assets/n54.jpg' },
-  { id: 'c7gF1jjT9YQ', duration: '9:36', title: 'Into the hills on the 1977 RD400', category: 'Two-Strokes', label: 'RIDES · TWO-STROKE', image: '/assets/rd400.jpg' },
-  { id: '2Juq4oxPOo4', duration: '28:56', title: 'Getting the SV1000S clutch sorted', category: 'V-Twins', label: 'IN THE GARAGE · REPAIR', image: '/assets/sv1000.jpg' },
-  { id: 'XqX31p88MuA', duration: '11:46', title: 'SV1000S common problems & POV ride', category: 'V-Twins', label: 'FROM THE SADDLE · POV', image: '/assets/sv1000.jpg', imageNote: 'SV1000S series artwork' },
-  { id: 'wRsSPRLMadI', duration: '0:56', title: 'CRF110 backyard track laps', category: 'Pit Bikes', label: 'PIT BIKES · RAW RIDING', image: '/assets/pitbike.jpg' },
+  { id: 'LOOSFHJGUPM', duration: '18:04', title: 'The N54 single-turbo build starts here', category: 'Turbo Cars', label: 'BUILD SERIES · PART 1', image: '/assets/episodes/LOOSFHJGUPM.jpg' },
+  { id: 'c7gF1jjT9YQ', duration: '9:36', title: 'Into the hills on the 1977 RD400', category: 'Two-Strokes', label: 'RIDES · TWO-STROKE', image: '/assets/episodes/c7gF1jjT9YQ.jpg' },
+  { id: '2Juq4oxPOo4', duration: '28:56', title: 'Getting the SV1000S clutch sorted', category: 'V-Twins', label: 'IN THE GARAGE · REPAIR', image: '/assets/episodes/2Juq4oxPOo4.jpg' },
+  { id: 'XqX31p88MuA', duration: '11:46', title: 'SV1000S common problems & POV ride', category: 'V-Twins', label: 'FROM THE SADDLE · POV', image: '/assets/episodes/XqX31p88MuA.jpg' },
+  { id: 'wRsSPRLMadI', duration: '0:56', title: 'CRF110 backyard track laps', category: 'Pit Bikes', label: 'PIT BIKES · RAW RIDING', image: '/assets/episodes/wRsSPRLMadI.jpg' },
 ];
 
 export const merch = [
-  { id: 'e92-tee', name: 'E92 Coupe Line-Art Tee', detail: 'E92 coupe · Line-art study', image: '/assets/IMG_5076.jpg', type: 'Graphic tee', notes: 'A three-quarter coupe outline with the Dual Bore Media wordmark. The supplied mockup shows the vehicle line work against a black garment.' },
-  { id: 'e90-crewneck', name: 'E90 Sedan Front-Clip Crewneck', detail: 'E90 sedan · Front elevation', image: '/assets/IMG_5077.jpg', type: 'Crewneck', notes: 'A front-facing E90 illustration centered above the DualBore Media wordmark. Headlights, grille, and body lines carry the design.' },
-  { id: 'sv1000s-silhouette', name: 'SV1000S Silhouette Crewneck', detail: 'SV1000S · Side profile', image: '/assets/IMG_5078.jpg', type: 'Crewneck', notes: 'A high-contrast side-profile silhouette of the SV1000S with the DualBore Media wordmark below.' },
+  { id: 'e92-tee', name: 'E92 Coupe Line-Art Tee', detail: 'E92 coupe · Line-art study', image: '/assets/IMG_5076.jpg', type: 'Graphic tee', previewPrice: 30, notes: 'A three-quarter coupe outline with the Dual Bore Media wordmark. A clean line-art tribute to the coupe, shown here on the original black-garment design mockup.' },
+  { id: 'e90-crewneck', name: 'E90 Sedan Front-Clip Crewneck', detail: 'E90 sedan · Front elevation', image: '/assets/IMG_5077.jpg', type: 'Crewneck', previewPrice: 50, notes: 'A front-facing E90 illustration centered above the DualBore Media wordmark. Headlights, grille, and body lines carry the design.' },
+  { id: 'sv1000s-silhouette', name: 'SV1000S Silhouette Crewneck', detail: 'SV1000S · Side profile', image: '/assets/IMG_5078.jpg', type: 'Crewneck', previewPrice: 50, notes: 'A high-contrast side-profile silhouette of the SV1000S with the DualBore Media wordmark below. For the days when the V-twin stays in the garage.' },
 ];
 export const previewSizes = ['S', 'M', 'L', 'XL', '2XL'];
 export const madeToOrder = {

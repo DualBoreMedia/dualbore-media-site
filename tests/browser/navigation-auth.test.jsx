@@ -39,7 +39,7 @@ test('mobile drawer dismisses on Escape, navigation and brand action',async()=>{
 test('build details switch to verified films and dialog Escape restores the original trigger',async()=>{
  root.render(<App/>);const build=page.getByRole('button',{name:'Explore Suzuki SV1000S platform details'});await build.click();
  await page.getByRole('button',{name:'Watch the POV ride'}).click();
- await expect.element(page.getByRole('dialog').getByRole('heading')).toBeVisible();
+ await expect.element(page.getByRole('dialog').getByRole('heading',{level:2})).toBeVisible();
  await expect.element(page.getByRole('dialog').getByTitle(/SV1000S/)).toHaveAttribute('src',expect.stringContaining('XqX31p88MuA'));
  const dialog=document.querySelector('dialog');dialog.dispatchEvent(new Event('cancel',{cancelable:true,bubbles:true}));
  await expect.element(build).toHaveFocus();await expect.element(page.getByRole('dialog')).not.toBeInTheDocument();
@@ -64,7 +64,7 @@ test('WorkOS session refresh recovers customer access without bearer tokens and 
 });
 
 test('WorkOS staff sign-in failure never offers customer signup or privileged navigation',async()=>{
- vi.stubGlobal('fetch',vi.fn().mockRejectedValue(new TypeError('offline')));history.replaceState(null,'','/staff?auth=failed');root.render(<WorkosOperations/>);
+ vi.stubGlobal('fetch',vi.fn(async()=>json({signedIn:false},401)));history.replaceState(null,'','/staff?auth=failed');root.render(<WorkosOperations/>);
  await expect.element(page.getByRole('alert')).toHaveTextContent('We could not complete sign-in.');
  await expect.element(page.getByRole('link',{name:'Secure sign in'})).toHaveAttribute('href','/api/auth/sign-in?staff=1');
  await expect.element(page.getByRole('link',{name:'Create account'})).not.toBeInTheDocument();

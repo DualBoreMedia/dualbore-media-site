@@ -11,6 +11,28 @@ import {runMadeToOrderBrowserChecks} from '../tests/made-to-order.browser.mjs';
 // Provider-boundary fixtures only. This suite proves rendered permissions,
 // interactions and data minimization, not real hosted authentication or payment.
 const output = resolve('test-results/browser');
+async function capturePublic(page, path) {
+  const dialog = page.locator('dialog[open]');
+  const scope = await dialog.count() ? dialog : page.locator('main');
+  // Full-page screenshots do not scroll lazy images into view. Exercise that
+  // real loading behavior before capturing evidence, including offscreen cards.
+  for (const image of await scope.locator('img').all()) {
+    if (!await image.isVisible()) continue;
+    await image.scrollIntoViewIfNeeded();
+    await image.evaluate(async element => {
+      let timeout;
+      try {
+        await Promise.race([
+          element.decode(),
+          new Promise((_, reject) => {timeout = setTimeout(() => reject(new Error('Image decode timed out: ' + (element.currentSrc || element.src))), 10000);}),
+        ]);
+      } finally {clearTimeout(timeout);}
+    });
+  }
+  await page.evaluate(() => window.scrollTo(0, 0));
+  if (await dialog.count()) await dialog.evaluate(element => {element.scrollTop = 0;});
+  await page.screenshot({path, fullPage: true, animations: 'disabled'});
+}
 const fixtures = 'test-results/browser-fixtures';
 await mkdir(output, {recursive: true});
 await mkdir(fixtures, {recursive: true});
@@ -114,7 +136,28 @@ try {
         });
         if (visualAssets.brokenVisibleImages.length) throw Error(`Visible public images failed at ${width}px: ${visualAssets.brokenVisibleImages.join(', ')}`);
         viewportResults.push({width, identity: await publicPage.title(), layout, navigation, visualAssets});
-        if ([375, 1440].includes(width)) await publicPage.screenshot({path: `${output}/${name}-public-${width}.png`, fullPage: true});
+        const reviewWidth = [320,375,390,414,768,1024,1440].includes(width);
+        if (reviewWidth) {
+          await capturePublic(publicPage, `${output}/${name}-public-${width}.png`);
+          await publicPage.getByRole('tab').filter({hasText:'Video Vault'}).click();
+          await publicPage.getByLabel('Find your next watch').fill('clutch');
+          await publicPage.getByText('01 films',{exact:true}).waitFor();
+          await publicPage.getByRole('button',{name:'Clear search',exact:true}).click();
+          if(!await publicPage.getByLabel('Find your next watch').evaluate(element=>element===document.activeElement)) throw Error(`Clearing search lost keyboard focus at ${width}px`);
+          await publicPage.getByText('05 films',{exact:true}).waitFor();
+          await capturePublic(publicPage, `${output}/${name}-vault-${width}.png`);
+          await publicPage.getByRole('tab').filter({hasText:'Garage Merch'}).click();
+          await publicPage.getByRole('button',{name:'Quick View E92 Coupe Line-Art Tee'}).waitFor();
+          await capturePublic(publicPage, `${output}/${name}-merch-${width}.png`);
+          await publicPage.getByRole('button',{name:'Quick View E92 Coupe Line-Art Tee'}).click();
+          await publicPage.getByRole('region',{name:'Drop 01 release details'}).waitFor();
+          if(await publicPage.getByRole('dialog').getByRole('table').count()) throw Error('Unverified garment measurement table is visible');
+          await capturePublic(publicPage, `${output}/${name}-product-${width}.png`);
+          await publicPage.keyboard.press('Escape');
+          if(!await publicPage.getByRole('button',{name:'Quick View E92 Coupe Line-Art Tee'}).evaluate(element=>element===document.activeElement)) throw Error(`Product quick view lost return focus at ${width}px`);
+          const detailsLayout=await publicPage.evaluate(()=>({document:document.documentElement.scrollWidth,body:document.body.scrollWidth}));
+          if(detailsLayout.document>width||detailsLayout.body>width)throw Error(`Merch layout overflow at ${width}px`);
+        }
         if (width === 390) {
           await publicPage.emulateMedia({reducedMotion: 'reduce'});
           await publicPage.getByRole('tab').filter({hasText: 'Video Vault'}).click();
@@ -126,7 +169,7 @@ try {
           await publicPage.keyboard.press('Escape');
           await publicPage.getByRole('tab').filter({hasText: 'Garage Merch'}).click();
           await publicPage.getByText(/Orders aren’t open yet/).waitFor();
-          await publicPage.getByRole('button', {name: /Join Drop Alert for E92/}).click();
+          await publicPage.getByRole('button', {name: 'Release updates',exact:true}).click();
           await publicPage.getByText(/signups are not open yet/i).waitFor();
           if (await publicPage.getByRole('dialog').locator('form').count()) throw Error('Public Drop Alert collected personal information while privacy readiness is blocked');
           const quickView = publicPage.getByRole('button', {name: /Quick View E92 Coupe/});

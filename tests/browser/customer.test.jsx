@@ -172,9 +172,9 @@ test('public garage tabs, filters, details and waitlist remain usable without ch
   await page.getByRole('tab',{name:/Drop 01 Merch|Garage Merch/}).click();
   await expect.element(page.getByText('Coming soon · Orders aren’t open yet.')).toBeVisible();
   await page.getByRole('button',{name:/Quick View E92 Coupe/}).click();
-  await expect.element(page.getByRole('dialog').getByText('To be confirmed')).toBeVisible();
+  await expect.element(page.getByRole('dialog').getByRole('region',{name:'Drop 01 release details'}).getByText('$30',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Close details'}).click();
-  await page.getByRole('button',{name:/Join Drop Alert for E92/}).click();
+  await page.getByRole('button',{name:'Release updates',exact:true}).click();
   await expect.element(page.getByRole('dialog').getByText(/signups are not open yet/i)).toBeVisible();
   await expect.element(page.getByRole('dialog').getByRole('checkbox')).not.toBeInTheDocument();
   await page.getByRole('button',{name:'Close details'}).click();

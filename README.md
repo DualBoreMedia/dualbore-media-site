@@ -197,3 +197,12 @@ Alternative payment methods and real asynchronous settlement were not exercised;
 # Accounts and operations: pre-deployment
 
 See [the operations runbook](docs/operations-runbook.md) and [managed authentication setup](docs/auth-setup.md). `/account`, `/admin`, `/shop`, `/contact` and `/unsubscribe` are implemented. Accounts require configured Clerk; production purchases and transactional email remain disabled server-side. The strict launch validator intentionally fails while real provider/business information is missing. This branch does not authorize deployment.
+# Curating the garage and Video Vault
+
+The public channel experience uses `src/content.js` as its source of truth. It does not need a YouTube API key, scheduled provider jobs or a paid feed service.
+
+To add a real upload, verify its video ID and channel ownership, then add one `films` entry with a clear editorial title, a verified duration, a supported category, a label and a local channel thumbnail. Use one of the existing category labels so search and filters stay consistent. Keep the thumbnail descriptive text accurate; do not use an unrelated stock vehicle. Link an episode to a build with the project's `video` or `relatedVideo` ID. Player suggestions use the same category and the project link uses those explicit IDs.
+
+The YouTube channel link always leads to the complete upload archive. The homepage presents a curated selection, not a claim that its films are the latest uploads. Automated updates are intentionally deferred until their provenance, thumbnail rights and failure behavior can be maintained reliably.
+
+Public merchandise `previewPrice` is an owner-approved planned release price, not a Stripe price or a payment configuration. Server catalog prices remain the authority for future orders. Public previews must keep orders and email collection paused, and must not imply that a size selection reserves stock.

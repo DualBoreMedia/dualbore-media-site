@@ -20,6 +20,13 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Finished product development, October 20, 2026
+
+- Refine the established public website, not only its test infrastructure: cohesive homepage, complete build/video journeys, original merchandise previews, Pit Crew and public information. Preserve the charcoal/red/cyan visual identity and real channel assets.
+- Public planned release prices are now approved for previews: E92 tee $30 USD, E90 crewneck $50 USD, SV1000S crewneck $50 USD. Label them as planned release prices. No checkout, orders, inventory promises or Drop Alert collection is enabled by showing them.
+- Public product previews must not show internal placeholder tables, invented material weights or measurements. Explain planned S/M/L/XL/2XL sizes and forthcoming fit guidance in customer language. Preserve detailed local test fixtures separately.
+- The owner requests visual review at 320/375/390/414/768/1024/1440px and meaningful journey tests. Preserve the 90/90/90/85 coverage gates. Safe development checkpoints may be pushed only to codex/commerce-test-foundation with [skip netlify]. No deployment, previews, main merges, paid services or production-provider changes.
+
 ### Controlling correction: authentication, testing and no deployment, October 15, 2026
 
 - Deployment is NOT authorized, even if all readiness checks pass. Do not merge main, trigger any Netlify deployment or enable production payments. PAYMENTS_ENABLED remains false. Transactional email activation stays gated pending final verification and explicit authorization. This supersedes every conditional deployment permission below.

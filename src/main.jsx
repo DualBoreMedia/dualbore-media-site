@@ -2,6 +2,7 @@ import React, {lazy,Suspense} from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.jsx";
 import "./styles.css";
+import "./product-polish.css";
 import {ErrorBoundary} from './observability/ErrorBoundary.jsx';
 import {configureBrowserMonitoring,installBrowserErrorHandlers} from './observability/client.js';
 const ManagedOperations=lazy(()=>import('./operations/ManagedOperations.jsx'));
