@@ -13,7 +13,8 @@ import {runMadeToOrderBrowserChecks} from '../tests/made-to-order.browser.mjs';
 const output = resolve('test-results/browser');
 async function capturePublic(page, path) {
   const dialog = page.locator('dialog[open]');
-  const scope = await dialog.count() ? dialog : page.locator('body');
+  const modalOpen = await dialog.count() > 0;
+  const scope = modalOpen ? dialog : page.locator('body');
   // Full-page screenshots do not scroll lazy images into view. Exercise that
   // real loading behavior before capturing evidence, including offscreen cards.
   for (const image of await scope.locator('img').all()) {
@@ -30,8 +31,8 @@ async function capturePublic(page, path) {
     });
   }
   await page.evaluate(() => window.scrollTo(0, 0));
-  if (await dialog.count()) await dialog.evaluate(element => {element.scrollTop = 0;});
-  await page.screenshot({path, fullPage: true, animations: 'disabled'});
+  if (modalOpen) await dialog.evaluate(element => {element.scrollTop = 0;});
+  await page.screenshot({path, fullPage: !modalOpen, animations: 'disabled'});
 }
 const fixtures = 'test-results/browser-fixtures';
 await mkdir(output, {recursive: true});
@@ -150,6 +151,7 @@ try {
           await publicPage.getByRole('tab').filter({hasText:'Garage Merch'}).click();
           await publicPage.getByRole('button',{name:'Quick View E92 Coupe Line-Art Tee'}).waitFor();
           const cards=await publicPage.locator('.merch-card').evaluateAll(elements=>elements.map(card=>({height:card.getBoundingClientRect().height,priceTop:card.querySelector('.merch-preview-price').getBoundingClientRect().top,quickView:getComputedStyle(card.querySelector('.quick-view-label')).opacity,qualifierFont:Number.parseFloat(getComputedStyle(card.querySelector('.merch-preview-price span')).fontSize)})));
+          if(cards.length!==3)throw Error('Expected 3 merch cards, found '+cards.length);
           if(cards.some(card=>card.quickView!=='1'||card.qualifierFont<12))throw Error('Merch details or Quick View are not consistently readable');
           if(width>700&&(Math.max(...cards.map(c=>c.height))-Math.min(...cards.map(c=>c.height))>2||Math.max(...cards.map(c=>c.priceTop))-Math.min(...cards.map(c=>c.priceTop))>2))throw Error('Merch card heights or price rows do not align at '+width+'px: '+JSON.stringify(cards));
           const footer=publicPage.getByRole('contentinfo');
