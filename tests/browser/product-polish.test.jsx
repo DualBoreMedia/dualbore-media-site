@@ -27,10 +27,13 @@ test('homepage connects the channel story, featured episodes and first merch des
 
 test('episode search combines with categories, announces counts and recovers from no matches',async()=>{
  root.render(<App/>);await page.getByRole('tab',{name:/Video Vault/}).click();expect(document.title).toBe('Video Vault | DualBore Media');
- await page.getByLabelText('Find your next watch').fill(' clutch ');await expect.element(page.getByText('01 films',{exact:true})).toBeVisible();
+ await page.getByLabelText('Find your next watch').fill(' clutch ');await expect.element(page.getByText('1 film',{exact:true})).toBeVisible();
+ const card=host.querySelector('.film-card');expect(card.querySelectorAll('.video-duration')).toHaveLength(1);expect(card.querySelector('.video-duration').textContent).toMatch(/\d+:\d+/);expect(card.querySelector('.card-copy .eyebrow').textContent).toBe('V-Twins');
+ await page.getByLabelText('Find your next watch').fill('SV1000S');await expect.element(page.getByText('2 films',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Two-Strokes',exact:true}).click();await expect.element(page.getByRole('heading',{name:'No matching episodes.'})).toBeVisible();
- await page.getByRole('button',{name:'Show all episodes'}).click();await expect.element(page.getByText('05 films',{exact:true})).toBeVisible();await expect.element(page.getByLabelText('Find your next watch')).toHaveValue('');
- await page.getByLabelText('Find your next watch').fill('RD400');await page.getByRole('button',{name:'Clear search'}).click();await expect.element(page.getByText('05 films',{exact:true})).toBeVisible();await expect.element(page.getByLabelText('Find your next watch')).toHaveFocus();
+ await expect.element(page.getByText('0 films',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Show all episodes'}).click();await expect.element(page.getByText('5 films',{exact:true})).toBeVisible();await expect.element(page.getByLabelText('Find your next watch')).toHaveValue('');
+ await page.getByLabelText('Find your next watch').fill('RD400');await page.getByRole('button',{name:'Clear search'}).click();await expect.element(page.getByText('5 films',{exact:true})).toBeVisible();await expect.element(page.getByLabelText('Find your next watch')).toHaveFocus();
 });
 
 test('player links a related SV1000S episode and its actual project without leaving the dialog',async()=>{
@@ -47,8 +50,10 @@ test('merch uses approved preview prices and a size plan without fake measuremen
  await page.getByRole('button',{name:'Release details for E92 Coupe Line-Art Tee'}).click();const dialog=page.getByRole('dialog');
  await expect.element(dialog.getByText('To be confirmed',{exact:true})).not.toBeInTheDocument();await expect.element(dialog.getByRole('table')).not.toBeInTheDocument();
  await expect.element(dialog.getByLabelText('Planned sizes, not available to order').getByText('2XL',{exact:true})).toBeVisible();
+ await expect.element(dialog.getByText(/No orders or payments are being accepted/)).toBeVisible();
  await dialog.getByRole('button',{name:'Release updates for E92 Coupe Line-Art Tee'}).click();await expect.element(dialog.getByRole('link',{name:/Follow DualBore Media release announcements/})).toHaveAttribute('href','https://www.youtube.com/@DualBoreMedia');
  await expect.element(dialog.getByRole('textbox')).not.toBeInTheDocument();await expect.element(dialog.getByRole('button',{name:/buy|checkout/i})).not.toBeInTheDocument();
+ await expect.element(dialog.getByText(/Orders and email signups are not open yet/)).toBeVisible();
 });
 
 test('unavailable account access explains prelaunch state and can retry into normal hosted sign-in',async()=>{

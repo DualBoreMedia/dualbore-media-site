@@ -149,10 +149,10 @@ try {
           await capturePublic(publicPage, `${output}/${name}-public-${width}.png`);
           await publicPage.getByRole('tab').filter({hasText:'Video Vault'}).click();
           await publicPage.getByLabel('Find your next watch').fill('clutch');
-          await publicPage.getByText('01 films',{exact:true}).waitFor();
+          await publicPage.getByText('1 film',{exact:true}).waitFor();
           await publicPage.getByRole('button',{name:'Clear search',exact:true}).click();
           if(!await publicPage.getByLabel('Find your next watch').evaluate(element=>element===document.activeElement)) throw Error(`Clearing search lost keyboard focus at ${width}px`);
-          await publicPage.getByText('05 films',{exact:true}).waitFor();
+          await publicPage.getByText('5 films',{exact:true}).waitFor();
           await capturePublic(publicPage, `${output}/${name}-vault-${width}.png`);
           await publicPage.getByRole('tab').filter({hasText:'Garage Merch'}).click();
           await publicPage.getByRole('button',{name:'Quick View E92 Coupe Line-Art Tee'}).waitFor();
