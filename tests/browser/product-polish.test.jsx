@@ -56,6 +56,19 @@ test('merch uses approved preview prices and a size plan without fake measuremen
  await expect.element(dialog.getByText(/Orders and email signups are not open yet/)).toBeVisible();
 });
 
+test('pointer-activated dialogs restore their actual opener when the browser does not focus clicked buttons',async()=>{
+ history.replaceState(null,'','/#merch');root.render(<App/>);
+ await expect.element(page.getByRole('button',{name:'Quick View E92 Coupe Line-Art Tee'})).toBeVisible();
+ const panel=host.querySelector('[role="tabpanel"]');
+ for(const label of ['Quick View E92 Coupe Line-Art Tee','Release details for E92 Coupe Line-Art Tee','Release updates']){
+  const trigger=Array.from(host.querySelectorAll('button')).find(button=>(button.getAttribute('aria-label')||button.textContent.trim())===label);
+  panel.focus();trigger.click();
+  await expect.element(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('button',{name:'Close details'}).click();
+  expect(document.activeElement).toBe(trigger);
+ }
+});
+
 test('unavailable account access explains prelaunch state and can retry into normal hosted sign-in',async()=>{
  const request=vi.fn().mockRejectedValue(new TypeError('offline'));vi.stubGlobal('fetch',request);root.render(<WorkosOperations/>);
  await expect.element(page.getByRole('region',{name:'Account availability'})).toBeVisible();await expect.element(page.getByRole('link',{name:'Secure sign in'})).not.toBeInTheDocument();
