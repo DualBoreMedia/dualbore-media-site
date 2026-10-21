@@ -20,6 +20,21 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Admin practice sprint, October 21, 2026
+
+- First deliverable is a running, resettable localhost-only Admin/Staff practice dashboard using synthetic data and real operation services. Pause for owner usability feedback before large interface changes. Preserve unfinished legal commits; no reset, deployment, main merge, provider production changes, payments, email sending or signup collection.
+- Updated future promise is FIVE BUSINESS DAYS after payment confirmation, excluding weekends and holidays. Final holiday dates/calendar and real capacity remain unverified. The confirmed operating/return location is also a personal residence; do not add its street address to public pages during this sprint.
+- Owner feedback: bound Needs Attention to five prioritized grouped tasks per page, retain all underlying records, and provide fast daily-workflow queue shortcuts. Automate sorting, grouping and navigation; never automate real refunds, handoffs or sending without their existing confirmations and gates.
+- WorkOS AuthKit work is staging only. Google sign-in with the owner-approved account is authorized. No paid features, production auth activation or provider credential publication.
+
+
+### Legal candidate, October 20, 2026: no deployment
+
+- Keep published release 0b5f474 unchanged. This legal/compliance candidate may be committed and pushed only to codex/commerce-test-foundation with [skip netlify]. No main merge, Netlify deploy, provider activation, email sending or signup collection.
+- Shipment promise is 3 BUSINESS DAYS after payment confirmation. Shipment means physical carrier possession, never label creation. Carrier transit is additional. No cutoff, business calendar, holiday policy or capacity assumption is approved by this statement.
+- Temporary public support/privacy contact is midohiomx@gmail.com with mailto links. Gmail is manual support, separate from disabled automated transactional/marketing email. A branded support mailbox is a future migration only.
+- Public policy rendering (draft=false) describes current non-selling practices. Keep future purchase drafts separate, and retain genuine unresolved facts as sales blockers. Reconfirm the business/return address before final publication; do not invent retention periods, entity status, carrier commitments, rights clearances or refund-processing guarantees.
+
 ### Owner screenshot refinements, October 20, 2026
 
 - Use consistent dark framing around the three authentic merchandise mockups; preserve their artwork and natural photographic backgrounds. Keep planned prices $30/$50/$50 and sizes S/M/L/XL/2XL, with no ordering or email collection.
@@ -45,7 +60,7 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 - Preserve the current local worktree. The earlier conditional authorization is superseded by the controlling correction above. Deployment is NOT authorized even if every gate passes. Do not merge main, trigger Netlify deployments or enable payments; wait for the owner's later explicit final deployment instruction.
 - Initial deployment keeps payments and transactional email false. Verify production and signed live webhook delivery, then activate transactional email with controlled delivery verification. Live payments activate last. Never purchase a recurring service or upgrade without showing exact plan/cost and obtaining approval.
-- DualBoreMedia operates, makes, packs and ships apparel at 55 Union St, Hartford, OH 43013, United States. The domain dualboremedia.com is owned at Porkbun. Canonical https://dualboremedia.com; www redirects to apex.
+- The operating and return address was confirmed privately and is also a personal residence. Keep its street address out of public source and customer policies during this sprint; retrieve it only through owner-approved private configuration when needed. The domain dualboremedia.com is owned at Porkbun. Canonical https://dualboremedia.com; www redirects to apex.
 - All current 15 variants are made to order. Preserve future finite stock mode. Tee $30, each crewneck $50, USD, USA only; reliable calculated shipping or $9.95 flat fallback. No false stock scarcity.
 - Owner answered 3 days to ship and revised voluntary size-exchange REQUEST window to 30 calendar days after delivery. Items unused/unworn/unwashed/undamaged/original condition; customer pays both shipping legs, disclosed before acceptance. Define a reasonable approved-return mailing deadline (current draft: 14 calendar days after approval). Seller errors/defects/nonconformity retain applicable remedies and seller-paid correction shipping.
 - Individual Clerk customer/employee/admin accounts, private server role metadata, staff MFA and least privilege are mandatory. No staff/admin links in customer navigation. Packing slips are staff-authorized, order/package specific, contain no prices/provider IDs/notes, and require print QA.

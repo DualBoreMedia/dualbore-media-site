@@ -1,3 +1,4 @@
+import {shippingCommitment} from './business.js';
 export const channel = {
   name: 'DualBore Media',
   url: 'https://www.youtube.com/@DualBoreMedia',
@@ -55,7 +56,7 @@ export const merch = [
 export const previewSizes = ['S', 'M', 'L', 'XL', '2XL'];
 export const madeToOrder = {
   label: 'Made to order',
-  processing: 'Made to order. Ships within 3 days after payment is confirmed. Carrier transit time is additional.',
+  processing: shippingCommitment.processing,
   returns: 'No change-of-mind returns or refunds. Incorrect, defective or materially nonconforming orders remain eligible for appropriate remedies.',
   exchanges: 'Request a voluntary size exchange within 30 calendar days of delivery. Items must be unused, unworn, unwashed, undamaged and in original condition. You pay both return and replacement shipping.',
 };

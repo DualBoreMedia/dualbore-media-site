@@ -172,6 +172,23 @@ try {
           if(!await publicPage.getByRole('button',{name:'Quick View E92 Coupe Line-Art Tee'}).evaluate(element=>element===document.activeElement)) throw Error(`Product quick view lost return focus at ${width}px`);
           const detailsLayout=await publicPage.evaluate(()=>({document:document.documentElement.scrollWidth,body:document.body.scrollWidth}));
           if(detailsLayout.document>width||detailsLayout.body>width)throw Error(`Merch layout overflow at ${width}px`);
+          for(const route of ['terms','privacy','contact','shipping','returns']){
+            await publicPage.goto(`${publicBaseUrl}/${route}?qaViewport=${width}`);
+            await publicPage.locator('main .policy-page h1').waitFor();
+            if(!(await publicPage.title()).includes('DualBore Media'))throw Error('Policy page identity missing');
+            if(await publicPage.locator('vite-error-overlay').count())throw Error('Policy framework error overlay');
+            const policyLayout=await publicPage.evaluate(()=>({document:document.documentElement.scrollWidth,body:document.body.scrollWidth}));
+            if(policyLayout.document>width||policyLayout.body>width)throw Error(`${route} overflows at ${width}px`);
+            const support=publicPage.locator('main a[href="mailto:midohiomx@gmail.com"]').first();
+            await support.waitFor();
+            await support.press('Tab');
+            const focus=await publicPage.evaluate(()=>({tag:document.activeElement.tagName,outline:getComputedStyle(document.activeElement).outlineStyle}));
+            if(!['A','BUTTON'].includes(focus.tag)||focus.outline==='none')throw Error('Policy keyboard focus not visible');
+            if(await publicPage.locator('main .policy-page form,main .policy-page input').count())throw Error('Public policy collects information');
+            if([390,1440].includes(width))await capturePublic(publicPage,`${output}/${name}-${route}-${width}.png`);
+          }
+          await publicPage.goto(publicBaseUrl+'/');
+          await publicPage.getByRole('heading',{name:/Four platforms/}).waitFor();
         }
         if (width === 390) {
           await publicPage.emulateMedia({reducedMotion: 'reduce'});
@@ -191,7 +208,7 @@ try {
           await publicPage.getByRole('button', {name: 'Close details'}).click();
           await quickView.click();
           const merchCopy = await publicPage.getByRole('dialog').innerText();
-          if (/Ships within 3 days|No change-of-mind returns|30 calendar days of delivery|Made-to-order policies/i.test(merchCopy)) throw Error('Public Coming Soon dialog presents purchase policies as active offers');
+          if (/Ships within 3 (?:business )?days|No change-of-mind returns|30 calendar days of delivery|Made-to-order policies/i.test(merchCopy)) throw Error('Public Coming Soon dialog presents purchase policies as active offers');
           await publicPage.keyboard.press('Escape');
           for (const route of ['shipping', 'returns', 'privacy', 'terms', 'contact']) {
             await publicPage.goto(`${publicBaseUrl}/${route}`);

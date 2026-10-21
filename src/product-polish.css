@@ -136,3 +136,4 @@
  .header .subscribe svg{font-size:18px;width:18px;height:18px;margin:0}
 }
 .public-footer .footer-bottomline>span{width:auto;max-width:none;flex-shrink:0}
+.policy-contact-link{color:var(--cyan);text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}.policy-page section p{overflow-wrap:anywhere}.policy-page nav a{min-height:48px}

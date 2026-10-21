@@ -127,10 +127,10 @@ test('package and order guards reject held, corrupt, prematurely shipped and can
  const f=setup();const p=await f.service.mutate(admin,draft);
  await assert.rejects(f.service.mutate(admin,{action:'shipment-status',shipmentId:p.shipmentId,status:'delivered',expectedVersion:0}),{code:'invalid_transition'});
  await f.service.mutate(employee,{action:'shipment-status',shipmentId:p.shipmentId,status:'packed',expectedVersion:0});
- await assert.rejects(f.service.mutate(employee,{action:'shipment-status',shipmentId:p.shipmentId,status:'shipped',expectedVersion:1}),{code:'not_ready'});
+ await assert.rejects(f.service.mutate(employee,{action:'shipment-status',shipmentId:p.shipmentId,status:'shipped',carrierAccepted:true,expectedVersion:1}),{code:'not_ready'});
  await assert.rejects(f.service.mutate(admin,{action:'shipment-update',shipmentId:'missing',carrier:'UPS',service:'Ground',trackingNumber:'Synthetic',trackingUrl:'https://ups.com',expectedVersion:0}),{code:'not_found'});
  await f.repository.transaction(s=>{s.orders['order-fixture'].fulfillmentStatus='on_hold';});
- await assert.rejects(f.service.mutate(employee,{action:'shipment-status',shipmentId:p.shipmentId,status:'shipped',expectedVersion:1}),{code:'not_ready'});
+ await assert.rejects(f.service.mutate(employee,{action:'shipment-status',shipmentId:p.shipmentId,status:'shipped',carrierAccepted:true,expectedVersion:1}),{code:'not_ready'});
  await f.repository.transaction(s=>{s.orders['order-fixture'].fulfillmentStatus='packing';s.shipments[p.shipmentId].status='shipped';});
  await assert.rejects(f.service.mutate(admin,{action:'transition',orderNumber:'DBM-RECOVERY',status:'cancelled',expectedVersion:1,confirmed:true,note:'Synthetic cancellation'}),{code:'already_shipped'});
  await assert.rejects(f.service.mutate(admin,{action:'transition',orderNumber:'DBM-RECOVERY',status:'ready_to_ship',expectedVersion:1,note:''}),{code:'invalid_note'});

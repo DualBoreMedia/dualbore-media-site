@@ -53,7 +53,7 @@ test('employee can fulfill, edit draft packages, and generate minimal split pack
  for(const value of ['o1','user_customer','cs_secret','pi_private','unitPriceCents','totalCents','variantId','must omit',a.shipmentId])assert.equal(JSON.stringify(first).includes(value),false,value);
  assert.equal(await repository.transaction(s=>Object.values(s.audit).filter(a=>a.action==='packing-slip-generated').length),2);
  await service.mutate(employee,{action:'transition',orderNumber:'DBM-ONE',status:'ready_to_ship',expectedVersion:2});
- await service.mutate(employee,{action:'shipment-status',shipmentId:a.shipmentId,status:'packed',expectedVersion:1});await service.mutate(employee,{action:'shipment-status',shipmentId:a.shipmentId,status:'shipped',expectedVersion:2});
+ await service.mutate(employee,{action:'shipment-status',shipmentId:a.shipmentId,status:'packed',expectedVersion:1});await service.mutate(employee,{action:'shipment-status',shipmentId:a.shipmentId,status:'shipped',carrierAccepted:true,expectedVersion:2});
  await assert.rejects(service.mutate(employee,{action:'shipment-status',shipmentId:a.shipmentId,status:'delivered',expectedVersion:3}),{code:'confirmation_required'});
  await service.mutate(employee,{action:'shipment-status',shipmentId:a.shipmentId,status:'delivered',expectedVersion:3,confirmed:true});
  assert.equal(await repository.transaction(s=>s.shipments[a.shipmentId].status),'delivered');

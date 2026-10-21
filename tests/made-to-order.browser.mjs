@@ -17,7 +17,7 @@ export async function runMadeToOrderBrowserChecks({page,baseUrl,evidenceDirector
     assert(await first.getByRole('button',{name:'Orders paused',exact:true}).isDisabled(),'Paused MTO must not imply sold out.');
     await first.getByRole('button',{name:'M',exact:true}).press('Enter');
     await first.getByRole('button',{name:'Add to cart',exact:true}).press('Enter');
-    assert((await first.innerText()).includes('Ships within 3 days'),'Processing promise missing');
+    assert((await first.innerText()).includes('Ships within 5 business days'),'Processing promise missing');
     assert(await first.getByRole('link',{name:'Returns and size exchanges'}).getAttribute('href')==='/returns','Product policy missing');
     const stockedCard=page.getByRole('article').nth(1);
     await stockedCard.getByRole('button',{name:'M',exact:true}).click();

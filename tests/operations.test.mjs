@@ -37,7 +37,7 @@ test('split packages enforce allocation and truthful shipping/delivery, with dis
  const input={action:'shipment',orderNumber:'DBM-TEST',carrier:'USPS',service:'Ground',trackingNumber:'TEST123',trackingUrl:'https://tools.usps.com/go/TrackConfirmAction',items:[{variantId:'tee-m',quantity:1}]};
  const a=await service.mutate(admin,input),b=await service.mutate(admin,{...input,trackingNumber:'TEST456'});
  await assert.rejects(service.mutate(admin,input),{code:'over_allocated'});
- for(const id of [a.shipmentId,b.shipmentId]){await service.mutate(admin,{action:'shipment-status',shipmentId:id,status:'packed',expectedVersion:0});await service.mutate(admin,{action:'shipment-status',shipmentId:id,status:'shipped',expectedVersion:1});}
+ for(const id of [a.shipmentId,b.shipmentId]){await service.mutate(admin,{action:'shipment-status',shipmentId:id,status:'packed',expectedVersion:0});await service.mutate(admin,{action:'shipment-status',shipmentId:id,status:'shipped',carrierAccepted:true,expectedVersion:1});}
  assert.equal(await repository.transaction(s=>s.orders.o1.fulfillmentStatus),'shipped');
  await assert.rejects(service.mutate(admin,{action:'shipment-status',shipmentId:a.shipmentId,status:'delivered',expectedVersion:2}),{code:'confirmation_required'});
  await service.mutate(admin,{action:'shipment-status',shipmentId:a.shipmentId,status:'delivered',expectedVersion:2,confirmed:true});assert.equal(await repository.transaction(s=>s.orders.o1.fulfillmentStatus),'shipped');
@@ -121,7 +121,7 @@ test('split package packing attribution comes from authenticated staff and remai
  const a=await service.mutate(admin,input),b=await service.mutate(employee,input);
  await assert.rejects(service.mutate(employee,{action:'shipment-status',shipmentId:a.shipmentId,status:'packed',expectedVersion:0,packedByUserId:'spoofed'}),{code:'invalid_input'});
  for(const [shipmentId,principal]of [[a.shipmentId,admin],[b.shipmentId,employee]])await service.mutate(principal,{action:'shipment-status',shipmentId,status:'packed',expectedVersion:0});
- await service.mutate(employee,{action:'shipment-status',shipmentId:a.shipmentId,status:'shipped',expectedVersion:1});
+ await service.mutate(employee,{action:'shipment-status',shipmentId:a.shipmentId,status:'shipped',carrierAccepted:true,expectedVersion:1});
  const state=await repository.transaction(s=>s);
  assert.equal(state.shipments[a.shipmentId].packedByUserId,admin.userId);
  assert.equal(state.shipments[b.shipmentId].packedByUserId,employee.userId);

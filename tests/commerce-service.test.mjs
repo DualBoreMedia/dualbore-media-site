@@ -9,7 +9,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 const clock = () => Date.parse('2026-10-12T12:00:00Z');
 const item = { variantId: 'e92-tee-m', quantity: 1 };
-async function fixture({ quantity = 5, create, repository = createMemoryRepository() } = {}) {
+async function fixture({ quantity = 5, create, env = {}, now = clock, repository = createMemoryRepository() } = {}) {
   await seedTestCatalog(repository, { quantity });
   await repository.transaction(state => { for (const v of Object.values(state.variants)) v.stripePriceId = 'price_' + v.id; });
   const sessions = new Map();
@@ -24,7 +24,7 @@ async function fixture({ quantity = 5, create, repository = createMemoryReposito
       return sessions.get(options.idempotencyKey);
     } } },
   };
-  const service = createCommerceService({ repository, stripe, now: clock });
+  const service = createCommerceService({ repository, stripe, now, env });
   const start = (items = [item], options = {}) => service.checkout({ items }, { requestKey: randomUUID(), ...options });
   const state = () => repository.transaction(value => value);
   const event = async (session, type = 'checkout.session.completed', fields = {}, eventId = 'evt_' + randomUUID().replaceAll('-', '')) => {
@@ -88,6 +88,12 @@ test('verified paid event and exact or logical duplicates sell once and preserve
   assert.equal(order.status, 'paid'); assert.equal(order.totalCents, 3940); assert.equal(order.customerEmail, 'test@example.invalid');
   assert.equal(state.variants[item.variantId].soldQuantity, 1); assert.equal(state.variants[item.variantId].reservedQuantity, 0); assert.equal(state.variants[item.variantId].availableQuantity, 4);
   assert.equal(Object.values(state.reservations)[0].status, 'sold');
+});
+
+test('delayed paid webhook uses the verified event time, never the delivery time, for the business-day promise', async () => {
+ let at=clock();const env={SHIPPING_CALENDAR_APPROVED:'true',SHIPPING_BUSINESS_CALENDAR:JSON.stringify({timeZone:'America/New_York',weekdays:[1,2,3,4,5],holidays:[],reviewedThrough:'2026-12-31'})};
+ const f=await fixture({env,now:()=>at});const session=await f.start();const event=await f.event(session);event.created=at/1000;at+=5*86400000;await f.service.webhook(event);const o=Object.values((await f.state()).orders)[0];assert.equal(o.paidAt,'2026-10-12T12:00:00.000Z');assert.equal(o.shippingPromise.dueDate,'2026-10-19');assert.equal(o.paymentTimestampVerified,true);
+ const missing=await fixture({env});const s=await missing.start();await missing.service.webhook(await missing.event(s));const conservative=Object.values((await missing.state()).orders)[0];assert.equal(conservative.paidAt,conservative.createdAt);assert.equal(conservative.shippingPromise.verified,false);
 });
 
 test('async payments remain reserved until paid or failed; unpaid checkout expiry releases once', async () => {
@@ -241,8 +247,8 @@ test('expired lease owner cannot release stock after another worker acquires rec
 test('fulfillment and verified refund records are bounded, idempotent and never restock automatically',async()=>{
  const f=await fixture();const session=await f.start();await f.service.webhook(await f.event(session));const order=Object.values((await f.state()).orders)[0];
  await assert.rejects(f.service.fulfill(order.id,{carrier:'Example',trackingNumber:'T1',trackingUrl:'javascript:alert(1)'}),{code:'invalid_tracking'});
- await f.service.fulfill(order.id,{carrier:'Example',trackingNumber:'T1',trackingUrl:'https://example.invalid/track/T1'});
- assert.equal((await f.state()).orders[order.id].fulfillmentStatus,'fulfilled');
+ await f.service.fulfill(order.id,{carrier:'Example',trackingNumber:'T1',trackingUrl:'https://example.invalid/track/T1',carrierAccepted:true});
+ assert.equal((await f.state()).orders[order.id].fulfillmentStatus,'shipped');
  assert.equal(await f.service.recordVerifiedRefund(order.id,{refundId:'re_mockpartial',amountCents:1000}),true);
  assert.equal(await f.service.recordVerifiedRefund(order.id,{refundId:'re_mockpartial',amountCents:1000}),false);
  await assert.rejects(f.service.recordVerifiedRefund(order.id,{refundId:'re_mockexcess',amountCents:99999}),{code:'invalid_refund'});

@@ -24,6 +24,33 @@ function fixture(){
  const auth={isLoaded:true,isSignedIn:true,getToken:async()=> 'synthetic-token',fetcher,signOut:vi.fn()};return {auth,data,order,posts,fetcher};
 }
 const posted=(f,action)=>f.posts.findLast(p=>p.action===action);
+test('resolved last category automatically reveals remaining attention tasks',async()=>{
+ const f=fixture();f.data.failures=[{type:'email',status:'queued',eventId:'last-mail'},{type:'refund',status:'review',orderNumber:'REFUND-PENDING'}];
+ const original=f.auth.fetcher;f.auth.fetcher=async(url,options)=>{if(options.method==='POST')f.data.failures=f.data.failures.filter(e=>e.type!=='email');return original(url,options);};
+ root.render(<OperationsApp admin auth={f.auth}/>);await page.getByLabelText('Attention category').selectOptions('email');await page.getByRole('region',{name:'Needs attention'}).getByRole('button',{name:'Retry email',exact:true}).click();
+ await expect.element(page.getByLabelText('Attention category')).toHaveValue('');await expect.element(page.getByText('REFUND-PENDING',{exact:true})).toBeVisible();
+});
+test('closing an attention-opened order restores focus to mounted Orders navigation',async()=>{
+ const f=fixture();f.data.failures=[{type:'shipment_delay',status:'refund_required',orderNumber:f.order.orderNumber}];root.render(<OperationsApp admin auth={f.auth}/>);
+ await page.getByRole('button',{name:'Review order',exact:true}).click();await expect.element(page.getByRole('heading',{name:f.order.orderNumber,exact:true})).toHaveFocus();
+ await page.getByRole('button',{name:'Close',exact:true}).click();await expect.element(page.getByRole('button',{name:'Orders',exact:true})).toHaveFocus();
+});
+test('daily workflow opens oldest paid work and attention stays bounded, grouped and fully reachable',async()=>{
+ const f=fixture();f.data.overview={paid:1,received:1,making:2,packing:3,ready_to_ship:4,on_hold:1};
+ f.data.failures=[...Array.from({length:12},(_,i)=>({type:'email',status:'queued',eventId:'mail-'+i,orderNumber:'DBM-'+i})),{type:'shipment_delay',status:'refund_required',orderNumber:'URGENT'},{type:'fulfillment',status:'review',orderNumber:'URGENT'},{type:'email',status:'queued',orderNumber:'DBM-0',eventId:'repeat'}];
+ root.render(<OperationsApp admin auth={f.auth}/>);
+ await expect.element(page.getByRole('heading',{name:'Daily workflow'})).toBeVisible();
+ const attention=page.getByRole('region',{name:'Needs attention'});
+ await expect.element(attention.getByText('13 grouped tasks | urgent first')).toBeVisible();
+ await expect.element(attention.getByText('URGENT',{exact:true})).toBeVisible();
+ expect(host.querySelectorAll('.ops-attention>ul>li')).toHaveLength(5);
+ await page.getByRole('button',{name:'Next tasks'}).click();await expect.element(page.getByText('Tasks 6-10 of 13')).toBeVisible();
+ await page.getByRole('button',{name:'Previous tasks'}).click();
+ await page.getByLabelText('Attention category').selectOptions('email');await expect.element(page.getByText('Tasks 1-5 of 12')).toBeVisible();
+ await page.getByRole('button',{name:'Start production 1',exact:true}).click();
+ await expect.poll(()=>f.fetcher.mock.calls.filter(([,o])=>o.method==='GET').some(([url])=>url.includes('fulfillmentStatus=received')&&url.includes('sort=oldest')&&url.includes('status=paid'))).toBe(true);
+ await page.getByRole('button',{name:'Overview',exact:true}).click();await page.getByRole('button',{name:'Customer requests 0',exact:true}).click();await expect.element(page.getByRole('heading',{name:'Customer support',exact:true})).toBeVisible();
+});
 async function openOrder(f){await page.getByRole('button',{name:new RegExp(f.order.orderNumber)}).click();await expect.element(page.getByRole('heading',{name:f.order.orderNumber})).toHaveFocus();}
 
 test('admin filters and paginates orders using server query parameters',async()=>{

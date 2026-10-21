@@ -1,9 +1,10 @@
+import {approvedShippingCalendar,captureShippingPromise} from '../netlify/operations/shipping-compliance.mjs';
 import {readFile} from 'node:fs/promises';
 import {resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 export const requiredDeclarations=['STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET','DATABASE_URL','RESEND_API_KEY','RESEND_FROM','RESEND_REPLY_TO','AUTH_PROVIDER','WORKOS_API_KEY','WORKOS_CLIENT_ID','WORKOS_COOKIE_PASSWORD','WORKOS_STAFF_ORGANIZATION_ID','PAYMENTS_ENABLED','TRANSACTIONAL_EMAILS_ENABLED'];
-export function checkLaunch({policyText='',catalogText='',declarations='',env={},phase='activation'}={}) {
+export function checkLaunch({policyText='',catalogText='',declarations='',env={},phase='activation',now=Date.now}={}) {
   const blockers=[];
   if(!['activation','predeploy'].includes(phase))return {ready:false,blockers:['Unknown readiness phase.'],phase};
   if(!policyText.trim() || /\[[^\]]*REQUIRED\]|TODO|placeholder|draft for review|not an approved|still need confirmation|review required|policy pending|owner decisions still required/i.test(policyText)) blockers.push('Customer policies contain draft or placeholder wording.');
@@ -17,6 +18,8 @@ export function checkLaunch({policyText='',catalogText='',declarations='',env={}
   if(env.STORE_COUNTRY!=='US' || env.STORE_CURRENCY!=='usd') blockers.push('USA/USD shipping and currency configuration is unverified.');
   if(!/^\d+$/.test(env.SHIPPING_RATE_CENTS ?? '') || Number(env.SHIPPING_RATE_CENTS)<=0 || env.SHIPPING_CONFIGURATION_APPROVED!=='true') blockers.push('Final production shipping price and configuration require approval.');
   for(const name of ['BUSINESS_LEGAL_NAME','BUSINESS_POSTAL_ADDRESS','SUPPORT_EMAIL']) if(!env[name] || /TODO|placeholder|example\./i.test(env[name])) blockers.push(`Business information missing or unverified: ${name}.`);
+  if(!approvedShippingCalendar(env)||!captureShippingPromise({paidAt:new Date(now()).toISOString()},env).verified)blockers.push('An owner-approved shipping business calendar, holidays, timezone and sufficient review horizon are required.');
+  for(const key of ['FULFILLMENT_CAPACITY_VERIFIED','SHIPPING_DELAY_WORKFLOW_VERIFIED','BUSINESS_ADDRESS_CONFIRMED','APPAREL_LABELS_VERIFIED','ARTWORK_RIGHTS_VERIFIED'])if(env[key]!=='true')blockers.push('Required legal/fulfillment verification missing: '+key+'.');
   if(env.POLICIES_APPROVED!=='true') blockers.push('Final customer policies have not been approved.');
   if(env.LIVE_CATALOG_APPROVED!=='true') blockers.push('Live prices, inventory and Stripe catalog require approval.');
   if(env.TAX_CONFIGURATION_APPROVED!=='true') blockers.push('Tax configuration requires owner/professional review.');

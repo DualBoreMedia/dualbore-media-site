@@ -1,3 +1,5 @@
+import {shippingReview,captureShippingPromise,changeShippingDelay,assertCarrierHandoff} from './shipping-compliance.mjs';
+import {originalPaidEvent} from './payment-evidence.mjs';
 import {inventoryPolicy,madeToOrder,publicAvailableQuantity} from '../commerce/inventory.mjs';
 import {randomUUID,createHash} from 'node:crypto';
 import {CommerceError,createCommerceService} from '../commerce/service.mjs';
@@ -31,14 +33,17 @@ function employeeProjection(state,order){
   allowedTransitions:(fulfillmentTransitions[base.fulfillmentStatus]||[]).filter(s=>employeeTransitions.includes(s)),
   shipments:base.shipments.map(p=>({...p,items:(p.items||[]).map(({variantId,quantity})=>({variantId,quantity})),shipmentId:Object.values(state.shipments).find(s=>s.orderId===order.id&&s.packageNumber===p.packageNumber)?.id}))};
 }
-function projection(state,order,admin){
+function projection(state,order,admin,at=new Date()){
  const shipments=Object.values(state.shipments).filter(s=>s.orderId===order.id).map(s=>({...admin?{shipmentId:s.id,packedByUserId:s.packedByUserId,packedAt:s.packedAt,createdByUserId:s.createdByUserId,trackingEnteredByUserId:s.trackingEnteredByUserId}:{},packageNumber:s.packageNumber,carrier:s.carrier,service:s.service,status:s.status,trackingNumber:s.trackingNumber,trackingUrl:s.trackingUrl,version:version(s),items:s.items,weightOz:s.weightOz,dimensions:s.dimensions,createdAt:s.createdAt,shippedAt:s.shippedAt,deliveredAt:s.deliveredAt}));
  const history=Object.values(state.audit).filter(a=>a.target===order.orderNumber);
  const timeline=history.filter(a=>['fulfillment','shipment-status','payment'].includes(a.action)).map(a=>({status:a.metadata.next,previousStatus:a.metadata.previous,createdAt:a.createdAt,source:a.metadata.source||'garage'}));
  if(order.paidAt&&!timeline.some(e=>e.status==='paid'))timeline.unshift({status:'paid',createdAt:order.paidAt,source:'verified-payment'});
  if(!shipments.length&&order.shippedAt&&order.trackingUrl)shipments.push({packageNumber:'Earlier shipment',carrier:order.carrier,status:'shipped',trackingNumber:order.trackingNumber,trackingUrl:safeTrackingUrl(order.trackingUrl),shippedAt:order.shippedAt,items:order.items.map(({variantId,quantity})=>({variantId,quantity}))});
  const result={orderNumber:order.orderNumber,status:order.status,paymentStatus:order.refundStatus==='partial'?'partially_refunded':order.status==='fulfilled'?'paid':order.status,fulfillmentStatus:initialFulfillment(order),version:version(order),createdAt:order.createdAt,paidAt:order.paidAt,totalCents:order.totalCents,subtotalCents:order.subtotalCents,shippingCents:order.shippingCents,taxCents:order.taxCents,refundedCents:order.refundedCents||0,items:cleanItems(order.items),shipments,timeline};
- if(admin)Object.assign(result,{allowedTransitions:initialFulfillment(order)==='on_hold'?[order.holdPreviousStatus,'cancelled'].filter(Boolean):fulfillmentTransitions[initialFulfillment(order)]||[],customerEmail:order.customerEmail,shippingName:order.shippingName,shippingAddress:order.shippingAddress,notes:history.filter(a=>a.action==='note').map(a=>({text:a.metadata.note,actor:a.actor,createdAt:a.createdAt})),audit:history,sessionId:order.sessionId,paymentIntentId:order.paymentIntentId,emailEvents:Object.values(state.emails).filter(e=>e.orderId===order.id).map(e=>({eventId:e.id,emailType:e.emailType,status:e.status,attemptCount:e.attemptCount,lastError:e.lastError}))});
+ result.shippingReview=shippingReview(order,at);
+ if(admin)Object.assign(result,{shippingDelay:order.shipmentDelay||null,shippingTimeZone:order.shippingPromise?.calendar?.timeZone,allowedTransitions:initialFulfillment(order)==='on_hold'?[order.holdPreviousStatus,'cancelled'].filter(Boolean):fulfillmentTransitions[initialFulfillment(order)]||[],customerEmail:order.customerEmail,shippingName:order.shippingName,shippingAddress:order.shippingAddress,notes:history.filter(a=>a.action==='note').map(a=>({text:a.metadata.note,actor:a.actor,createdAt:a.createdAt})),audit:history,sessionId:order.sessionId,paymentIntentId:order.paymentIntentId,emailEvents:Object.values(state.emails).filter(e=>e.orderId===order.id).map(e=>({eventId:e.id,emailType:e.emailType,status:e.status,attemptCount:e.attemptCount,lastError:e.lastError}))});
+ if(admin&&(['awaiting_consent','refund_required'].includes(order.shipmentDelay?.status)||result.shippingReview.status==='cancel_refund_due'))result.allowedTransitions=[];
+ if(admin&&order.shipmentDelay?.status==='consented')result.allowedTransitions=result.allowedTransitions.filter(status=>status!=='cancelled');
  return result;
 }
 export function createOperationsService({repository,stripe,env={},now=()=>new Date(),send=deliverLifecycleEmails,retryEmail=retryRecordedEmail}){
@@ -88,12 +93,13 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
    for(const r of Object.values(s.refundRequests))if(r.status!=='succeeded')failures.push({type:'refund',status:r.status,orderNumber:r.orderNumber,safeMessage:'Refund has not been confirmed. Retry the same request or reconcile with Stripe.'});
    for(const p of Object.values(s.shipments))if(['shipped','delivered'].includes(p.status)&&(!p.trackingNumber||!p.trackingUrl))failures.push({type:'shipment',status:'review',orderNumber:s.orders[p.orderId]?.orderNumber,safeMessage:'Shipment tracking needs review.'});
    for(const p of Object.values(s.profiles))if(p.deletionRequestedAt)failures.push({type:'account',status:'review',safeMessage:'An account deletion request requires retention review and managed-provider action.'});
+   for(const o of all.filter(o=>paid(o)&&(o.shippingPromise||initialFulfillment(o)==='cancelled'))){const review=shippingReview(o,now());if(!['upcoming','shipped','closed'].includes(review.status))failures.push({type:'shipment_delay',status:review.status,orderNumber:o.orderNumber,safeMessage:review.status==='refund_required'?'Unshipped merchandise cancellation requires a confirmed refund. Split-package amounts need manual review.':review.status==='cancel_refund_due'?'Shipment or consent deadline expired. Cancel unshipped merchandise and arrange the required refund.':review.status==='calendar_unconfirmed'?'The business calendar or original payment timestamp needs verification. Do not open sales.':'Review the carrier handoff deadline or outstanding customer delay response.'});}
    const staleHours=Number(env.FULFILLMENT_REVIEW_HOURS)||72;
-   for(const o of all)if(['making','packing','ready_to_ship','on_hold'].includes(initialFulfillment(o))&&now().getTime()-Date.parse(o.paidAt||o.createdAt)>staleHours*3600000)failures.push({type:'fulfillment',status:'review',orderNumber:o.orderNumber,safeMessage:'This order exceeds the configured operations review interval. Review its progress.'});
+   for(const o of all)if(paid(o)&&['received','making','packing','ready_to_ship','on_hold'].includes(initialFulfillment(o))&&now().getTime()-Date.parse(o.paidAt||o.createdAt)>staleHours*3600000)failures.push({type:'fulfillment',status:'review',orderNumber:o.orderNumber,safeMessage:'This order exceeds the configured operations review interval. Review its progress.'});
    const supportTickets=Object.values(s.supportTickets).filter(t=>admin||t.userId===principal.userId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,100).map(({id,userId,customerEmail,note,...ticket})=>({...ticket,...admin?{customerEmail,note}:{}}));
    profile.marketingConsent=getMarketingPreference(s,principal.email).subscribed;
    for(const failure of failures)failure.safeMessage??=failure.type==='email'?'A recorded email needs safe retry or delivery review.':failure.type==='inventory'?failure.reason:'A verified webhook needs Stripe reconciliation.';
-   return {role:roleOf(principal),permissions:permissionsFor(principal),supportTickets,profile:{displayName:principal.displayName,email:principal.email,verified:true,marketingConsent:profile.marketingConsent,marketingSuppressed:getMarketingPreference(s,principal.email).suppressed,deletionRequestedAt:profile.deletionRequestedAt},orders:orders.map(o=>projection(s,o,admin)),pagination:{page:pageNumber,total,pageSize:25},...(admin?{overview:{paid:all.filter(o=>['paid','fulfilled'].includes(o.status)).length,received:all.filter(o=>paid(o)&&initialFulfillment(o)==='received').length,...Object.fromEntries(['making','packing','ready_to_ship','shipped','delivered','on_hold'].map(k=>[k,all.filter(o=>paid(o)&&initialFulfillment(o)===k).length])),lowInventory:variants.filter(v=>!madeToOrder(v)&&v.availableQuantity<=lowThreshold).length,soldOut:variants.filter(v=>!madeToOrder(v)&&v.active&&v.availableQuantity===0).length,needsAttention:failures.length,failedEmails:failures.filter(e=>e.type==='email').length,webhookFailures:failures.filter(e=>e.type==='webhook').length},variants:variants.map(v=>({id:v.id,variantId:v.id,productId:v.productId,sku:v.sku,name:v.name,size:v.size,inventoryPolicy:inventoryPolicy(v),availableQuantity:publicAvailableQuantity(v),reservedQuantity:v.reservedQuantity,soldQuantity:v.soldQuantity,active:v.active,version:version(v),lowStock:!madeToOrder(v)&&v.active&&v.availableQuantity>0&&v.availableQuantity<=lowThreshold})),audit:Object.values(s.audit).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,250),failures}:{} )};
+   return {role:roleOf(principal),permissions:permissionsFor(principal),supportTickets,profile:{displayName:principal.displayName,email:principal.email,verified:true,marketingConsent:profile.marketingConsent,marketingSuppressed:getMarketingPreference(s,principal.email).suppressed,deletionRequestedAt:profile.deletionRequestedAt},orders:orders.map(o=>projection(s,o,admin,now())),pagination:{page:pageNumber,total,pageSize:25},...(admin?{overview:{paid:all.filter(o=>['paid','fulfilled'].includes(o.status)).length,received:all.filter(o=>paid(o)&&initialFulfillment(o)==='received').length,...Object.fromEntries(['making','packing','ready_to_ship','shipped','delivered','on_hold'].map(k=>[k,all.filter(o=>paid(o)&&initialFulfillment(o)===k).length])),lowInventory:variants.filter(v=>!madeToOrder(v)&&v.availableQuantity<=lowThreshold).length,soldOut:variants.filter(v=>!madeToOrder(v)&&v.active&&v.availableQuantity===0).length,needsAttention:failures.length,failedEmails:failures.filter(e=>e.type==='email').length,webhookFailures:failures.filter(e=>e.type==='webhook').length},variants:variants.map(v=>({id:v.id,variantId:v.id,productId:v.productId,sku:v.sku,name:v.name,size:v.size,inventoryPolicy:inventoryPolicy(v),availableQuantity:publicAvailableQuantity(v),reservedQuantity:v.reservedQuantity,soldQuantity:v.soldQuantity,active:v.active,version:version(v),lowStock:!madeToOrder(v)&&v.active&&v.availableQuantity>0&&v.availableQuantity<=lowThreshold})),audit:Object.values(s.audit).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,250),failures}:{} )};
   });
  }
  async function mutate(principal,input){
@@ -120,8 +126,18 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
    let session;try{session=await stripe.checkout.sessions.retrieve(order.sessionId);}catch{fail('provider_unavailable','Stripe is unavailable. No order or stock change was confirmed.',503);}
    const type=session.payment_status==='paid'?'checkout.session.completed':session.status==='expired'?'checkout.session.expired':null;
    if(!type)return {saved:false,status:'pending'};
-   const result=await createCommerceService({repository,stripe,env}).webhook({id:'evt_reconcile_'+order.id.replaceAll('-','')+'_'+type.split('.').at(-1),type,livemode:env.COMMERCE_ENVIRONMENT==='production',data:{object:session}});
-   await repository.transaction(s=>audit(s,principal,'reconciliation',order.orderNumber,{source:'stripe-retrieval'},timestamp()));return {saved:true,...result};
+   const live=env.COMMERCE_ENVIRONMENT==='production';
+   const original=session.payment_status==='paid'?await originalPaidEvent(stripe,order,{live,now:()=>now().getTime()}):null;
+   const result=await createCommerceService({repository,stripe,env,now:()=>now().getTime()}).webhook(original||{id:'evt_reconcile_'+order.id.replaceAll('-','')+'_'+type.split('.').at(-1),type,livemode:live,data:{object:session}});
+   await repository.transaction(s=>{
+    const o=s.orders[order.id];
+    if(original&&paid(o)&&o.paymentTimestampVerified===false){
+     const payment=original.data.object,paymentId=typeof payment.payment_intent==='string'?payment.payment_intent:payment.payment_intent?.id;
+     if(payment.amount_total!==o.totalCents||payment.currency!==o.currency||paymentId!==o.paymentIntentId)fail('payment_time_unverified','Payment evidence needs manual review. No deadline was changed.',409);
+     o.paidAt=new Date(original.created*1000).toISOString();o.paymentTimestampVerified=true;o.shippingPromise=captureShippingPromise(o,env);o.version=version(o)+1;
+    }
+    audit(s,principal,'reconciliation',order.orderNumber,{source:'stripe-retrieval',paymentEventId:original?.id||null},timestamp());
+   });return {saved:true,...result};
   }
   if(input?.action==='refund')return refund(principal,input);
   if(input?.action==='retry-email'){
@@ -131,6 +147,13 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
   }
   const result=await repository.transaction(s=>{
    const time=timestamp();
+   if(input.action==='shipping-delay'){
+    schema(input,['orderNumber','operation','expectedVersion'],['reason','basis','reference','revisedShipDate','sentAt','replyBy','noticeText','confirmed','decision','receivedAt']);
+    const o=orderByNumber(s,input.orderNumber);checkVersion(o,input.expectedVersion);
+    const change=changeShippingDelay(s,o,input,now());o.version=version(o)+1;
+    audit(s,principal,'shipping-delay',o.orderNumber,{operation:input.operation,...change,reference:input.reference||null},time);
+    return {saved:true};
+   }
    if(input.action==='packing-slip'){
     schema(input,['orderNumber'],['shipmentId']);const o=orderByNumber(s,input.orderNumber);if(!fulfillable(o)||['cancelled','on_hold'].includes(initialFulfillment(o)))fail('not_ready','A paid order that is not refunded, cancelled or on hold is required for a packing slip.',409);
     let items=o.items,packageNumber;
@@ -156,6 +179,7 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
    }
    if(input.action==='transition'){
     schema(input,['orderNumber','status','expectedVersion'],['note','confirmed']);const o=orderByNumber(s,input.orderNumber);checkVersion(o,input.expectedVersion);if(!fulfillable(o))fail('not_paid','A non-refunded verified payment is required before fulfillment.',409);const previous=initialFulfillment(o);
+    if(['awaiting_consent','refund_required'].includes(o.shipmentDelay?.status)||shippingReview(o,now()).status==='cancel_refund_due'||(o.shipmentDelay?.status==='consented'&&input.status==='cancelled'))fail('shipping_review_required','Resolve the shipment delay, customer decision and required refund through the shipment review.',409);
     const allowed=previous==='on_hold'?[o.holdPreviousStatus,'cancelled']:fulfillmentTransitions[previous];
     if(!allowed?.includes(input.status))fail('invalid_transition','That fulfillment transition is not allowed.',409);
     if(input.note!==undefined&&!text(input.note))fail('invalid_note','Enter a valid note.');
@@ -192,11 +216,12 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
     audit(s,principal,'shipment-updated',o.orderNumber,{packageNumber:p.packageNumber,version:p.version,itemsChanged:input.items!==undefined},time);return {saved:true};
    }
    if(input.action==='shipment-status'){
-    schema(input,['shipmentId','status','expectedVersion'],['confirmed']);const p=record(s.shipments,input.shipmentId);if(!p)fail('not_found','Package not found.',404);checkVersion(p,input.expectedVersion);const o=s.orders[p.orderId];if(!fulfillable(o)||['cancelled','on_hold'].includes(initialFulfillment(o)))fail('not_ready','This order cannot be shipped.',409);
+    schema(input,['shipmentId','status','expectedVersion'],['confirmed','carrierAccepted']);const p=record(s.shipments,input.shipmentId);if(!p)fail('not_found','Package not found.',404);checkVersion(p,input.expectedVersion);const o=s.orders[p.orderId];if(!fulfillable(o)||['cancelled','on_hold'].includes(initialFulfillment(o)))fail('not_ready','This order cannot be shipped.',409);
     if(!({draft:['packed'],packed:['shipped'],shipped:['delivered'],delivered:[]})[p.status]?.includes(input.status))fail('invalid_transition','That package transition is not allowed.',409);
     if(input.status==='shipped'&&initialFulfillment(o)!=='ready_to_ship'&&initialFulfillment(o)!=='shipped')fail('not_ready','Mark the order ready to ship first.',409);
+    if(input.status==='shipped')assertCarrierHandoff(o,input,now(),env);
     if(input.status==='delivered'&&input.confirmed!==true)fail('confirmation_required','Confirm that delivery was actually recorded.');
-    const previous=p.status;p.status=input.status;p.version=version(p)+1;p[`${input.status}At`]=time;if(input.status==='packed')p.packedByUserId=principal.userId;
+    const previous=p.status;p.status=input.status;p.version=version(p)+1;p[`${input.status}At`]=time;if(input.status==='packed')p.packedByUserId=principal.userId;if(input.status==='shipped'){p.carrierAcceptedAt=time;p.carrierAcceptedByUserId=principal.userId;}
     const source=roleOf(principal)==='admin'?'manual-admin':'manual-employee';const tid=randomUUID();s.trackingEvents[tid]={id:tid,shipmentId:p.id,status:p.status,source,actorUserId:principal.userId,createdAt:time};
     audit(s,principal,'shipment-status',o.orderNumber,{previous,next:p.status,packageNumber:p.packageNumber,source},time);
     const packages=Object.values(s.shipments).filter(x=>x.orderId===o.id);
@@ -214,7 +239,7 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
  async function refund(principal,input){
   schema(input,['orderNumber','amountCents','requestKey','confirmed']);
   if(input.confirmed!==true||!Number.isSafeInteger(input.amountCents)||input.amountCents<1||!/^[-a-f0-9]{36}$/i.test(input.requestKey||''))fail('invalid_refund','Confirm a valid refund amount.');
-  if(env.COMMERCE_ENVIRONMENT==='production'&&env.PAYMENTS_ENABLED!=='true')fail('payments_disabled','Payments and refunds are disabled before launch.',503);
+  if(env.COMMERCE_ENVIRONMENT==='production'&&env.REFUNDS_ENABLED!=='true')fail('payments_disabled','Refund processing is disabled. A required refund must be handled through the verified merchant process.',503);
   const request=await repository.transaction(s=>{
    const existing=s.refundRequests[input.requestKey];if(existing){if(existing.orderNumber!==input.orderNumber||existing.amountCents!==input.amountCents)fail('request_conflict','Refund request has changed.',409);if(existing.status==='failed'){const o=s.orders[existing.orderId];const pending=Object.values(s.refundRequests).filter(r=>r.orderId===o.id&&['pending','manual-review'].includes(r.status)).reduce((n,r)=>n+r.amountCents,0);if(existing.amountCents+(o.refundedCents||0)+pending>o.totalCents)fail('invalid_refund','Refund exceeds the remaining paid amount.',409);existing.status='pending';audit(s,principal,'refund-retry',o.orderNumber,{amountCents:existing.amountCents},timestamp());}return existing;}
    const o=orderByNumber(s,input.orderNumber);if(!paid(o)||!o.paymentIntentId)fail('invalid_refund','A verified paid order is required.',409);

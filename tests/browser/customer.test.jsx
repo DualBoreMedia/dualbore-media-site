@@ -191,7 +191,7 @@ test('public merchandise quick view stays a design preview without active purcha
   await page.getByRole('button',{name:/Quick View E92 Coupe/}).click();
   const dialog=page.getByRole('dialog');
   await expect.element(dialog.getByText(/Design preview\. No orders or payments are being accepted\./)).toBeVisible();
-  await expect.element(dialog.getByText(/Ships within 3 days|No change-of-mind returns|30 calendar days of delivery/)).not.toBeInTheDocument();
+  await expect.element(dialog.getByText(/Ships within 3 (?:business )?days|No change-of-mind returns|30 calendar days of delivery/)).not.toBeInTheDocument();
   await expect.element(dialog.getByRole('link',{name:/Shipping and processing|Returns and size exchanges/})).not.toBeInTheDocument();
 });
 
@@ -224,15 +224,15 @@ test('public policy pages disclose prelaunch status and keep purchase controls a
 test('public policy pages show safe pre-launch information without internal draft markers',async()=>{
   for(const policy of ['shipping','returns','privacy','terms','contact']){
     mount(<StorePage page={policy} draft={false} waitlistEnabled={false} onBrowse={()=>{}}/>);
-    await expect.element(page.getByText(/Pre-launch information \/ No orders accepted/)).toBeVisible();
+    await expect.element(page.getByText(/Website information \/ Orders and signups paused/)).toBeVisible();
     await expect.element(page.getByText(/not accepting (orders|purchases)/i)).toBeVisible();
     await expect.element(page.getByText(/\[VERIFIED|\[POLICY|draft for review|not an approved/i)).not.toBeInTheDocument();
     await expect.element(page.getByRole('button',{name:/checkout|buy now/i})).not.toBeInTheDocument();
     root.unmount();host.remove();host=document.createElement('div');document.body.append(host);root=createRoot(host);
   }
   mount(<StorePage page="privacy" draft={false} waitlistEnabled={false} onBrowse={()=>{}}/>);
-  await expect.element(page.getByText(/signup is temporarily closed/i)).toBeVisible();
-  await expect.element(page.getByText(/No signup will be recorded/i)).toBeVisible();
+  await expect.element(page.getByText(/Drop Alert signups and automated transactional and marketing email are disabled/i)).toBeVisible();
+  await expect.element(page.getByText(/Checkout, order collection and customer account enrollment are not available/i)).toBeVisible();
 });
 
 test('staff route refuses an unsigned or unprivileged account and packing slip omits payment details',async()=>{

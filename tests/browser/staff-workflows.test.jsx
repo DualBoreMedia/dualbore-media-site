@@ -78,6 +78,7 @@ test('staff fulfillment uses versioned transitions and clears privileged data on
 });
 
 test('staff tracking validates URLs, saves package quantities and records shipment state changes',async()=>{
+ const confirm=vi.spyOn(window,'confirm').mockReturnValue(true);
  const f=fixture();f.order.shipments=[{shipmentId:'shipment_synthetic',status:'draft',version:2,carrier:'USPS',service:'Ground',trackingNumber:'SYNTHETIC',trackingUrl:'https://example.invalid/track',items:[{variantId:'e92-tee-m',quantity:1}]}];
  root.render(<StaffApp auth={f.auth}/>);await page.getByRole('button',{name:/DBM-STAFF-QA/}).click();
  await page.getByText('Edit carrier / tracking',{exact:true}).click();
@@ -92,7 +93,7 @@ test('staff tracking validates URLs, saves package quantities and records shipme
  f.order.shipments[0].status='packed';await page.getByRole('button',{name:'Fulfillment queue'}).click();await page.getByRole('button',{name:/DBM-STAFF-QA/}).click();
  await page.getByRole('button',{name:'Mark shipped'}).click();await expect.poll(()=>posted(f,'shipment-status')?.status).toBe('shipped');
  f.order.shipments[0].status='shipped';await page.getByRole('button',{name:'Fulfillment queue'}).click();await page.getByRole('button',{name:/DBM-STAFF-QA/}).click();
- const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);const before=f.posts.length;
+ confirm.mockReturnValue(false);const before=f.posts.length;
  await page.getByRole('button',{name:'Record delivery'}).click();expect(f.posts).toHaveLength(before);
  confirm.mockReturnValue(true);await page.getByRole('button',{name:'Record delivery'}).click();
  await expect.poll(()=>posted(f,'shipment-status')).toMatchObject({status:'delivered',confirmed:true,expectedVersion:2});

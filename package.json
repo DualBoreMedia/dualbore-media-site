@@ -27,7 +27,8 @@
     "test:coverage": "node scripts/run-coverage.mjs",
     "test:inventory": "node scripts/test-inventory.mjs",
     "test:e2e": "node scripts/run-browser-qa.mjs",
-    "test:mutations": "node scripts/run-mutation-checks.mjs"
+    "test:mutations": "node scripts/run-mutation-checks.mjs",
+    "demo:admin": "node scripts/admin-demo.mjs"
   },
   "dependencies": {
     "@clerk/backend": "3.23.2",
