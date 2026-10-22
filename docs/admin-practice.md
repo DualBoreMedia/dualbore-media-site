@@ -35,4 +35,4 @@ For later production activation, configure server-only `AUTH_PROVIDER=workos`, `
 
 Keep payments, refunds to real services, transactional/marketing email, Drop Alert collection and Netlify Forms disabled. No deployment is authorized.
 
-Official references: [AuthKit MFA](https://workos.com/docs/authkit/mfa), [organization policies](https://workos.com/docs/authkit/organization-policies), [Node SDK session issuer](https://github.com/workos/workos-node#access-token-issuer-validation), [WorkOS pricing](https://workos.com/pricing). AuthKit user management with MFA/RBAC is currently $0 for up to one million users. No custom domain, enterprise SSO, paid add-on or billing subscription was selected.
+Official references: [AuthKit MFA](https://workos.com/docs/authkit/mfa), [organization policies](https://workos.com/docs/authkit/organization-policies), [Node SDK session issuer](https://github.com/workos/workos-node#access-token-issuer-validation), [WorkOS pricing](https://workos.com/pricing). AuthKit user management with MFA/RBAC is currently $0 for up to one million monthly active users. No custom domain, enterprise SSO, paid add-on or billing subscription was selected.
