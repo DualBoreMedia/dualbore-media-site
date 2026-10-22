@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {authenticate,AuthError} from './auth.mjs';
 import {createOperationsService} from './service.mjs';
-import {commerceRuntime} from '../commerce/runtime.mjs';
+import {operationsRuntime} from './runtime.mjs';
 import {CommerceError} from '../commerce/service.mjs';
 import {readBounded} from '../commerce/http.mjs';
 import {createStaffManagement} from './staff-management.mjs';
@@ -13,7 +13,7 @@ export async function consumeLimit(repository,identity,scope,{limit=60,windowMs=
  const id=createHash('sha256').update(`${scope}:${identity}`).digest('hex');
  return repository.transaction(s=>{for(const [key,row]of Object.entries(s.limits))if(row.expiresAt<=now)delete s.limits[key];const row=s.limits[id]??={id,count:0,expiresAt:now+windowMs};row.count++;return row.count<=limit;});
 }
-export async function operationsHttp(request,{env=process.env,runtime=commerceRuntime,auth=authenticate,clientIp='unavailable',clerkClient}={}){
+export async function operationsHttp(request,{env=process.env,runtime=operationsRuntime,auth=authenticate,clientIp='unavailable',clerkClient}={}){
  const reporter=await serverErrorReporter(env);
  return observeHttp(r=>operationsHandler(r,{env,runtime,auth,clientIp,clerkClient,reporter}),{scope:'operations',env,reporter})(request);
 }

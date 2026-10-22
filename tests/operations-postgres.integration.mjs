@@ -2,10 +2,15 @@ import test from 'node:test';import assert from 'node:assert/strict';import pg f
 import {runMigrations,createPostgresRepository}from'../netlify/commerce/repository.mjs';import {seedTestCatalog}from'../netlify/commerce/catalog.mjs';import{createOperationsService}from'../netlify/operations/service.mjs';
 import {captureShippingPromise} from '../netlify/operations/shipping-compliance.mjs';
 import {shippingDelayNotice} from '../src/business.js';
+import {operationsRuntime} from '../netlify/operations/runtime.mjs';
+import {operationsHttp} from '../netlify/operations/http.mjs';
 test('real PostgreSQL operations lifecycle, split packages, immutable audit and concurrent inventory edits',{skip:process.env.DBM_REAL_POSTGRES_TEST!=='true',timeout:30000},async()=>{
  const url=new URL(process.env.DATABASE_URL);assert.equal(url.hostname,'127.0.0.1');assert.equal(url.pathname,'/dbm_sandbox');
  const schema='dbm_ops_qa_'+randomBytes(8).toString('hex'),adminPool=new pg.Pool({connectionString:process.env.DATABASE_URL});let pool;
  try{await adminPool.query('CREATE SCHEMA '+schema);pool=new pg.Pool({connectionString:process.env.DATABASE_URL,options:'-c search_path='+schema,max:3});await runMigrations(pool);await runMigrations(pool);const repository=createPostgresRepository(pool);await seedTestCatalog(repository,{quantity:1});
+  const accountDatabase=new URL(process.env.DATABASE_URL);accountDatabase.searchParams.set('options','-c search_path='+schema);
+  const accountEnv={COMMERCE_ENVIRONMENT:'test',SITE_ORIGIN:'http://127.0.0.1:4320',DATABASE_URL:accountDatabase.href,PAYMENTS_ENABLED:'false',REFUNDS_ENABLED:'false',TRANSACTIONAL_EMAILS_ENABLED:'false'},accounts=await operationsRuntime(accountEnv);
+  try{const response=await operationsHttp(new Request(accountEnv.SITE_ORIGIN+'/api/operations'),{env:accountEnv,auth:async()=>({userId:'workos:user_fixture',email:'empty@example.invalid',sessionId:'session_fixture'})});assert.equal(response.status,200);assert.equal((await response.json()).orders.length,0);assert.equal(await accounts.repository.transaction(s=>Object.keys(s.orders).length),0);}finally{await accounts.close();}
   const actor={userId:'qa-admin',email:'qa@example.invalid',admin:true,mfa:true,sessionId:'qa-session'};
   // Synthetic paid fixture isolates persistence/authorization from real provider testing.
   await repository.transaction(s=>{s.orders.qa={id:'qa',orderNumber:'DBM-OPS-QA',status:'paid',customerEmail:'customer@example.invalid',fulfillmentStatus:'received',isTest:true,testProvider:'mock',createdAt:new Date().toISOString(),currency:'usd',subtotalCents:6000,shippingCents:700,taxCents:0,totalCents:6700,items:[{variantId:'e92-tee-m',sku:'DBM-E92-TEE-M',name:'E92 Tee',size:'M',quantity:2,unitPriceCents:3000,lineTotalCents:6000}]};});

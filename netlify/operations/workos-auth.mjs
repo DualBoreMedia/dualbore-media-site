@@ -10,7 +10,8 @@ export function workosConfig(env){
  if(!env.WORKOS_API_KEY||!/^client_[A-Za-z0-9]+$/.test(env.WORKOS_CLIENT_ID||'')||typeof env.WORKOS_COOKIE_PASSWORD!=='string'||env.WORKOS_COOKIE_PASSWORD.length<32)throw new AuthError('auth_unavailable','Secure sign-in is not configured yet.',503);
  return {origin,clientId:env.WORKOS_CLIENT_ID,cookiePassword:env.WORKOS_COOKIE_PASSWORD};
 }
-export async function workosClient(env){const {WorkOS}=await import('@workos-inc/node');return new WorkOS(env.WORKOS_API_KEY,{clientId:env.WORKOS_CLIENT_ID});}
+export const workosIssuer=env=>'https://api.workos.com/user_management/'+env.WORKOS_CLIENT_ID;
+export async function workosClient(env){const {WorkOS}=await import('@workos-inc/node');return new WorkOS(env.WORKOS_API_KEY,{clientId:env.WORKOS_CLIENT_ID,issuer:workosIssuer(env)});}
 const denied=()=>{throw new AuthError('sign_in_required','Please sign in again to continue.');};
 // Bounded provider pagination must find the exact current record. Failure closes access.
 async function findSession(api,userId,id){for await(const rows of workosPages(options=>api.listSessions(userId,{...options,order:'desc'}))){const found=rows.find(s=>s.id===id);if(found)return found;}return null;}
@@ -26,7 +27,7 @@ export async function authenticateWorkos(request,{env=process.env,client,now=Dat
   if(!verified.authenticated||verified.impersonator||!verified.user?.id||!verified.sessionId)denied();
   // decodeJwt follows the SDK signature/issuer/expiry verification, never replaces it.
   const claims=decodeJwt(verified.accessToken);
-  if(claims.sub!==verified.user.id||claims.sid!==verified.sessionId||claims.iss!=='https://api.workos.com/'||!Number.isFinite(claims.exp)||claims.exp*1000<=now)denied();
+  if(claims.sub!==verified.user.id||claims.sid!==verified.sessionId||claims.iss!==workosIssuer(env)||!Number.isFinite(claims.exp)||claims.exp*1000<=now)denied();
   const [user,session,memberships]=await Promise.all([api.getUser(claims.sub),findSession(api,claims.sub,claims.sid),env.WORKOS_STAFF_ORGANIZATION_ID?allWorkosPages(options=>api.listOrganizationMemberships({organizationId:env.WORKOS_STAFF_ORGANIZATION_ID,userId:claims.sub,...options})):Promise.resolve([])]);
   if(user.id!==claims.sub||!session||session.userId!==user.id||session.status!=='active'||session.impersonator||!Number.isFinite(Date.parse(session.expiresAt))||Date.parse(session.expiresAt)<=now)denied();
   if(!user.emailVerified||typeof user.email!=='string'||!user.email.includes('@'))throw new AuthError('email_verification_required','Verify your email before accessing orders.',403);
@@ -35,7 +36,7 @@ export async function authenticateWorkos(request,{env=process.env,client,now=Dat
   const member=active[0],role=['employee','admin'].includes(member?.role?.slug)?member.role.slug:'customer';
   let mfa=false,mfaEnrolled=false;
   if(role!=='customer'){
-   const factors=await c.mfa.listUserAuthFactors({userId:user.id});
+   const factors=await c.multiFactorAuth.listUserAuthFactors({userId:user.id});
    mfaEnrolled=factors.data.some(f=>f.userId===user.id&&f.type==='totp');
    // WorkOS has no documented policy-read API. This evidence switch MUST stay false
    // until the staff org's Require MFA policy and no-SSO setup pass real QA.

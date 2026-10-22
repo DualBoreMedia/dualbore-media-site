@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {authenticateWorkos,workosConfig} from '../netlify/operations/workos-auth.mjs';
+import {authenticateWorkos,workosConfig,workosClient,workosIssuer} from '../netlify/operations/workos-auth.mjs';
 import {requireStaff} from '../netlify/operations/permissions.mjs';
+import {createWorkosStaffProvider} from '../netlify/operations/workos-staff-provider.mjs';
 import {workosHttp} from '../netlify/operations/workos-http.mjs';
 import {createMemoryRepository} from '../netlify/commerce/memory-repository.mjs';
 import {WorkOS} from '@workos-inc/node';
@@ -11,15 +12,36 @@ const now=Date.now();
 const env={AUTH_PROVIDER:'workos',SITE_ORIGIN:'https://garage.example',WORKOS_API_KEY:'unit-fixture',WORKOS_CLIENT_ID:'client_fixture',WORKOS_COOKIE_PASSWORD:'a-local-unit-test-password-with-at-least-32-characters',WORKOS_STAFF_ORGANIZATION_ID:'org_staff'};
 const jwt=claims=>`${Buffer.from('{}').toString('base64url')}.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.fixture`;
 function fixture(){
- const claims={iss:'https://api.workos.com/',sub:'user_member',sid:'session_member',org_id:'org_staff',auth_time:Math.floor(now/1000),exp:Math.floor(now/1000)+3600};
+ const claims={iss:'https://api.workos.com/user_management/'+env.WORKOS_CLIENT_ID,sub:'user_member',sid:'session_member',org_id:'org_staff',auth_time:Math.floor(now/1000),exp:Math.floor(now/1000)+3600};
  const user={id:'user_member',email:'member@example.com',emailVerified:true,firstName:'Member'};
  const session={id:'session_member',userId:user.id,status:'active',expiresAt:new Date(now+3600000).toISOString(),organizationId:'org_staff',authMethod:'password'};
  const membership={id:'om_member',userId:user.id,organizationId:'org_staff',status:'active',role:{slug:'employee'}};
  const result={authenticated:true,user,sessionId:session.id,authenticationMethod:'Password'};
- const client={userManagement:{loadSealedSession:()=>({authenticate:async()=>({...result,accessToken:jwt(claims)})}),getUser:async()=>user,listSessions:async()=>({data:[session],listMetadata:{}}),listOrganizationMemberships:async()=>({data:[membership]})},mfa:{listUserAuthFactors:async()=>({data:[{userId:user.id,type:'totp'}]})}};
+ const client={userManagement:{loadSealedSession:()=>({authenticate:async()=>({...result,accessToken:jwt(claims)})}),getUser:async()=>user,listSessions:async()=>({data:[session],listMetadata:{}}),listOrganizationMemberships:async()=>({data:[membership]})},multiFactorAuth:{listUserAuthFactors:async()=>({data:[{userId:user.id,type:'totp'}]})}};
  return {client,user,session,membership,claims,result};
 }
 const request=(path='/api/operations',options={})=>new Request(env.SITE_ORIGIN+path,{headers:{Cookie:'__Host-dbm-session=sealed-fixture',...options.headers},...options});
+test('WorkOS binds session issuer to this client and rejects shared, foreign and lookalike issuers',async()=>{
+ const sdk=await workosClient(env);assert.equal(sdk.options.issuer,'https://api.workos.com/user_management/client_fixture');
+ for(const issuer of ['https://api.workos.com/','https://api.workos.com/user_management/client_other','https://api.workos.com.evil.example/user_management/client_fixture',workosIssuer(env)+'/']){
+  const f=fixture();f.claims.iss=issuer;await assert.rejects(authenticateWorkos(request(),{env,client:f.client,now}),{code:'sign_in_required'});
+ }
+});
+test('Installed WorkOS SDK factor endpoint supports authentication, staff lookup and promotion',async()=>{
+ const f=fixture(),sdk=new WorkOS('unit-fixture',{clientId:env.WORKOS_CLIENT_ID}),calls=[];
+ // Retain the installed SDK factor module and its wire deserializer. Only HTTP
+ // transport is replaced, so a nonexistent SDK namespace cannot pass this test.
+ Object.assign(sdk.userManagement,f.client.userManagement);
+ sdk.get=async path=>{calls.push(path);assert.equal(path,'/user_management/users/user_member/auth_factors');return{data:{object:'list',data:[{object:'authentication_factor',id:'auth_factor_fixture',user_id:f.user.id,type:'totp',created_at:new Date(now).toISOString(),updated_at:new Date(now).toISOString()}],list_metadata:{before:null,after:null}}};};
+ const configured={...env,WORKOS_STAFF_MFA_POLICY_VERIFIED:'true'};
+ assert.equal((await authenticateWorkos(request(),{env:configured,client:sdk,now})).mfa,true);
+ const adapter=await createWorkosStaffProvider({env:configured,client:sdk});
+ assert.equal((await adapter.users.getUser('workos:user_member')).twoFactorEnabled,true);
+ sdk.userManagement.updateOrganizationMembership=async(id,{roleSlug})=>{f.membership.role.slug=roleSlug;return f.membership;};
+ sdk.userManagement.revokeSession=async()=>{f.session.status='revoked';};
+ await adapter.users.updateUserMetadata('workos:user_member',{privateMetadata:{role:'admin'}});
+ assert.equal(f.membership.role.slug,'admin');assert.equal(f.session.status,'revoked');assert.equal(calls.length,3);
+});
 test('WorkOS finds the exact current session beyond ten pages and rejects ambiguous later memberships',async()=>{
  const f=fixture();let calls=0;
  f.client.userManagement.listSessions=async(userId,options)=>{assert.equal(userId,f.user.id);assert.equal(options.order,'desc');const page=options.after?Number(options.after):0;calls++;return{data:page===12?[f.session]:[],listMetadata:page<12?{after:String(page+1)}:{}};};
@@ -63,13 +85,16 @@ test('Invalid, missing, expired and tampered callback state redirects safely wit
 });
 test('Installed WorkOS SDK seals and verifies signed sessions; forged JWT and tampered cookies are rejected',async()=>{
  const {privateKey,publicKey}=await generateKeyPair('RS256');const jwk=await exportJWK(publicKey);jwk.kid='fixture';jwk.alg='RS256';
- const token=await new SignJWT({sid:'session_member',auth_time:Math.floor(now/1000)}).setProtectedHeader({alg:'RS256',kid:'fixture'}).setSubject('user_member').setIssuer('https://api.workos.com/').setExpirationTime('5m').sign(privateKey);
- const sdk=new WorkOS('unit-fixture',{clientId:env.WORKOS_CLIENT_ID});
+ const token=await new SignJWT({sid:'session_member',auth_time:Math.floor(now/1000)}).setProtectedHeader({alg:'RS256',kid:'fixture'}).setSubject('user_member').setIssuer(workosIssuer(env)).setExpirationTime('5m').sign(privateKey);
+ const sdk=await workosClient({...env,WORKOS_API_KEY:'unit-fixture'});
  sdk.post=async()=>({data:{user:{id:'user_member',email:'member@example.com',email_verified:true},access_token:token,refresh_token:'fixture-refresh',authentication_method:'Password'}});
  sdk.userManagement.getJWKS=async()=>createLocalJWKSet({keys:[jwk]});
  const response=await sdk.userManagement.authenticateWithCode({code:'fixture',session:{sealSession:true,cookiePassword:env.WORKOS_COOKIE_PASSWORD}});
  assert.ok(response.sealedSession);assert.ok(!response.sealedSession.includes(token));
  const verified=await sdk.userManagement.loadSealedSession({sessionData:response.sealedSession,cookiePassword:env.WORKOS_COOKIE_PASSWORD}).authenticate();assert.equal(verified.authenticated,true);assert.equal(verified.accessToken,token);assert.equal(verified.authenticationMethod,'Password');assert.equal(verified.sessionId,'session_member');
+ const foreign=await new SignJWT({sid:'session_member'}).setProtectedHeader({alg:'RS256',kid:'fixture'}).setSubject('user_member').setIssuer('https://api.workos.com/user_management/client_other').setExpirationTime('5m').sign(privateKey);
+ sdk.post=async()=>({data:{user:{id:'user_member',email:'member@example.com',email_verified:true},access_token:foreign,refresh_token:'fixture-refresh',authentication_method:'Password'}});
+ const foreignResponse=await sdk.userManagement.authenticateWithCode({code:'fixture',session:{sealSession:true,cookiePassword:env.WORKOS_COOKIE_PASSWORD}});assert.equal((await sdk.userManagement.loadSealedSession({sessionData:foreignResponse.sealedSession,cookiePassword:env.WORKOS_COOKIE_PASSWORD}).authenticate()).authenticated,false);
  await assert.rejects(sdk.userManagement.loadSealedSession({sessionData:response.sealedSession.slice(0,-15)+'changed',cookiePassword:env.WORKOS_COOKIE_PASSWORD}).authenticate());
  const other=await generateKeyPair('RS256');const forged=await new SignJWT({sid:'session_member'}).setProtectedHeader({alg:'RS256',kid:'fixture'}).setSubject('user_member').setExpirationTime('5m').sign(other.privateKey);
  sdk.post=async()=>({data:{user:{id:'user_member',email:'member@example.com',email_verified:true},access_token:forged,refresh_token:'fixture-refresh',authentication_method:'Password'}});

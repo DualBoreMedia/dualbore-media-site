@@ -3,8 +3,18 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {commerceRuntime,productionRuntime} from '../netlify/commerce/runtime.mjs';
 import {commerceHttp} from '../netlify/commerce/http.mjs';
+import {operationsRuntime} from '../netlify/operations/runtime.mjs';
 
 const local={COMMERCE_TEST_ENABLED:'true',COMMERCE_MOCK:'true',SITE_ORIGIN:'http://127.0.0.1:4176',TEST_DATABASE_DIRECTORY:'memory://',TEST_INVENTORY_PER_VARIANT:'1',PAYMENTS_ENABLED:'false',TRANSACTIONAL_EMAILS_ENABLED:'false'};
+test('local account storage is independent of checkout and rejects hosted, remote or enabled gates',async()=>{
+ const env={COMMERCE_ENVIRONMENT:'test',SITE_ORIGIN:'http://127.0.0.1:4320',DATABASE_URL:'postgresql://unused@127.0.0.1:55432/dbm_sandbox',PAYMENTS_ENABLED:'false',REFUNDS_ENABLED:'false',TRANSACTIONAL_EMAILS_ENABLED:'false'};
+ const first=await operationsRuntime(env);try{assert.equal(first,await operationsRuntime({...env}));assert.equal(first.stripe,null);assert.equal(first.service,undefined);assert.equal(first.mock,false);}finally{await first.close();}
+ for(const change of [{NETLIFY:'true'},{CONTEXT:'deploy-preview'},{NODE_ENV:'production'},{PAYMENTS_ENABLED:'true'},{REFUNDS_ENABLED:'true'},{TRANSACTIONAL_EMAILS_ENABLED:'true'},{PAYMENTS_ENABLED:undefined},{SITE_ORIGIN:'https://garage.example'},{SITE_ORIGIN:'http://127.0.0.1:4320/path'},{DATABASE_URL:'postgresql://unused@remote.invalid/db'},{DATABASE_URL:'https://127.0.0.1/db'}])await assert.rejects(operationsRuntime({...env,...change}));
+ await assert.rejects(operationsRuntime({...env,COMMERCE_ENVIRONMENT:undefined}));
+ await assert.rejects(operationsRuntime({...env,STRIPE_SECRET_KEY:'invalid'}));
+ // Adding account-only storage must never configure the checkout runtime.
+ await assert.rejects(commerceRuntime(env),/not configured/);
+});
 
 test('simulation and sandbox runtime reject deployed contexts before constructing storage or providers',async()=>{
  for(const marker of [{NETLIFY:'true'},{CONTEXT:'production'},{CONTEXT:'deploy-preview'},{CONTEXT:'branch-deploy'},{NODE_ENV:'production'},{COMMERCE_TEST_ENABLED:'false'}]){
