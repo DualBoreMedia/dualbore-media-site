@@ -8,7 +8,7 @@ const grants=Object.freeze({customer:Object.freeze([]),employee:Object.freeze(['
 export const roleOf=principal=>roles.includes(principal?.role)?principal.role:principal?.role===undefined&&principal?.admin===true?'admin':'customer';
 export const permissionsFor=principal=>[...grants[roleOf(principal)]];
 export function requireMfa(principal){
-  if(!principal?.mfa){const error=new AuthError('mfa_required','Enroll MFA in your secure profile and verify a second factor within the last 10 minutes to continue.',403);error.reverify=principal?.mfaEnrolled===true;throw error;}
+  if(!principal?.mfa){const error=new AuthError('mfa_required','Sign in to the staff organization and complete its required authenticator verification.',403);error.reverify=principal?.mfaEnrolled===true;throw error;}
   return principal;
 }
 export function requireAdmin(principal){
@@ -19,12 +19,17 @@ export function requireStaff(principal){
   if(!['employee','admin'].includes(roleOf(principal)))throw new AuthError('staff_required','Not found.',404);
   return requireMfa(principal);
 }
-export function requirePermission(principal,permission){
+export function requireFreshMfa(principal){
+  requireMfa(principal);
+  if(principal.mfaFresh!==true){const error=new AuthError('step_up_required','Verify your sign-in again before this sensitive change. Nothing was changed.',403);error.reverify=true;throw error;}
+  return principal;
+}
+export function requirePermission(principal,permission,{fresh=false}={}){
   if(!grants[roleOf(principal)].includes(permission)){
     if(['administration','staff-management'].includes(permission))return requireAdmin(principal);
     throw new AuthError('staff_required','Not found.',404);
   }
-  return requireMfa(principal);
+  return fresh?requireFreshMfa(principal):requireMfa(principal);
 }
 export const staffActions=Object.freeze(['transition','shipment','shipment-update','shipment-status','packing-slip']);
 export const employeeTransitions=Object.freeze(['making','packing','ready_to_ship']);

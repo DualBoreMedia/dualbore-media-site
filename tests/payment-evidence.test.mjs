@@ -22,7 +22,7 @@ test('missing, mismatched, future, looping and unavailable provider evidence nev
 test('admin reconciliation preserves the original payment deadline and repairs an older unverified promise without re-selling or duplicate email',async()=>{
  const repository=createMemoryRepository({orders:{qa:structuredClone(order)}}),original=event();const stripe={checkout:{sessions:{retrieve:async()=>original.data.object}},events:{list:async()=>({data:[original],has_more:false})}};
  const env={SHIPPING_CALENDAR_APPROVED:'true',SHIPPING_BUSINESS_CALENDAR:JSON.stringify({timeZone:'America/New_York',weekdays:[1,2,3,4,5],holidays:[],reviewedThrough:'2026-12-31'})};
- const service=createOperationsService({repository,stripe,env,now:()=>new Date(at()),send:async()=>{throw Error('No delivery allowed');}}),admin={userId:'a',admin:true,mfa:true,email:'a@example.invalid'};
+ const service=createOperationsService({repository,stripe,env,now:()=>new Date(at()),send:async()=>{throw Error('No delivery allowed');}}),admin={userId:'a',admin:true,mfa:true,mfaFresh:true,email:'a@example.invalid'};
  await service.mutate(admin,{action:'reconcile',orderNumber:order.orderNumber});let o=await repository.transaction(s=>s.orders.qa);assert.equal(o.paidAt,'2026-10-12T12:00:00.000Z');assert.equal(o.shippingPromise.dueDate,'2026-10-19');
  await repository.transaction(s=>{s.orders.qa.paymentTimestampVerified=false;s.orders.qa.shippingPromise.verified=false;});
  await service.mutate(admin,{action:'reconcile',orderNumber:order.orderNumber});o=await repository.transaction(s=>s.orders.qa);assert.equal(o.paymentTimestampVerified,true);assert.equal(o.shippingPromise.verified,true);assert.equal(o.version,1);

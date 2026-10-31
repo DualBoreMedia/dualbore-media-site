@@ -62,7 +62,7 @@ test('unanswered or missed deadlines cancel unshipped orders with full remaining
  assert.throws(()=>changeShippingDelay(state(),order(),{operation:'unknown'},clock));
 });
 test('delay actions are admin/MFA-only, versioned, persisted, audited, private and never send email',async()=>{
- const repository=createMemoryRepository({orders:{o:order()}});let sends=0;const service=createOperationsService({repository,now:()=>new Date(clock),send:async()=>sends++});const admin={userId:'a',admin:true,mfa:true,email:'a@example.invalid',sessionId:'s'};
+ const repository=createMemoryRepository({orders:{o:order()}});let sends=0;const service=createOperationsService({repository,now:()=>new Date(clock),send:async()=>sends++});const admin={userId:'a',admin:true,mfa:true,mfaFresh:true,email:'a@example.invalid',sessionId:'s'};
  const input={action:'shipping-delay',orderNumber:'DBM-DELAY-TEST',expectedVersion:0,...notice()};
  for(const principal of [{...admin,admin:false,role:'employee'},{...admin,mfa:false}])await assert.rejects(service.mutate(principal,input));
  await service.mutate(admin,input);await assert.rejects(service.mutate(admin,input),{code:'stale_record'});
@@ -75,7 +75,7 @@ test('delay actions are admin/MFA-only, versioned, persisted, audited, private a
 });
 
 test('consented and expired delays cannot bypass the dedicated cancellation/refund path through generic fulfillment controls',async()=>{
- let at=clock;const o=order();changeShippingDelay(state(),o,notice(),clock);const repository=createMemoryRepository({orders:{o}}),service=createOperationsService({repository,now:()=>new Date(at)}),admin={userId:'a',admin:true,mfa:true,email:'a@example.invalid'};
+ let at=clock;const o=order();changeShippingDelay(state(),o,notice(),clock);const repository=createMemoryRepository({orders:{o}}),service=createOperationsService({repository,now:()=>new Date(at)}),admin={userId:'a',admin:true,mfa:true,mfaFresh:true,email:'a@example.invalid'};
  await service.mutate(admin,{action:'shipping-delay',operation:'response',orderNumber:o.orderNumber,expectedVersion:0,decision:'consent',receivedAt:clock,reference:'customer-consent'});
  const dashboard=await service.read(admin,{admin:true});assert.ok(!dashboard.orders[0].allowedTransitions.includes('cancelled'));assert.ok(dashboard.orders[0].allowedTransitions.includes('packing'));
  await assert.rejects(service.mutate(admin,{action:'transition',orderNumber:o.orderNumber,expectedVersion:1,status:'cancelled',confirmed:true,note:'Generic cancel bypass'}),{code:'shipping_review_required'});
@@ -84,11 +84,11 @@ test('consented and expired delays cannot bypass the dedicated cancellation/refu
 });
 
 test('Needs Attention excludes expired unpaid checkouts from overdue fulfillment work',async()=>{
- const repository=createMemoryRepository({orders:{o:order(),unpaid:{...order(),id:'unpaid',orderNumber:'DBM-UNPAID',status:'expired',fulfillmentStatus:undefined,shippingPromise:undefined}}});const service=createOperationsService({repository,now:()=>new Date('2026-10-20T14:00:00Z')});const dashboard=await service.read({userId:'a',admin:true,mfa:true,email:'a@example.invalid'},{admin:true});assert.ok(dashboard.failures.some(f=>f.type==='fulfillment'&&f.orderNumber==='DBM-DELAY-TEST'));assert.ok(!dashboard.failures.some(f=>f.type==='fulfillment'&&f.orderNumber==='DBM-UNPAID'));
+ const repository=createMemoryRepository({orders:{o:order(),unpaid:{...order(),id:'unpaid',orderNumber:'DBM-UNPAID',status:'expired',fulfillmentStatus:undefined,shippingPromise:undefined}}});const service=createOperationsService({repository,now:()=>new Date('2026-10-20T14:00:00Z')});const dashboard=await service.read({userId:'a',admin:true,mfa:true,mfaFresh:true,email:'a@example.invalid'},{admin:true});assert.ok(dashboard.failures.some(f=>f.type==='fulfillment'&&f.orderNumber==='DBM-DELAY-TEST'));assert.ok(!dashboard.failures.some(f=>f.type==='fulfillment'&&f.orderNumber==='DBM-UNPAID'));
 });
 
 test('ordinary merchant cancellation of an unshipped paid order also keeps the refund review visible',async()=>{
- const o=order();delete o.shippingPromise;const repository=createMemoryRepository({orders:{o}}),service=createOperationsService({repository,now:()=>new Date(clock)}),admin={userId:'a',admin:true,mfa:true,email:'a@example.invalid'};
+ const o=order();delete o.shippingPromise;const repository=createMemoryRepository({orders:{o}}),service=createOperationsService({repository,now:()=>new Date(clock)}),admin={userId:'a',admin:true,mfa:true,mfaFresh:true,email:'a@example.invalid'};
  await service.mutate(admin,{action:'transition',orderNumber:o.orderNumber,status:'cancelled',note:'Cannot obtain suitable blanks',confirmed:true,expectedVersion:0});
  const result=await service.read(admin,{admin:true});assert.equal(result.orders[0].shippingReview.status,'refund_required');assert.ok(result.failures.some(f=>f.type==='shipment_delay'&&f.status==='refund_required'));
 });

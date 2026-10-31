@@ -12,7 +12,7 @@ const schema=(input,keys)=>{if(!input||Array.isArray(input)||Object.keys(input).
 export function createStaffManagement({repository,env=process.env,client,now=()=>new Date()}){
  const timestamp=()=>now().toISOString();
  const audit=(state,principal,action,target,metadata)=>{const id=randomUUID();state.audit[id]={id,actor:principal.userId,action,target,metadata,createdAt:timestamp()};};
- async function authorize(principal){try{requirePermission(principal,'staff-management');}catch(error){if(principal?.userId)await repository.transaction(s=>audit(s,principal,'authorization-denied','staff-management',{code:error.code}));throw error;}}
+ async function authorize(principal,options){try{requirePermission(principal,'staff-management',options);}catch(error){if(principal?.userId)await repository.transaction(s=>audit(s,principal,'authorization-denied','staff-management',{code:error.code}));throw error;}}
  async function provider(){
   if((env.COMMERCE_ENVIRONMENT==='production'||env.CONTEXT==='production'||env.NODE_ENV==='production')&&env.AUTH_PROVIDER!=='workos')fail('staff_unavailable','Production staff management requires WorkOS.',503);
   if(env.AUTH_PROVIDER==='workos'){const {createWorkosStaffProvider}=await import('./workos-staff-provider.mjs');return createWorkosStaffProvider({env,client});}
@@ -61,7 +61,7 @@ export function createStaffManagement({repository,env=process.env,client,now=()=
   return {unresolved,members:users.data.filter(u=>search||role(u)!=='customer'||u.privateMetadata?.staffAccess?.revokedAt).map(u=>({...safeUser(u),lastStaffActivityAt:activity[u.id]||null})),invitations:invitations.data.map(i=>({invitationId:i.id,email:i.emailAddress,status:i.status,createdAt:i.createdAt,role:'customer',requiresPromotion:true})),pagination:{page:pageNumber,pageSize:100,totalAccounts:users.totalCount},invitationNotice:'Invitations create ordinary accounts. Verify the person and explicitly grant a staff role after signup and MFA enrollment.'};
  }
  async function mutate(principal,input){
-  await authorize(principal);
+  await authorize(principal,{fresh:true});
   if(input?.action==='staff-reconcile')return reconcile(principal,input,await provider());
   if(input?.action==='staff-invite'){
    schema(input,['email']);if(typeof input.email!=='string'||input.email.length>254||!/^\S+@[^\s@]+\.[^\s@]+$/.test(input.email)||/[\u0000-\u001f\u007f]/.test(input.email))fail('invalid_staff_request','Enter a valid invitation email.');

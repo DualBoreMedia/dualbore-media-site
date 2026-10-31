@@ -50,7 +50,7 @@ export async function authenticate(request, {env = process.env, client} = {}) {
     return Object.freeze({userId: user.id, sessionId: session.id, email: primary.emailAddress.trim().toLowerCase(),
       displayName: [user.firstName, user.lastName].filter(value => typeof value === 'string').join(' ').slice(0, 160),
       role: roles.includes(user.privateMetadata?.role)?user.privateMetadata.role:'customer',
-      admin: user.privateMetadata?.role === 'admin', mfa, mfaEnrolled:user.twoFactorEnabled===true});
+      admin: user.privateMetadata?.role === 'admin', mfa, mfaFresh:mfa, mfaEnrolled:user.twoFactorEnabled===true});
   } catch (error) {
     if (error instanceof AuthError) throw error;
     // Provider diagnostics may contain tokens or customer data. They never enter HTTP responses/logs.

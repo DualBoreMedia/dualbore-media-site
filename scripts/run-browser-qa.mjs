@@ -92,7 +92,7 @@ try {
     await context.tracing.start({screenshots: true, snapshots: true, sources: false});
     let page;
     try {
-      const principal = {role: 'employee', mfa: true, mfaEnrolled: true, userId: 'user_qa', email: 'staff@example.invalid', sessionId: 'qa'};
+      const principal = {role: 'employee', mfa: true,mfaFresh:true, mfaEnrolled: true, userId: 'user_qa', email: 'staff@example.invalid', sessionId: 'qa'};
       const repository = createMemoryRepository({
         orders: {o: {id: 'o', orderNumber: 'DBM-QA', status: 'paid', fulfillmentStatus: 'received', createdAt: '2026-10-15T12:00:00Z', shippingName: '<script>Example recipient</script>', shippingAddress: {line1: '1 <b>Test</b> St', city: 'Example', state: 'OH', postal_code: '00000', country: 'US'}, version: 0, totalCents: 11000, items: [{variantId: 'tee-m', name: 'E92 Tee', size: 'M', quantity: 2}, {variantId: 'crew-l', name: 'Crewneck', size: 'L', quantity: 1}]}},
         shipments: {a: {id: 'a', orderId: 'o', packageNumber: 'PKG-A', status: 'draft', version: 0, carrier: 'USPS', service: 'Ground', trackingNumber: 'TEST001', trackingUrl: 'https://tools.usps.com/go/TrackConfirmAction', items: [{variantId: 'tee-m', quantity: 1}]}, b: {id: 'b', orderId: 'o', packageNumber: 'PKG-B', status: 'draft', version: 0, items: [{variantId: 'tee-m', quantity: 1}, {variantId: 'crew-l', quantity: 1}]}},

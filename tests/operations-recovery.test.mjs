@@ -4,8 +4,8 @@ import {randomUUID} from 'node:crypto';
 import {createMemoryRepository} from '../netlify/commerce/memory-repository.mjs';
 import {createOperationsService} from '../netlify/operations/service.mjs';
 
-const admin={userId:'admin-fixture',email:'admin@example.invalid',admin:true,mfa:true,sessionId:'admin-session'};
-const employee={userId:'employee-fixture',email:'staff@example.invalid',role:'employee',mfa:true,sessionId:'staff-session'};
+const admin={userId:'admin-fixture',email:'admin@example.invalid',admin:true,mfa:true,mfaFresh:true,sessionId:'admin-session'};
+const employee={userId:'employee-fixture',email:'staff@example.invalid',role:'employee',mfa:true,mfaFresh:true,sessionId:'staff-session'};
 const customer={userId:'customer-fixture',email:'customer@example.invalid'};
 function setup(){
  const order={id:'order-fixture',orderNumber:'DBM-RECOVERY',status:'paid',fulfillmentStatus:'packing',version:0,createdAt:'2026-10-01T00:00:00Z',paidAt:'2026-10-01T00:00:00Z',customerEmail:customer.email,customerUserId:customer.userId,shippingName:'Synthetic Customer',shippingAddress:{line1:'Synthetic',country:'US',privateField:'must not escape'},paymentIntentId:'pi_fixture',sessionId:'cs_test_fixture',subtotalCents:6000,shippingCents:700,taxCents:0,totalCents:6700,items:[{variantId:'tee-m',sku:'TEE-M',name:'Synthetic Tee',size:'M',quantity:2,unitPriceCents:3000,lineTotalCents:6000}]};

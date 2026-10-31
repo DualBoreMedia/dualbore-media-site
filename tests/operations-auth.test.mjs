@@ -33,7 +33,7 @@ test('production markers never select legacy Clerk or infer an authentication pr
 test('managed auth verifies Bearer, authorized party and current user/session on every request', async () => {
   const f = fixture();
   const identity = await authenticate(request({Cookie: '__session=forged'}), {env, client: f.client});
-  assert.deepEqual(identity, {userId: 'user_a', sessionId: 'sess_a', email: 'member@example.com', displayName: 'Garage Member', role: 'customer', admin: false, mfa: true, mfaEnrolled:true});
+  assert.deepEqual(identity, {userId: 'user_a', sessionId: 'sess_a', email: 'member@example.com', displayName: 'Garage Member', role: 'customer', admin: false, mfa: true,mfaFresh:true, mfaEnrolled:true});
   assert.equal(f.calls[0].req.headers.has('Cookie'), false);
   assert.deepEqual(f.calls[0].options, {authorizedParties: [env.SITE_ORIGIN], acceptsToken: 'session_token'});
   f.session.status = 'revoked';
@@ -65,7 +65,7 @@ test('verified primary email is mandatory, secondary verified address cannot ove
 });
 test('admin role cannot originate from public/unsafe metadata or token claims', async () => {
   const f = fixture(); f.user.publicMetadata = {role: 'admin'}; f.user.unsafeMetadata = {role: 'admin'}; f.auth.sessionClaims.role = 'admin';
-  assert.throws(() => requireAdmin({admin: false, mfa: true, mfaEnrolled:true}), {code: 'admin_required'});
+  assert.throws(() => requireAdmin({admin: false, mfa: true,mfaFresh:true, mfaEnrolled:true}), {code: 'admin_required'});
   assert.equal((await authenticateWith(f)).admin, false);
   f.user.privateMetadata.role = 'admin';
   assert.equal(requireAdmin(await authenticateWith(f)).admin, true);
@@ -85,6 +85,6 @@ test('provider failure is sanitized and never grants account access', async () =
 });
 test('employee role is fresh private metadata, revoked employees lose access, and MFA applies to all staff',async()=>{
  const f=fixture();f.user.privateMetadata.role='employee';assert.equal(requireStaff(await authenticateWith(f)).role,'employee');
- f.user.privateMetadata.role='customer';f.user.publicMetadata={role:'employee'};f.auth.sessionClaims.role='admin';assert.throws(()=>requireStaff({role:'customer',admin:true,mfa:true}),{code:'staff_required'});const revoked=await authenticateWith(f);assert.throws(()=>requireStaff(revoked),{code:'staff_required'});
+ f.user.privateMetadata.role='customer';f.user.publicMetadata={role:'employee'};f.auth.sessionClaims.role='admin';assert.throws(()=>requireStaff({role:'customer',admin:true,mfa:true,mfaFresh:true}),{code:'staff_required'});const revoked=await authenticateWith(f);assert.throws(()=>requireStaff(revoked),{code:'staff_required'});
  f.user.privateMetadata.role='employee';f.auth.factorVerificationAge=[0,11];const stale=await authenticateWith(f);assert.throws(()=>requireStaff(stale),{code:'mfa_required'});
 });

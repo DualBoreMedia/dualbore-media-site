@@ -63,7 +63,7 @@ export default defineConfig(({mode}) => {
  const upload=process.env.SENTRY_UPLOAD_SOURCEMAPS==='true';
  if(upload&&(!process.env.SENTRY_AUTH_TOKEN||!process.env.SENTRY_ORG||!process.env.SENTRY_PROJECT||release==='local'))throw new Error('Private source-map upload requires an explicit target, credentials and release SHA.');
  return ({
-  cacheDir:mode==='commerce'?'.tools/cache/vite-commerce':'node_modules/.vite',
+  cacheDir:mode==='commerce'?'node_modules/.vite-commerce':'node_modules/.vite',
   define:{__APP_RELEASE__:JSON.stringify(release),__APP_ENVIRONMENT__:JSON.stringify(environment)},
   build: {
     outDir: "dist/client",

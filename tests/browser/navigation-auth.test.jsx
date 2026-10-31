@@ -4,6 +4,7 @@ import {afterEach,beforeEach,expect,test,vi} from 'vitest';
 import {page} from 'vitest/browser';
 import {App} from '../../src/App.jsx';
 import WorkosOperations from '../../src/operations/WorkosOperations.jsx';
+import {workosSessionFetch,workosSignInUrl,rememberOperationsView} from '../../src/operations/workos-session.js';
 import '../../src/styles.css';
 
 let root,host;
@@ -66,7 +67,7 @@ test('WorkOS session refresh recovers customer access without bearer tokens and 
 test('WorkOS staff sign-in failure never offers customer signup or privileged navigation',async()=>{
  vi.stubGlobal('fetch',vi.fn(async()=>json({signedIn:false},401)));history.replaceState(null,'','/staff?auth=failed');root.render(<WorkosOperations/>);
  await expect.element(page.getByRole('alert')).toHaveTextContent('We could not complete sign-in.');
- await expect.element(page.getByRole('link',{name:'Secure sign in'})).toHaveAttribute('href','/api/auth/sign-in?staff=1');
+ await expect.element(page.getByRole('link',{name:'Secure sign in'})).toHaveAttribute('href','/api/auth/sign-in?staff=1&returnTo=%2Fstaff');
  await expect.element(page.getByRole('link',{name:'Create account'})).not.toBeInTheDocument();
  await expect.element(page.getByRole('navigation',{name:'Staff navigation'})).not.toBeInTheDocument();
 });
@@ -77,4 +78,39 @@ test('WorkOS admin route requires a verified admin role before rendering operati
  await expect.element(page.getByRole('heading',{name:'Garage operations'})).toBeVisible();
  await expect.element(page.getByRole('navigation',{name:'Operations navigation'})).toBeVisible();
  await expect.element(page.getByText('Live payments disabled')).toBeVisible();
+});
+
+test('cookie requests share one refresh, retry only once and keep a transient session failure out of sign-in loops',async()=>{
+ let release;const gate=new Promise(resolve=>{release=resolve;});let rotations=0;const attempts={};
+ const fetcher=vi.fn(async url=>{if(url==='/api/auth/refresh'){rotations++;await gate;return json({ok:true});}attempts[url]=(attempts[url]||0)+1;return json({},attempts[url]===1?401:200);});
+ const first=workosSessionFetch('/first',{},fetcher),second=workosSessionFetch('/second',{},fetcher);await expect.poll(()=>rotations).toBe(1);release();expect((await first).status).toBe(200);expect((await second).status).toBe(200);expect(rotations).toBe(1);
+ const denied=vi.fn(async()=>json({},401));expect((await workosSessionFetch('/denied',{},denied)).status).toBe(401);expect(denied).toHaveBeenCalledTimes(2);
+ const transient=vi.fn(async url=>json({},url==='/api/auth/refresh'?503:401));await expect(workosSessionFetch('/kept',{},transient)).rejects.toMatchObject({code:'auth_refresh_unavailable'});expect(transient).toHaveBeenCalledTimes(2);
+ const stillExpired=vi.fn(async url=>json({},url==='/api/auth/refresh'?200:401));expect((await workosSessionFetch('/once',{},stillExpired)).status).toBe(401);expect(stillExpired).toHaveBeenCalledTimes(3);
+});
+
+test('WorkOS preserves the Admin view for explicit step-up and never forces it on routine sign-in',async()=>{
+ history.replaceState(null,'','/admin?view=inventory');
+ expect(workosSignInUrl({staff:true})).toBe('/api/auth/sign-in?staff=1&returnTo=%2Fadmin%3Fview%3Dinventory');
+ expect(workosSignInUrl({staff:true,stepUp:true})).toContain('step_up=1');
+ rememberOperationsView('Activity');expect(location.search).toBe('?view=activity');
+ history.replaceState(null,'','/');expect(workosSignInUrl()).toBe('/api/auth/sign-in');rememberOperationsView('Inventory');expect(location.pathname).toBe('/');
+});
+
+test('WorkOS expired callback displays one actionable failure without redirecting automatically',async()=>{
+ const fetcher=vi.fn(async()=>json({},401));vi.stubGlobal('fetch',fetcher);history.replaceState(null,'','/staff?auth=state_expired');root.render(<WorkosOperations/>);
+ await expect.element(page.getByRole('alert')).toHaveTextContent('This sign-in attempt expired or was already used.');
+ await expect.element(page.getByRole('link',{name:'Secure sign in'})).toBeVisible();expect(location.pathname).toBe('/staff');expect(fetcher.mock.calls.filter(([url])=>url==='/api/auth/refresh')).toHaveLength(1);
+});
+
+test('WorkOS refresh outage preserves a recoverable account surface without inviting another login',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async url=>json({},url==='/api/auth/refresh'?503:401)));history.replaceState(null,'','/admin');root.render(<WorkosOperations admin/>);
+ await expect.element(page.getByRole('button',{name:'Check account access'})).toBeVisible();await expect.element(page.getByRole('link',{name:'Secure sign in'})).not.toBeInTheDocument();expect(location.pathname).toBe('/admin');
+});
+
+test('sign-out recovers one expired access token and reports a later provider failure without dropping the session',async()=>{
+ let logouts=0,refreshes=0;const alert=vi.spyOn(window,'alert').mockImplementation(()=>{});
+ vi.stubGlobal('fetch',vi.fn(async url=>{if(url==='/api/auth/session')return json({signedIn:true});if(url==='/api/auth/refresh'){refreshes++;return json({ok:true});}if(url==='/api/auth/logout')return json({},++logouts===1?401:503);return json({orders:[],profile:{},supportTickets:[]});}));
+ history.replaceState(null,'','/account');root.render(<WorkosOperations/>);await expect.element(page.getByRole('heading',{name:'No orders found'})).toBeVisible();
+ await page.getByRole('button',{name:'Sign out'}).click();await expect.poll(()=>alert.mock.calls.length).toBe(1);expect(logouts).toBe(2);expect(refreshes).toBe(1);await expect.element(page.getByRole('heading',{name:'No orders found'})).toBeVisible();
 });

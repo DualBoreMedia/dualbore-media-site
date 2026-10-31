@@ -11,7 +11,7 @@ import {commerceHttp} from '../netlify/commerce/http.mjs';
 import {productionCatalogPlan} from '../netlify/commerce/production-catalog.mjs';
 
 const id='e92-tee-m';
-const admin={userId:'admin',email:'admin@example.invalid',admin:true,mfa:true,sessionId:'session-admin'};
+const admin={userId:'admin',email:'admin@example.invalid',admin:true,mfa:true,mfaFresh:true,sessionId:'session-admin'};
 test('production catalog plan records approved made-to-order prices without activation or live IDs',()=>{
   assert.equal(productionCatalogPlan.length,15);assert.equal(new Set(productionCatalogPlan.map(v=>v.id)).size,15);
   for(const product of ['e92-tee','e90-crewneck','sv1000s-silhouette']){

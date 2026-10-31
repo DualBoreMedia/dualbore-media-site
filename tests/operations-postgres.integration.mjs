@@ -11,7 +11,7 @@ test('real PostgreSQL operations lifecycle, split packages, immutable audit and 
   const accountDatabase=new URL(process.env.DATABASE_URL);accountDatabase.searchParams.set('options','-c search_path='+schema);
   const accountEnv={COMMERCE_ENVIRONMENT:'test',SITE_ORIGIN:'http://127.0.0.1:4320',DATABASE_URL:accountDatabase.href,PAYMENTS_ENABLED:'false',REFUNDS_ENABLED:'false',TRANSACTIONAL_EMAILS_ENABLED:'false'},accounts=await operationsRuntime(accountEnv);
   try{const response=await operationsHttp(new Request(accountEnv.SITE_ORIGIN+'/api/operations'),{env:accountEnv,auth:async()=>({userId:'workos:user_fixture',email:'empty@example.invalid',sessionId:'session_fixture'})});assert.equal(response.status,200);assert.equal((await response.json()).orders.length,0);assert.equal(await accounts.repository.transaction(s=>Object.keys(s.orders).length),0);}finally{await accounts.close();}
-  const actor={userId:'qa-admin',email:'qa@example.invalid',admin:true,mfa:true,sessionId:'qa-session'};
+  const actor={userId:'qa-admin',email:'qa@example.invalid',admin:true,mfa:true,mfaFresh:true,sessionId:'qa-session'};
   // Synthetic paid fixture isolates persistence/authorization from real provider testing.
   await repository.transaction(s=>{s.orders.qa={id:'qa',orderNumber:'DBM-OPS-QA',status:'paid',customerEmail:'customer@example.invalid',fulfillmentStatus:'received',isTest:true,testProvider:'mock',createdAt:new Date().toISOString(),currency:'usd',subtotalCents:6000,shippingCents:700,taxCents:0,totalCents:6700,items:[{variantId:'e92-tee-m',sku:'DBM-E92-TEE-M',name:'E92 Tee',size:'M',quantity:2,unitPriceCents:3000,lineTotalCents:6000}]};});
   const service=createOperationsService({repository,send:async()=>{}});

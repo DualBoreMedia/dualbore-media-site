@@ -6,7 +6,7 @@ import {createOperationsService} from '../netlify/operations/service.mjs';
 import {createStaffManagement} from '../netlify/operations/staff-management.mjs';
 import {operationsHttp} from '../netlify/operations/http.mjs';
 import {requireStaff,permissionsFor} from '../netlify/operations/permissions.mjs';
-const employee={userId:'user_employee',email:'employee@example.invalid',role:'employee',mfa:true,mfaEnrolled:true,sessionId:'session-employee'};
+const employee={userId:'user_employee',email:'employee@example.invalid',role:'employee',mfa:true,mfaFresh:true,mfaEnrolled:true,sessionId:'session-employee'};
 const admin={...employee,userId:'user_admin',role:'admin',admin:true,sessionId:'session-admin'};
 const customer={...employee,userId:'user_customer',role:'customer',admin:false};
 function setup(){

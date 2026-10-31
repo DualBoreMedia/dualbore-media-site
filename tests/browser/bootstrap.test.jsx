@@ -28,7 +28,7 @@ test('real lazy account and staff entries remain signed out and deny privileged 
  await expect.element(page.getByRole('link',{name:'Create account'})).toBeVisible();dispose();dispose=undefined;
  history.replaceState(null,'','/admin');dispose=await module.start(host);
  await expect.element(page.getByRole('heading',{name:'Sign in',exact:true})).toBeVisible();
- await expect.element(page.getByRole('link',{name:'Secure sign in'})).toHaveAttribute('href','/api/auth/sign-in?staff=1');
+  await expect.element(page.getByRole('link',{name:'Secure sign in'})).toHaveAttribute('href','/api/auth/sign-in?staff=1&returnTo=%2Fadmin');
  await expect.element(page.getByRole('heading',{name:'Fulfillment workspace'})).not.toBeInTheDocument();
 });
 test('real lazy email-preference and order-return entries require explicit verifiable actions',async()=>{

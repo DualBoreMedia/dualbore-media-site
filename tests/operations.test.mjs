@@ -3,7 +3,7 @@ import {createMemoryRepository} from '../netlify/commerce/memory-repository.mjs'
 import {createOperationsService,safeTrackingUrl} from '../netlify/operations/service.mjs';
 import {deliverLifecycleEmails} from '../netlify/commerce/order-email.mjs';
 import {consumeLimit,operationsHttp} from '../netlify/operations/http.mjs';
-const admin={userId:'admin',email:'admin@example.invalid',admin:true,mfa:true,sessionId:'session-admin'};
+const admin={userId:'admin',email:'admin@example.invalid',admin:true,mfa:true,mfaFresh:true,sessionId:'session-admin'};
 const customer={userId:'customer',email:'owner@example.invalid',displayName:'Owner',sessionId:'session-customer'};
 function setup(options={}){
  const order={id:'o1',orderNumber:'DBM-TEST',customerEmail:customer.email,status:'paid',isTest:true,version:0,fulfillmentStatus:'received',createdAt:'2026-10-13T00:00:00.000Z',paidAt:'2026-10-13T00:00:00.000Z',currency:'usd',subtotalCents:6000,shippingCents:700,taxCents:0,totalCents:6700,paymentIntentId:'pi_test',items:[{variantId:'tee-m',sku:'TEE-M',name:'E92 Tee',size:'M',quantity:2,unitPriceCents:3000,lineTotalCents:6000}]};
@@ -11,6 +11,15 @@ function setup(options={}){
  const calls=[];const stripe={paymentIntents:{retrieve:async()=>({livemode:false,currency:'usd',status:'succeeded'})},refunds:{create:async(p,o)=>{calls.push({p,o});return {id:'re_Test',currency:'usd',payment_intent:'pi_test',amount:p.amount,status:'succeeded'};}}};
  return {repository,calls,stripe,service:createOperationsService({repository,stripe,send:async()=>{},...options})};
 }
+
+test('an established MFA session may read and print while refunds and inventory changes require fresh step-up',async()=>{
+ const {service,calls,repository}=setup();const principal={...admin,mfaFresh:false};
+ assert.equal((await service.read(principal,{admin:true})).orders.length,1);
+ assert.equal((await service.mutate(principal,{action:'packing-slip',orderNumber:'DBM-TEST'})).packingSlip.orderNumber,'DBM-TEST');
+ for(const action of ['refund','inventory','reconcile'])await assert.rejects(service.mutate(principal,{action}),{code:'step_up_required'});
+ assert.equal(calls.length,0);assert.equal(await repository.transaction(s=>s.variants['tee-m'].availableQuantity),2);
+ await assert.rejects(service.read({...principal,mfa:false},{admin:true}),{code:'mfa_required'});
+});
 test('verified email claims guest order once, prevents cross-account IDOR and hides internal data',async()=>{
  const {repository,service}=setup();const first=await service.read(customer);assert.equal(first.orders.length,1);assert.equal(first.orders[0].orderNumber,'DBM-TEST');assert.equal(first.orders[0].id,undefined);assert.equal(first.orders[0].customerEmail,undefined);assert.equal(first.orders[0].paymentIntentId,undefined);assert.equal(first.profile.marketingConsent,false);
  await service.read(customer);assert.equal(await repository.transaction(s=>Object.values(s.audit).filter(a=>a.action==='order-claimed').length),1);
@@ -116,7 +125,7 @@ test('late pending refund API response cannot undo confirmed webhook state',asyn
 test('split package packing attribution comes from authenticated staff and remains private and historical',async()=>{
  const {service,repository}=setup();
  for(const [i,status]of ['making','packing','ready_to_ship'].entries())await service.mutate(admin,{action:'transition',orderNumber:'DBM-TEST',status,expectedVersion:i});
- const employee={userId:'workos:packer-two',role:'employee',email:'packer@example.invalid',mfa:true,sessionId:'packer-session'};
+ const employee={userId:'workos:packer-two',role:'employee',email:'packer@example.invalid',mfa:true,mfaFresh:true,sessionId:'packer-session'};
  const input={action:'shipment',orderNumber:'DBM-TEST',carrier:'USPS',service:'Ground',trackingNumber:'TEST123',trackingUrl:'https://tools.usps.com/',items:[{variantId:'tee-m',quantity:1}]};
  const a=await service.mutate(admin,input),b=await service.mutate(employee,input);
  await assert.rejects(service.mutate(employee,{action:'shipment-status',shipmentId:a.shipmentId,status:'packed',expectedVersion:0,packedByUserId:'spoofed'}),{code:'invalid_input'});

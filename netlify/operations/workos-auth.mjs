@@ -34,21 +34,23 @@ export async function authenticateWorkos(request,{env=process.env,client,now=Dat
   const active=memberships.filter(m=>m.userId===user.id&&m.organizationId===env.WORKOS_STAFF_ORGANIZATION_ID&&m.status==='active');
   if(active.length>1)denied();
   const member=active[0],role=['employee','admin'].includes(member?.role?.slug)?member.role.slug:'customer';
-  let mfa=false,mfaEnrolled=false;
+  let mfa=false,mfaFresh=false,mfaEnrolled=false;
   if(role!=='customer'){
    const factors=await c.multiFactorAuth.listUserAuthFactors({userId:user.id});
    mfaEnrolled=factors.data.some(f=>f.userId===user.id&&f.type==='totp');
    // WorkOS has no documented policy-read API. This evidence switch MUST stay false
    // until the staff org's Require MFA policy and no-SSO setup pass real QA.
-   // Organization-scoped auth, a fresh approved primary authentication and current
+   // Organization-scoped auth, an approved primary authentication and current
    // enrollment are all required; enrollment alone never grants privileged access.
+   // MFA assurance lasts for the active session; sensitive actions separately require mfaFresh.
    // AuthKit records its hosted code transport as "oauth" independently of the
    // primary method. Google requires explicit server opt-in; both methods rely
    // on the verified organization policy requiring WorkOS TOTP for non-SSO users.
    const primary=verified.authenticationMethod==='Password'&&['password','oauth'].includes(session.authMethod)
     ||env.WORKOS_STAFF_GOOGLE_ENABLED==='true'&&verified.authenticationMethod==='GoogleOAuth'&&session.authMethod==='oauth';
-   mfa=env.WORKOS_STAFF_MFA_POLICY_VERIFIED==='true'&&mfaEnrolled&&claims.org_id===env.WORKOS_STAFF_ORGANIZATION_ID&&session.organizationId===claims.org_id&&primary&&Number.isFinite(claims.auth_time)&&claims.auth_time*1000<=now&&now-claims.auth_time*1000<=600000;
+   mfa=env.WORKOS_STAFF_MFA_POLICY_VERIFIED==='true'&&mfaEnrolled&&claims.org_id===env.WORKOS_STAFF_ORGANIZATION_ID&&session.organizationId===claims.org_id&&primary&&Number.isFinite(claims.auth_time)&&claims.auth_time*1000<=now;
+   mfaFresh=mfa&&now-claims.auth_time*1000<=600000;
   }
-  return Object.freeze({userId:'workos:'+user.id,sessionId:session.id,email:user.email.trim().toLowerCase(),displayName:[user.firstName,user.lastName].filter(x=>typeof x==='string').join(' ').slice(0,160),role,admin:role==='admin',mfa,mfaEnrolled});
+  return Object.freeze({userId:'workos:'+user.id,sessionId:session.id,email:user.email.trim().toLowerCase(),displayName:[user.firstName,user.lastName].filter(x=>typeof x==='string').join(' ').slice(0,160),role,admin:role==='admin',mfa,mfaFresh,mfaEnrolled});
  }catch(error){if(error instanceof AuthError)throw error;if([401,403,404].includes(error?.status))denied();throw new AuthError('auth_unavailable','Account access is temporarily unavailable.',503);}
 }

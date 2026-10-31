@@ -48,8 +48,8 @@ function projection(state,order,admin,at=new Date()){
 }
 export function createOperationsService({repository,stripe,env={},now=()=>new Date(),send=deliverLifecycleEmails,retryEmail=retryRecordedEmail}){
  const timestamp=()=>now().toISOString();
- async function authorize(principal,permission){
-  try{return requirePermission(principal,permission);}catch(error){
+ async function authorize(principal,permission,options){
+  try{return requirePermission(principal,permission,options);}catch(error){
    if(principal?.userId)await repository.transaction(s=>audit(s,principal,'authorization-denied','staff',{permission,code:error.code,sessionHash:createHash('sha256').update(String(principal.sessionId||'')).digest('hex')},timestamp()));
    throw error;
   }
@@ -117,7 +117,8 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
    else {p.deletionRequestedAt??=timestamp();p.marketingConsent=false;recordMarketingConsent(s,{email:principal.email,consent:false,source:'account-preferences',policyVersion:'prelaunch-v1',actorUserId:principal.userId,now:now()});}
    audit(s,principal,input.action,'account',{marketingConsent:p.marketingConsent},timestamp());return {saved:true};
   });
-  await authorize(principal,staffActions.includes(input.action)?input.action==='packing-slip'?'packing-slip':'fulfillment':'administration');
+  const permission=staffActions.includes(input.action)?input.action==='packing-slip'?'packing-slip':'fulfillment':'administration';
+  await authorize(principal,permission,{fresh:permission==='administration'||input.action==='shipment-status'&&['shipped','delivered'].includes(input.status)||input.action==='transition'&&input.status==='cancelled'});
   if(roleOf(principal)==='employee'&&((input.action==='transition'&&(!employeeTransitions.includes(input.status)||input.note!==undefined))||(input.action==='shipment-status'&&!['packed','shipped','delivered'].includes(input.status))||(['shipment','shipment-update'].includes(input.action)&&input.note!==undefined))){
    await repository.transaction(s=>audit(s,principal,'authorization-denied','staff',{permission:'fulfillment-exception',code:'admin_required'},timestamp()));fail('admin_required','Administrator access is required for this exception.',403);
   }

@@ -30,5 +30,5 @@ export function demoSeed(at=new Date()){
 }
 
 export function demoIdentity(role='admin'){
- return {userId:role==='customer'?'user_demoCustomer':role==='employee'?'user_demoEmployee':'user_demoAdmin',email:role==='customer'?'practice1@example.invalid':role+'@example.invalid',displayName:'Synthetic '+role,role,admin:role==='admin',mfa:true,mfaEnrolled:true,sessionId:'demo-session-'+role};
+ return {userId:role==='customer'?'user_demoCustomer':role==='employee'?'user_demoEmployee':'user_demoAdmin',email:role==='customer'?'practice1@example.invalid':role+'@example.invalid',displayName:'Synthetic '+role,role,admin:role==='admin',mfa:true,mfaFresh:true,mfaEnrolled:true,sessionId:'demo-session-'+role};
 }
