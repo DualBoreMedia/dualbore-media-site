@@ -235,6 +235,15 @@ test('public policy pages show safe pre-launch information without internal draf
   await expect.element(page.getByText(/Checkout, order collection and customer account enrollment are not available/i)).toBeVisible();
 });
 
+test('staff MFA denial provides a real reauthentication link without displaying protected data',async()=>{
+ const auth={isLoaded:true,isSignedIn:true,getToken:async()=> 'synthetic-token',accountElement:<a href="/api/auth/sign-in?staff=1">Verify sign-in again</a>,fetcher:vi.fn().mockResolvedValue(response({code:'mfa_required'},403))};
+ mount(<StaffApp auth={auth}/>);
+ await expect.element(page.getByText('Complete two-step verification to access garage operations.')).toBeVisible();
+ const verify=page.getByRole('link',{name:'Verify sign-in again',exact:true});await expect.element(verify).toBeVisible();
+ await expect.element(verify).toHaveAttribute('href','/api/auth/sign-in?staff=1');
+ await expect.element(page.getByRole('heading',{name:'Fulfillment workspace'})).not.toBeInTheDocument();
+});
+
 test('staff route refuses an unsigned or unprivileged account and packing slip omits payment details',async()=>{
   const auth={isLoaded:true,isSignedIn:true,getToken:async()=> 'synthetic-token',fetcher:vi.fn().mockResolvedValue(response({role:'customer',orders:[]}))};
   mount(<StaffApp auth={auth}/>);

@@ -40,9 +40,14 @@ export async function authenticateWorkos(request,{env=process.env,client,now=Dat
    mfaEnrolled=factors.data.some(f=>f.userId===user.id&&f.type==='totp');
    // WorkOS has no documented policy-read API. This evidence switch MUST stay false
    // until the staff org's Require MFA policy and no-SSO setup pass real QA.
-   // Organization-scoped auth, a fresh active password authentication and current
+   // Organization-scoped auth, a fresh approved primary authentication and current
    // enrollment are all required; enrollment alone never grants privileged access.
-   mfa=env.WORKOS_STAFF_MFA_POLICY_VERIFIED==='true'&&mfaEnrolled&&claims.org_id===env.WORKOS_STAFF_ORGANIZATION_ID&&session.organizationId===claims.org_id&&session.authMethod==='password'&&verified.authenticationMethod==='Password'&&Number.isFinite(claims.auth_time)&&claims.auth_time*1000<=now&&now-claims.auth_time*1000<=600000;
+   // AuthKit records its hosted code transport as "oauth" independently of the
+   // primary method. Google requires explicit server opt-in; both methods rely
+   // on the verified organization policy requiring WorkOS TOTP for non-SSO users.
+   const primary=verified.authenticationMethod==='Password'&&['password','oauth'].includes(session.authMethod)
+    ||env.WORKOS_STAFF_GOOGLE_ENABLED==='true'&&verified.authenticationMethod==='GoogleOAuth'&&session.authMethod==='oauth';
+   mfa=env.WORKOS_STAFF_MFA_POLICY_VERIFIED==='true'&&mfaEnrolled&&claims.org_id===env.WORKOS_STAFF_ORGANIZATION_ID&&session.organizationId===claims.org_id&&primary&&Number.isFinite(claims.auth_time)&&claims.auth_time*1000<=now&&now-claims.auth_time*1000<=600000;
   }
   return Object.freeze({userId:'workos:'+user.id,sessionId:session.id,email:user.email.trim().toLowerCase(),displayName:[user.firstName,user.lastName].filter(x=>typeof x==='string').join(' ').slice(0,160),role,admin:role==='admin',mfa,mfaEnrolled});
  }catch(error){if(error instanceof AuthError)throw error;if([401,403,404].includes(error?.status))denied();throw new AuthError('auth_unavailable','Account access is temporarily unavailable.',503);}
