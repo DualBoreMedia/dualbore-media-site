@@ -103,6 +103,15 @@ test('WorkOS expired callback displays one actionable failure without redirectin
  await expect.element(page.getByRole('link',{name:'Secure sign in'})).toBeVisible();expect(location.pathname).toBe('/staff');expect(fetcher.mock.calls.filter(([url])=>url==='/api/auth/refresh')).toHaveLength(1);
 });
 
+test('an expired callback remains visible when an existing valid Admin session is preserved',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async url=>url==='/api/auth/session'?json({signedIn:true}):json({role:'admin',orders:[],variants:[],failures:[],audit:[]})));
+ history.replaceState(null,'','/admin?view=inventory&auth=state_expired');root.render(<WorkosOperations admin/>);
+ await expect.element(page.getByRole('heading',{name:'Inventory',exact:true})).toBeVisible();
+ await expect.element(page.getByRole('alert',{name:'Sign-in verification notice'})).toHaveTextContent('This sign-in attempt expired or was already used.');
+ await page.getByRole('button',{name:'Dismiss sign-in notice'}).click();await expect.element(page.getByRole('alert',{name:'Sign-in verification notice'})).not.toBeInTheDocument();
+ expect(new URLSearchParams(location.search).has('auth')).toBe(false);expect(new URLSearchParams(location.search).get('view')).toBe('inventory');expect(location.pathname).toBe('/admin');
+});
+
 test('WorkOS refresh outage preserves a recoverable account surface without inviting another login',async()=>{
  vi.stubGlobal('fetch',vi.fn(async url=>json({},url==='/api/auth/refresh'?503:401)));history.replaceState(null,'','/admin');root.render(<WorkosOperations admin/>);
  await expect.element(page.getByRole('button',{name:'Check account access'})).toBeVisible();await expect.element(page.getByRole('link',{name:'Secure sign in'})).not.toBeInTheDocument();expect(location.pathname).toBe('/admin');

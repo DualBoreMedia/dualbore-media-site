@@ -48,7 +48,9 @@ export async function authenticateWorkos(request,{env=process.env,client,now=Dat
    // on the verified organization policy requiring WorkOS TOTP for non-SSO users.
    const primary=verified.authenticationMethod==='Password'&&['password','oauth'].includes(session.authMethod)
     ||env.WORKOS_STAFF_GOOGLE_ENABLED==='true'&&verified.authenticationMethod==='GoogleOAuth'&&session.authMethod==='oauth';
-   mfa=env.WORKOS_STAFF_MFA_POLICY_VERIFIED==='true'&&mfaEnrolled&&claims.org_id===env.WORKOS_STAFF_ORGANIZATION_ID&&session.organizationId===claims.org_id&&primary&&Number.isFinite(claims.auth_time)&&claims.auth_time*1000<=now;
+   // auth_time is provider-issued integer seconds. Bound small inter-server clock
+   // skew without accepting arbitrary future authentication or expired JWTs.
+   mfa=env.WORKOS_STAFF_MFA_POLICY_VERIFIED==='true'&&mfaEnrolled&&claims.org_id===env.WORKOS_STAFF_ORGANIZATION_ID&&session.organizationId===claims.org_id&&primary&&Number.isFinite(claims.auth_time)&&claims.auth_time*1000<=now+30000;
    mfaFresh=mfa&&now-claims.auth_time*1000<=600000;
   }
   return Object.freeze({userId:'workos:'+user.id,sessionId:session.id,email:user.email.trim().toLowerCase(),displayName:[user.firstName,user.lastName].filter(x=>typeof x==='string').join(' ').slice(0,160),role,admin:role==='admin',mfa,mfaFresh,mfaEnrolled});

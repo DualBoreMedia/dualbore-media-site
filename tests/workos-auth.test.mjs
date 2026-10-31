@@ -27,6 +27,13 @@ test('sensitive authorization requires affirmative freshness, not an absent fiel
  assert.doesNotThrow(()=>requirePermission({role:'admin',mfa:true,mfaFresh:true},'administration',{fresh:true}));
 });
 
+test('signed staff authentication tolerates small provider clock skew but rejects far-future or missing times',async()=>{
+ const f=fixture(),options={env:{...env,WORKOS_STAFF_MFA_POLICY_VERIFIED:'true'},client:f.client,now};
+ f.claims.auth_time=Math.floor(now/1000)+2;const principal=await authenticateWorkos(request(),options);assert.equal(principal.mfa,true);assert.equal(principal.mfaFresh,true);
+ f.claims.auth_time=Math.floor(now/1000)+31;assert.equal((await authenticateWorkos(request(),options)).mfa,false);
+ delete f.claims.auth_time;assert.equal((await authenticateWorkos(request(),options)).mfa,false);
+});
+
 test('verified Google MFA session permits routine staff access after ten minutes but sensitive writes require step-up',async()=>{
  const f=fixture();f.membership.role.slug='admin';f.session.authMethod='oauth';f.result.authenticationMethod='GoogleOAuth';f.claims.auth_time-=1200;
  const principal=await authenticateWorkos(request(),{env:{...env,WORKOS_STAFF_MFA_POLICY_VERIFIED:'true',WORKOS_STAFF_GOOGLE_ENABLED:'true'},client:f.client,now});
