@@ -1,8 +1,10 @@
 # Managed accounts and administrator verification
 
+Current status, October 31, 2026: real staging Google plus mandatory WorkOS authenticator, routine navigation beyond ten minutes, explicit sensitive inventory step-up and logout were verified. See [session QA](workos-session-qa.md) for evidence and limitations. This is not production verification. The [Admin-only release plan](admin-only-release.md) supersedes legacy setup instructions below; production remains billing-locked and no deployment or activation is authorized.
+
 ## Current target: WorkOS AuthKit
 
-The October 15 owner correction selects WorkOS AuthKit evaluation/migration instead of a paid Clerk upgrade. Read [the provider decision](auth-provider-decision.md) for the $0 use case, hosted domain, cookie/PKCE integration, staff organization MFA policy and remaining real-provider checks. No deployment is authorized and payments remain false. Configure AUTH_PROVIDER=workos and VITE_AUTH_PROVIDER=workos consistently. Staff/admin memberships must be explicitly granted in the private staff organization; customer signup never grants either role. Actual hosted verification, recovery, revocation and MFA are not yet demonstrated.
+The October 15 owner correction selects WorkOS AuthKit instead of a paid Clerk upgrade. Read [the provider decision](auth-provider-decision.md) for the free-tier use case, hosted domain, cookie/PKCE integration, staff MFA policy and remaining production checks. Configure AUTH_PROVIDER=workos and VITE_AUTH_PROVIDER=workos consistently. The proposed closed-store release additionally requires AUTH_ACCESS_MODE=staff-only and VITE_AUTH_ACCESS_MODE=staff-only. Staff/admin memberships are explicit private-organization grants; customer signup never grants either role. Production recovery, policy enforcement, memberships and provider revocation remain pending.
 
 ## Historical Clerk compatibility path
 

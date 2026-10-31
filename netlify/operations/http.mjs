@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {authenticate,AuthError} from './auth.mjs';
+import {requireStaff} from './permissions.mjs';
 import {createOperationsService} from './service.mjs';
 import {operationsRuntime} from './runtime.mjs';
 import {CommerceError} from '../commerce/service.mjs';
@@ -25,6 +26,7 @@ async function operationsHandler(request,{env,runtime,auth,clientIp,clerkClient,
   const r=await runtime(env);
   if(!await consumeLimit(r.repository,clientIp,'auth-attempt',{limit:90}))return json({error:'Too many requests. Try again shortly.'},429);
   const principal=await auth(request,{env});
+  if(env.AUTH_ACCESS_MODE==='staff-only')requireStaff(principal);
   const admin=url.searchParams.get('admin')==='true';
   const staff=url.searchParams.get('staff')==='true';
   if(!await consumeLimit(r.repository,principal.userId,request.method==='POST'?'write':'read',{limit:request.method==='POST'?30:90}))return json({error:'Too many requests. Try again shortly.'},429);

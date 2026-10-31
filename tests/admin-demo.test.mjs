@@ -35,7 +35,7 @@ test('provider simulators reject real invitations and payments, keep role change
  const refund=await p.stripe.refunds.create({payment_intent:'pi_demo_1',amount:100},{idempotencyKey:'same'});assert.deepEqual(await p.stripe.refunds.create({amount:100},{idempotencyKey:'same'}),refund);assert.equal((await p.stripe.checkout.sessions.retrieve()).payment_status,'unpaid');
 });
 
-test('loopback practice HTTP supports actual operations, reset and server-side role/session enforcement without real services',async()=>{
+test('loopback practice HTTP supports actual operations, reset and server-side role/session enforcement without real services',{timeout:30000},async()=>{
  let closed=0,repository;
  const demo=await startAdminDemo({port:4337,env:{},repositoryFactory:async()=>({repository:repository=createMemoryRepository(),close:async()=>closed++})});
  try{

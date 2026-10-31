@@ -182,7 +182,12 @@ test('public garage tabs, filters, details and waitlist remain usable without ch
   await expect.element(page.getByRole('heading',{name:/Two brothers/})).toBeVisible();
   await page.getByRole('button',{name:'Open navigation'}).click();
   await expect.element(page.getByRole('button',{name:'Close navigation',exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'Close navigation overlay'}).click();
+  const backdrop=page.getByRole('button',{name:'Close navigation overlay'}),bounds=backdrop.element().getBoundingClientRect();
+  // The menu covers the center of this full-screen backdrop with real fonts.
+  // Click its visible lower edge, never force a click through the menu.
+  expect(document.elementFromPoint(bounds.left+8,bounds.bottom-8)).toBe(backdrop.element());
+  await backdrop.click({position:{x:8,y:bounds.height-8}});
+  await expect.element(page.getByRole('button',{name:'Open navigation'})).toBeVisible();
 });
 
 test('public merchandise quick view stays a design preview without active purchase-policy promises',async()=>{

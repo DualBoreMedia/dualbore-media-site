@@ -38,7 +38,7 @@ export function renderShipmentEmail(order) {
 }
 
 async function sendType({repository,orderId,type,eventId,env,fetchImpl,now}) {
-  if(env.COMMERCE_ENVIRONMENT==='production' && env.TRANSACTIONAL_EMAILS_ENABLED!=='true')return {type,status:'disabled'};
+  if(env.AUTH_ACCESS_MODE==='staff-only'||env.COMMERCE_ENVIRONMENT==='production' && env.TRANSACTIONAL_EMAILS_ENABLED!=='true')return {type,status:'disabled'};
   const timestamp = now().getTime();
   const id = eventId || `${orderId}:${type}`;
   const token = randomUUID();

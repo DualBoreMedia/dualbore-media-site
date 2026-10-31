@@ -23,6 +23,18 @@ test('real lazy store entry keeps both sales and signup paused',async()=>{
  await expect.element(page.getByText(/Orders and Drop Alert signups are not open yet/)).toBeVisible();
  await expect.element(page.getByRole('button',{name:/checkout|buy now|Cart/i})).not.toBeInTheDocument();
 });
+
+test('staff-only release hides customer account entry while keeping private staff sign-in',async()=>{
+ vi.stubEnv('VITE_AUTH_ACCESS_MODE','staff-only');
+ await boot('/');await expect.element(page.getByRole('heading',{name:/Four platforms/})).toBeVisible();
+ await expect.element(page.getByRole('link',{name:'My Garage',exact:true})).not.toBeInTheDocument();dispose();dispose=undefined;
+ history.replaceState(null,'','/account');dispose=await module.start(host);
+ await expect.element(page.getByRole('heading',{name:'Customer accounts are not open yet.'})).toBeVisible();
+ await expect.element(page.getByRole('link',{name:'Create account'})).not.toBeInTheDocument();
+ await expect.element(page.getByRole('link',{name:'Secure sign in'})).not.toBeInTheDocument();dispose();dispose=undefined;
+ history.replaceState(null,'','/admin');dispose=await module.start(host);
+ await expect.element(page.getByRole('link',{name:'Secure sign in'})).toHaveAttribute('href','/api/auth/sign-in?staff=1&returnTo=%2Fadmin');
+});
 test('real lazy account and staff entries remain signed out and deny privileged content',async()=>{
  await boot('/account');await expect.element(page.getByRole('heading',{name:'Welcome to your garage'})).toBeVisible();
  await expect.element(page.getByRole('link',{name:'Create account'})).toBeVisible();dispose();dispose=undefined;

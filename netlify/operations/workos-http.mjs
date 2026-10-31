@@ -5,7 +5,7 @@ import {createPostgresRepository} from '../commerce/repository.mjs';
 import {authenticateWorkos,cookieName,readCookie,workosConfig,workosClient} from './workos-auth.mjs';
 import {observeHttp,reportUnexpected} from '../observability/index.mjs';
 import {serverErrorReporter} from '../observability/server.mjs';
-import {AuthError} from './permissions.mjs';
+import {AuthError,requireStaff} from './permissions.mjs';
 const security={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"};
 const json=(body,status=200)=>Response.json(body,{status,headers:security});
 const pools=new Map();
@@ -25,6 +25,7 @@ async function handleWorkos(request,{env=process.env,client,repository,clientIp=
   const config=workosConfig(env),url=new URL(request.url),action=url.pathname.split('/').at(-1);
   if(url.origin!==config.origin||request.headers.has('Origin')&&request.headers.get('Origin')!==config.origin||request.method==='POST'&&request.headers.get('Origin')!==config.origin)return json({error:'Request origin rejected.'},403);
   callback=request.method==='GET'&&action==='callback';
+  if(env.AUTH_ACCESS_MODE==='staff-only'&&action==='sign-in'&&(url.searchParams.get('staff')!=='1'||url.searchParams.has('signup')))return json({error:'Customer accounts are not open yet.',code:'accounts_closed'},403);
   repository||=repositoryFor(env);if(!await limit(repository,clientIp,now))return json({error:'Too many attempts. Try again shortly.'},429);
   if(!client)client=await workosClient(env);
   const api=client.userManagement;
@@ -33,6 +34,7 @@ async function handleWorkos(request,{env=process.env,client,repository,clientIp=
    const pending=(request.headers.get('Cookie')||'').split(';').filter(value=>value.trim().startsWith(statePrefix(env))).length;
    if(pending>=5)return json({error:'Finish an open sign-in tab or wait thirty minutes before starting another.',code:'too_many_sign_ins'},429);
    returnTo=safeAuthDestination(url.searchParams.get('returnTo'),staff?'/staff':'/account');
+   if(env.AUTH_ACCESS_MODE==='staff-only'&&returnTo.split('?')[0]==='/account')returnTo='/admin';
    if(!staff&&returnTo.split('?')[0]!=='/account')returnTo='/account';
    const pkce=await api.getAuthorizationUrlWithPKCE({provider:'authkit',clientId:config.clientId,redirectUri:config.origin+'/api/auth/callback',...(staff?{organizationId:env.WORKOS_STAFF_ORGANIZATION_ID}:{}),...(staff&&url.searchParams.get('step_up')==='1'?{maxAge:0}:{}),screenHint:url.searchParams.get('signup')==='1'?'sign-up':'sign-in'});
    const key=createHash('sha256').update(config.cookiePassword).digest();
@@ -53,6 +55,7 @@ async function handleWorkos(request,{env=process.env,client,repository,clientIp=
    }
    if(payload.state!==url.searchParams.get('state')||typeof payload.verifier!=='string')invalidState();
    returnTo=safeAuthDestination(payload.returnTo);
+   if(env.AUTH_ACCESS_MODE==='staff-only'&&returnTo.split('?')[0]==='/account')invalidState();
    const id=createHash('sha256').update('oauth-used:'+payload.state).digest('hex');
    const fresh=await repository.transaction(s=>{if(s.limits[id])return false;s.limits[id]={id,count:1,expiresAt:now+600000};return true;});if(!fresh)invalidState();
    const result=await api.authenticateWithCode({clientId:config.clientId,code:url.searchParams.get('code'),codeVerifier:payload.verifier,session:{sealSession:true,cookiePassword:config.cookiePassword}});
@@ -70,6 +73,7 @@ async function handleWorkos(request,{env=process.env,client,repository,clientIp=
   }
   if(request.method==='GET'&&action==='session'){
    const principal=await authenticateWorkos(request,{env,client,now});
+   if(env.AUTH_ACCESS_MODE==='staff-only')requireStaff(principal);
    return json({signedIn:true,user:{id:principal.userId,firstName:principal.displayName},mfa:principal.mfa,mfaFresh:principal.mfaFresh});
   }
   if(request.method==='POST'&&action==='logout'){

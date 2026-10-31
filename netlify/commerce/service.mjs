@@ -23,6 +23,7 @@ export function createCommerceService({repository,stripe,env={},now=Date.now}) {
  const view=o=>({orderNumber:o.orderNumber,status:o.status,items:o.items.map(({variantId,name,size,quantity,unitPriceCents,lineTotalCents})=>({variantId,name,size,quantity,unitPriceCents,lineTotalCents})),subtotalCents:o.subtotalCents,shippingCents:o.shippingCents,taxCents:o.taxCents,totalCents:o.totalCents});
  const inFlightCheckouts=new Map();
  async function checkout(input,options={}) {
+  if(env.AUTH_ACCESS_MODE==='staff-only')bad('payments_disabled','Orders are not open yet. Your cart is saved.',503);
   if(live&&(env.PAYMENTS_ENABLED!=='true'||!stripe||!approvedShippingCalendar(env)||!captureShippingPromise({paidAt:iso(now)},env).verified||['LIVE_CATALOG_APPROVED','SHIPPING_CONFIGURATION_APPROVED','TAX_CONFIGURATION_APPROVED','POLICIES_APPROVED','FULFILLMENT_CAPACITY_VERIFIED','SHIPPING_DELAY_WORKFLOW_VERIFIED','BUSINESS_ADDRESS_CONFIRMED','APPAREL_LABELS_VERIFIED','ARTWORK_RIGHTS_VERIFIED'].some(k=>env[k]!=='true')))bad('payments_disabled','Orders are not open yet. Your cart is saved.',503);
   if(!input||Object.keys(input).length!==1||!Object.hasOwn(input,'items'))bad('invalid_cart','Send only variants and quantities.');
   let validated;try{validated=validateItems(input.items);}catch{bad('invalid_cart','Choose valid sizes and quantities.');}

@@ -80,6 +80,7 @@ export async function processSubmission(event, {
   env = key => Netlify.env.get(key), request = fetch, pause = sleep,
   log = (code, details = {}) => console.warn('[drop-waitlist-email]', code, details),
 } = {}) {
+  if(env('AUTH_ACCESS_MODE')==='staff-only')return {status:'disabled'};
   const submission = validateSubmission(event);
   const production=env('COMMERCE_ENVIRONMENT')==='production';
   if(production&&env('DROP_WAITLIST_ENABLED')!=='true')return {status:'disabled'};

@@ -16,6 +16,7 @@ async function commerceHandler(request,{env,runtime,clientIp,reporter}){
  const url=new URL(request.url),route=url.pathname.split('/').at(-1);
  const live=env.COMMERCE_ENVIRONMENT==='production';
  if(live&&(url.origin!==env.SITE_ORIGIN||url.protocol!=='https:'))return json({error:'Not available.'},404);
+ if(env.AUTH_ACCESS_MODE==='staff-only')return route==='config'||route==='catalog'?json({enabled:false,variants:[],reason:'Orders and signups are not open yet.'}):json({error:'Orders are not open yet.',code:'commerce_paused'},503);
  if(!live&&(hostedEnvironment(env)||!loopback(request.url)||env.COMMERCE_TEST_ENABLED!=='true'))return route==='config'?json({enabled:false,mode:'test',reason:'Test checkout is not configured.',shippingCents:700}):json({error:'Not available.'},404);
  try{
   if(route==='config'){

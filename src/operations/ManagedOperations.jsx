@@ -13,6 +13,8 @@ function Connected({admin}){
  return staff?<StaffApp auth={auth} adminView={admin} renderAdmin={()=><OperationsApp admin auth={auth}/>}/>:<OperationsApp auth={auth}/>;
 }
 export default function ManagedOperations({admin=false}){
+ const buildEnvironment=import.meta.env;
+ if(buildEnvironment.VITE_AUTH_ACCESS_MODE==='staff-only'&&!admin&&!window.location.pathname.startsWith('/staff'))return <main className="store-page"><h1>Customer accounts are not open yet.</h1><p>Orders and Drop Alert signups remain paused.</p><a href="/">Back to garage</a></main>;
  if(import.meta.env.VITE_AUTH_PROVIDER!=='clerk')return <WorkosOperations admin={admin}/>;
  const key=import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
  if(!key&&(admin||window.location.pathname.startsWith('/staff')))return <main className="store-page"><h1>Page unavailable</h1><a href="/">Back to garage</a></main>;

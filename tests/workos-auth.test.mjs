@@ -34,6 +34,11 @@ test('signed staff authentication tolerates small provider clock skew but reject
  delete f.claims.auth_time;assert.equal((await authenticateWorkos(request(),options)).mfa,false);
 });
 
+test('production authentication cannot reuse a staging or unclassified WorkOS key',()=>{
+ for(const settings of [{WORKOS_ENVIRONMENT:'staging',WORKOS_API_KEY:'sk_live_fixture'},{WORKOS_ENVIRONMENT:'production',WORKOS_API_KEY:'sk_test_fixture'},{WORKOS_ENVIRONMENT:'production',WORKOS_API_KEY:'unclassified'}])assert.throws(()=>workosConfig({...env,COMMERCE_ENVIRONMENT:'production',...settings}),{code:'auth_unavailable'});
+ assert.equal(workosConfig({...env,COMMERCE_ENVIRONMENT:'production',WORKOS_ENVIRONMENT:'production',WORKOS_API_KEY:'sk_live_fixture'}).origin,env.SITE_ORIGIN);
+});
+
 test('verified Google MFA session permits routine staff access after ten minutes but sensitive writes require step-up',async()=>{
  const f=fixture();f.membership.role.slug='admin';f.session.authMethod='oauth';f.result.authenticationMethod='GoogleOAuth';f.claims.auth_time-=1200;
  const principal=await authenticateWorkos(request(),{env:{...env,WORKOS_STAFF_MFA_POLICY_VERIFIED:'true',WORKOS_STAFF_GOOGLE_ENABLED:'true'},client:f.client,now});
@@ -64,6 +69,21 @@ test('refresh preserves cookies on retryable failures and clears only terminal f
  const refresh=()=>workosHttp(request('/api/auth/refresh',{method:'POST',headers:{Origin:env.SITE_ORIGIN,Cookie:'__Host-dbm-session=original'}}),options);
  const transient=await refresh();assert.equal(transient.status,503);assert.equal(transient.headers.get('Set-Cookie'),null);assert.equal((await transient.json()).code,'auth_refresh_unavailable');
  client.userManagement.loadSealedSession=()=>({refresh:async()=>({authenticated:false,retryable:false,reason:'invalid_grant'})});const terminal=await refresh();assert.equal(terminal.status,401);assert.match(terminal.headers.get('Set-Cookie'),/Max-Age=0/);
+});
+
+test('staff-only sign-in keeps organization scope and rejects a previously started customer callback',async()=>{
+ let exchange=0,counter=0,called;
+ const client={userManagement:{getAuthorizationUrlWithPKCE:async options=>{called=options;return{url:'https://auth.example',state:'mode-'+(++counter),codeVerifier:'fixture'};},authenticateWithCode:async()=>{exchange++;return{sealedSession:'fixture'};}}};
+ const options={env,client,repository:createMemoryRepository(),now,log:()=>{}};
+ const old=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/sign-in'),options);
+ const refused=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/callback?code=fixture&state=mode-1',{headers:{Cookie:old.headers.get('Set-Cookie').split(';')[0]}}),{...options,env:{...env,AUTH_ACCESS_MODE:'staff-only'}});
+ assert.equal(refused.headers.get('Location'),'/account?auth=state_expired');assert.equal(exchange,0);
+ const start=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/sign-in?staff=1&returnTo=%2Faccount'),{...options,env:{...env,AUTH_ACCESS_MODE:'staff-only'}});
+ assert.equal(called.organizationId,env.WORKOS_STAFF_ORGANIZATION_ID);assert.equal(called.screenHint,'sign-in');assert.equal(called.maxAge,undefined);
+ const callback=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/callback?code=fixture&state=mode-2',{headers:{Cookie:start.headers.get('Set-Cookie').split(';')[0]}}),{...options,env:{...env,AUTH_ACCESS_MODE:'staff-only'}});
+ assert.equal(callback.headers.get('Location'),'/admin');assert.equal(exchange,1);
+ const f=fixture();const signed=await workosHttp(request('/api/auth/session'),{...options,client:f.client,env:{...env,AUTH_ACCESS_MODE:'staff-only',WORKOS_STAFF_MFA_POLICY_VERIFIED:'true'}});assert.equal(signed.status,200);
+ f.membership.role.slug='member';assert.equal((await workosHttp(request('/api/auth/session'),{...options,client:f.client,env:{...env,AUTH_ACCESS_MODE:'staff-only'}})).status,503);
 });
 
 test('Account sign-in retains Profile and Help without allowing customer staff destinations',async()=>{

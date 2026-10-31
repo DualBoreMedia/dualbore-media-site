@@ -1,5 +1,7 @@
 # Local admin practice
 
+October 31 status: [WorkOS session QA](workos-session-qa.md) records the completed real staging Google/TOTP flow, routine navigation beyond ten minutes, sensitive inventory step-up and exact-session logout. Earlier follow-up paragraphs below retain the sequence of evidence and their then-pending checks; production and real employee-role revocation remain separate. The [Admin-only release manifest](admin-only-release.md) controls the next production preparation phase. The practice identities/data described here remain synthetic and are never hosted-provider proof.
+
 Start in the application repository with `npm run demo:admin`. The existing local PostgreSQL sandbox must be running on `127.0.0.1:55432`, database `dbm_sandbox`; its ignored `.env.local` supplies `DATABASE_URL`. The demo deliberately rejects other database targets, hosted environments and production mode. It does not load real payment, email or authentication handlers or inherit their secrets.
 
 Open **http://127.0.0.1:4330/__demo/admin**. Use **Staff / Employees** for the fulfillment queue and account-management practice. Use only synthetic information ending in `@example.invalid`. Each launch creates a separate schema with all real migrations. Changes survive browser refresh. **Reset demo orders** replaces only that disposable schema and restores the original eight scenarios. A normal stop discards its schema; restarting begins fresh. Production is never copied or changed.

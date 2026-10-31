@@ -1,6 +1,16 @@
 # DualBore Media
 
-## Local commerce foundation (not published)
+## Current operating state: October 31, 2026
+
+The live site remains the approved non-selling release. Development is on `codex/commerce-test-foundation`; no deployment or main merge is authorized. Payments, refunds, automated emails and signup collection stay disabled. The selected authentication provider is WorkOS AuthKit; real staging Google plus authenticator and session/step-up checks are documented in [WorkOS QA](docs/workos-session-qa.md). Production remains separate and unverified.
+
+The next candidate is private Admin/Staff access with the public store closed. Read the [Admin-only release manifest and NO-GO blockers](docs/admin-only-release.md), then run `npm run check:admin` for its strict, read-only gate. `npm run check:launch` remains the separate merchandise-sales gate. Neither command deploys or activates anything.
+
+Current future-sales decisions: $30 tee, $50 sweatshirts, USA calculated shipping if verified or $9.95 flat fallback, made-to-order physical carrier handoff within five business days after payment excluding weekends/holidays, and thirty-calendar-day size-exchange requests. Exact holiday calendar/timezone, capacity and approved-return mailing deadline remain open. Manual support: midohiomx@gmail.com. Keep the operating/return street address private during this phase.
+
+## Historical local commerce foundation and test fixtures
+
+The following records earlier implementation stages, not current release or activation instructions. The $30-all/$7 values belong only to isolated sandbox fixtures. Checkout, waitlist collection and sending are paused on the public site. Clerk details are retained compatibility/history; WorkOS is the current target.
 
 The user approved a local test commerce foundation only. Start `npm run dev:commerce` for the loopback-only commerce preview; normal `npm run dev` and `npm run build` retain the Coming soon/waitlist experience. No keys or account access are needed for this stage.
 

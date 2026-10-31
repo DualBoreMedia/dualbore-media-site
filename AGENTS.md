@@ -20,6 +20,14 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Production Admin readiness, October 31, 2026
+
+- Prepare an Admin/Staff-only release on codex/commerce-test-foundation with [skip netlify]. No deployment, main merge, billing details, paid usage activation, payments, refunds, emails or signup collection are authorized. Passing any gate is not deployment approval.
+- WorkOS production must be isolated from the working staging environment. Never copy its MFA evidence flag, users or keys into production. Require Google plus mandatory organization authenticator, explicit individual owner memberships, current server authorization and fresh sensitive-action verification. No SSO/JIT/domain admission bypass or public signup.
+- The Admin-only candidate uses AUTH_ACCESS_MODE=staff-only and VITE_AUTH_ACCESS_MODE=staff-only. Keep all payment/refund/sending/signup switches explicitly false and omit sending/payment keys. Existing managed database provisioning is not evidence of verified production migrations or recovery; no resource/access activation is allowed without cost/owner approval.
+- Current future-sales decisions supersede older historical entries below: tee $30, sweatshirts $50, verified USA calculated shipping or $9.95 fallback, made-to-order carrier handoff within five business days after payment, excluding weekends/holidays, thirty-calendar-day size-exchange request window. Exact calendar/timezone/capacity and approved-return mailing deadline remain unverified. Do not publish the personal street address.
+- Preserve historical test prices, shipping fixtures and Clerk evidence as labeled history, not current production guidance. Government registration remains deferred.
+
 ### Admin practice sprint, October 21, 2026
 
 - First deliverable is a running, resettable localhost-only Admin/Staff practice dashboard using synthetic data and real operation services. Pause for owner usability feedback before large interface changes. Preserve unfinished legal commits; no reset, deployment, main merge, provider production changes, payments, email sending or signup collection.

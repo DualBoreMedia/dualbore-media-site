@@ -87,6 +87,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:postgres
+        env:
+          DBM_PG_CONTAINER: ${{ job.services.postgres.id }}
 
   browser:
     name: Rendered storefront and staff QA (${{ matrix.browser }})
@@ -98,6 +100,7 @@ jobs:
         browser: [chromium, firefox, webkit]
     env:
       QA_BROWSERS: ${{ matrix.browser }}
+      VITE_AUTH_ACCESS_MODE: staff-only
       PAYMENTS_ENABLED: 'false'
       TRANSACTIONAL_EMAILS_ENABLED: 'false'
     steps:
@@ -125,6 +128,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
+      VITE_AUTH_ACCESS_MODE: staff-only
       PAYMENTS_ENABLED: 'false'
       TRANSACTIONAL_EMAILS_ENABLED: 'false'
     steps:

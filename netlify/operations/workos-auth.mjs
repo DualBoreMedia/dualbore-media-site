@@ -8,6 +8,7 @@ export function readCookie(request,name){const values=(request.headers.get('Cook
 export function workosConfig(env){
  let origin;try{const u=new URL(env.SITE_ORIGIN);if(u.origin!==env.SITE_ORIGIN||u.username||u.password||!(u.protocol==='https:'||env.COMMERCE_ENVIRONMENT!=='production'&&u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname)))throw Error();origin=u.origin;}catch{throw new AuthError('auth_unavailable','Secure sign-in is not configured yet.',503);}
  if(!env.WORKOS_API_KEY||!/^client_[A-Za-z0-9]+$/.test(env.WORKOS_CLIENT_ID||'')||typeof env.WORKOS_COOKIE_PASSWORD!=='string'||env.WORKOS_COOKIE_PASSWORD.length<32)throw new AuthError('auth_unavailable','Secure sign-in is not configured yet.',503);
+ if(env.COMMERCE_ENVIRONMENT==='production'&&(env.WORKOS_ENVIRONMENT!=='production'||!/^sk_live_[A-Za-z0-9]+$/.test(env.WORKOS_API_KEY)))throw new AuthError('auth_unavailable','Secure sign-in is not configured yet.',503);
  return {origin,clientId:env.WORKOS_CLIENT_ID,cookiePassword:env.WORKOS_COOKIE_PASSWORD};
 }
 export const workosIssuer=env=>'https://api.workos.com/user_management/'+env.WORKOS_CLIENT_ID;

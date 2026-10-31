@@ -122,13 +122,15 @@ try {
         const navigation = await publicPage.evaluate(() => {
           const header = document.querySelector('.header').getBoundingClientRect();
           const garage = document.querySelector('.header-meta .text-link');
-          const garageRect = garage.getBoundingClientRect();
+          const garageRect = garage?.getBoundingClientRect();
           const brand = document.querySelector('.brand').getBoundingClientRect();
           const wordmark = document.querySelector('.brand strong');
           const wordmarkRect = wordmark.getBoundingClientRect();
-          return {garageVisible: getComputedStyle(garage).display !== 'none' && garageRect.width > 0, garageWithinHeader: garageRect.left >= header.left && garageRect.right <= header.right, brandWithinViewport: brand.left >= 0 && brand.right <= innerWidth, wordmarkWithinViewport: wordmarkRect.left >= brand.left && wordmarkRect.right <= innerWidth, wordmark: wordmark.innerText, subscribeLeft:document.querySelector('.header .subscribe').getBoundingClientRect().left, brandRight:brand.right, subscribeFont:getComputedStyle(document.querySelector('.header .subscribe')).fontSize};
+          return {garageVisible: !!garage&&getComputedStyle(garage).display !== 'none' && garageRect.width > 0, garageWithinHeader: !!garageRect&&garageRect.left >= header.left && garageRect.right <= header.right, brandWithinViewport: brand.left >= 0 && brand.right <= innerWidth, wordmarkWithinViewport: wordmarkRect.left >= brand.left && wordmarkRect.right <= innerWidth, wordmark: wordmark.innerText, subscribeLeft:document.querySelector('.header .subscribe').getBoundingClientRect().left, brandRight:brand.right, subscribeFont:getComputedStyle(document.querySelector('.header .subscribe')).fontSize};
         });
-        if ([701, 768, 1024, 1100].includes(width) && (!navigation.garageVisible || !navigation.garageWithinHeader)) throw Error(`My Garage is not reachable in the primary header at ${width}px: ${JSON.stringify(navigation)}`);
+        if (process.env.VITE_AUTH_ACCESS_MODE==='staff-only'){
+          if(await publicPage.locator('a[href="/account"]').count())throw Error('Admin-only release advertised customer accounts');
+        }else if ([701, 768, 1024, 1100].includes(width) && (!navigation.garageVisible || !navigation.garageWithinHeader)) throw Error(`My Garage is not reachable in the primary header at ${width}px: ${JSON.stringify(navigation)}`);
         if(width<=700&&(navigation.subscribeFont!=='0px'||navigation.subscribeLeft<navigation.brandRight))throw Error('Compact header actions overlap the brand at '+width+'px');
         if (width === 320 && (!navigation.brandWithinViewport || !navigation.wordmarkWithinViewport || navigation.wordmark !== 'DUALBOREMEDIA')) throw Error(`Brand logo or complete wordmark is clipped at 320px: ${JSON.stringify(navigation)}`);
         // The form-detector route can also be served from the browser cache.
@@ -222,6 +224,13 @@ try {
             await publicPage.locator('main').waitFor();
             const body = await publicPage.locator('main').innerText();
             if (/Fulfillment workspace|Needs attention|Admin dashboard/i.test(body)) throw Error(`Unconfigured /${route} route exposed a privileged workspace`);
+            if(process.env.VITE_AUTH_ACCESS_MODE==='staff-only'){
+              if(route==='account')await expect(publicPage.getByRole('heading',{name:'Customer accounts are not open yet.'})).toBeVisible();
+              // Static preview has no auth Functions: missing backend must fail
+              // closed, never be represented as a successful provider login.
+              else await expect(publicPage.getByText(/Account access is temporarily unavailable/)).toBeVisible();
+              if(await publicPage.getByRole('link',{name:'Create account'}).count())throw Error('Admin-only route advertised registration');
+            }
           }
         }
       }

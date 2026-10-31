@@ -35,7 +35,7 @@ export async function commerceRuntime(env=process.env){
 export async function productionRuntime(env=process.env){
  if(!/^postgres(?:ql)?:\/\//.test(env.DATABASE_URL||'')||!/^https:\/\//.test(env.SITE_ORIGIN||''))throw new Error('Production storage/origin is not configured.');
  const origin=new URL(env.SITE_ORIGIN);if(origin.username||origin.password||origin.origin!==env.SITE_ORIGIN)throw new Error('Invalid production origin.');
- const identity='production:'+createHash('sha256').update(JSON.stringify([env.DATABASE_URL,env.STRIPE_SECRET_KEY,env.SITE_ORIGIN,env.PAYMENTS_ENABLED,env.TRANSACTIONAL_EMAILS_ENABLED,env.RESEND_FROM,env.RESEND_API_KEY,env.RESEND_REPLY_TO,env.SHIPPING_RATE_CENTS,env.LIVE_CATALOG_APPROVED,env.SHIPPING_CONFIGURATION_APPROVED,env.TAX_CONFIGURATION_APPROVED,env.POLICIES_APPROVED])).digest('hex');
+ const identity='production:'+createHash('sha256').update(JSON.stringify([env.AUTH_ACCESS_MODE,env.DATABASE_URL,env.STRIPE_SECRET_KEY,env.SITE_ORIGIN,env.PAYMENTS_ENABLED,env.TRANSACTIONAL_EMAILS_ENABLED,env.RESEND_FROM,env.RESEND_API_KEY,env.RESEND_REPLY_TO,env.SHIPPING_RATE_CENTS,env.LIVE_CATALOG_APPROVED,env.SHIPPING_CONFIGURATION_APPROVED,env.TAX_CONFIGURATION_APPROVED,env.POLICIES_APPROVED])).digest('hex');
  if(runtimes.has(identity))return runtimes.get(identity);
  const pool=new pg.Pool({connectionString:env.DATABASE_URL,max:2,connectionTimeoutMillis:5000});
  const repository=createPostgresRepository(pool);

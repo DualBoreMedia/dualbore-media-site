@@ -240,7 +240,7 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
  async function refund(principal,input){
   schema(input,['orderNumber','amountCents','requestKey','confirmed']);
   if(input.confirmed!==true||!Number.isSafeInteger(input.amountCents)||input.amountCents<1||!/^[-a-f0-9]{36}$/i.test(input.requestKey||''))fail('invalid_refund','Confirm a valid refund amount.');
-  if(env.COMMERCE_ENVIRONMENT==='production'&&env.REFUNDS_ENABLED!=='true')fail('payments_disabled','Refund processing is disabled. A required refund must be handled through the verified merchant process.',503);
+  if(env.AUTH_ACCESS_MODE==='staff-only'||env.COMMERCE_ENVIRONMENT==='production'&&env.REFUNDS_ENABLED!=='true')fail('payments_disabled','Refund processing is disabled. A required refund must be handled through the verified merchant process.',503);
   const request=await repository.transaction(s=>{
    const existing=s.refundRequests[input.requestKey];if(existing){if(existing.orderNumber!==input.orderNumber||existing.amountCents!==input.amountCents)fail('request_conflict','Refund request has changed.',409);if(existing.status==='failed'){const o=s.orders[existing.orderId];const pending=Object.values(s.refundRequests).filter(r=>r.orderId===o.id&&['pending','manual-review'].includes(r.status)).reduce((n,r)=>n+r.amountCents,0);if(existing.amountCents+(o.refundedCents||0)+pending>o.totalCents)fail('invalid_refund','Refund exceeds the remaining paid amount.',409);existing.status='pending';audit(s,principal,'refund-retry',o.orderNumber,{amountCents:existing.amountCents},timestamp());}return existing;}
    const o=orderByNumber(s,input.orderNumber);if(!paid(o)||!o.paymentIntentId)fail('invalid_refund','A verified paid order is required.',409);

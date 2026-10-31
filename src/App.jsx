@@ -36,6 +36,8 @@ function SectionTitle({ eyebrow, title, accent, children }) {
 }
 
 export function App() {
+  const buildEnvironment=import.meta.env;
+  const staffOnly=buildEnvironment.VITE_AUTH_ACCESS_MODE==='staff-only';
   const cart = useTestCart();
   const [cartOpen,setCartOpen]=useState(false);
   const [page,setPage]=useState(()=>{const p=readPage();return testCommerceEnabled||p&&!p.startsWith('order/')?p:null;});
@@ -131,11 +133,11 @@ export function App() {
     <a className="skip-link" href="#content" onClick={event => { event.preventDefault(); panelTop.current?.focus(); }}>Skip to content</a>
     <header className={`header${testCommerceEnabled ? ' commerce-header' : ''}`} onClick={event => { if (event.target.closest('a')) setMenu(false); }}>
       <button className="brand" onClick={() => chooseView('garage', true)} aria-label="DualBore Media home"><img className="brand-logo" src="/assets/channel-logo.jpg" alt="DualBore Media Logo" width="48" height="48" loading="eager" fetchPriority="high" /><span><strong>DUALBORE<span>MEDIA</span></strong><small>BUILT. RIDDEN. REPEAT.</small></span></button>
-      <div className="header-meta"><ExhaustEmblem /><a className="text-link" href="/account">My Garage</a></div>
+      <div className="header-meta"><ExhaustEmblem />{!staffOnly&&<a className="text-link" href="/account">My Garage</a>}</div>
       {testCommerceEnabled && <button className="cart-toggle" aria-label={`Open test cart, ${cart.count} items`} onClick={openCart}><FaBagShopping aria-hidden="true"/> <span>{cart.count}</span></button>}
       <External href={channel.url} label="Visit DualBore Media on YouTube to subscribe" className="button subscribe"><FaYoutube aria-hidden="true" /> Subscribe</External>
       <button ref={menuButton} className="menu-toggle" aria-label={menu ? 'Close navigation' : 'Open navigation'} aria-expanded={menu} aria-controls="mobile-navigation" onClick={() => setMenu(!menu)}>{menu ? <FaXmark /> : <FaBars />}</button>
-      <button className={`drawer-backdrop${menu ? ' is-open' : ''}`} aria-label="Close navigation overlay" tabIndex={menu ? 0 : -1} aria-hidden={!menu} onClick={() => { setMenu(false); menuButton.current?.focus(); }} /><nav id="mobile-navigation" className={`mobile-drawer${menu ? ' is-open' : ''}`} aria-label="Mobile navigation" inert={!menu}>{views.map(item => <button key={item.id} aria-current={view === item.id ? 'page' : undefined} onClick={() => chooseView(item.id, true)}><span>{item.number}</span>{item.label}<FaArrowRight aria-hidden="true" /></button>)}<a className="drawer-channel" href="/account">My Garage <FaArrowRight aria-hidden="true"/></a><External className="drawer-channel" href={channel.url} label="Subscribe to DualBore Media on YouTube"><FaYoutube aria-hidden="true" /> YouTube channel <FaArrowUpRightFromSquare aria-hidden="true" /></External></nav>
+      <button className={`drawer-backdrop${menu ? ' is-open' : ''}`} aria-label="Close navigation overlay" tabIndex={menu ? 0 : -1} aria-hidden={!menu} onClick={() => { setMenu(false); menuButton.current?.focus(); }} /><nav id="mobile-navigation" className={`mobile-drawer${menu ? ' is-open' : ''}`} aria-label="Mobile navigation" inert={!menu}>{views.map(item => <button key={item.id} aria-current={view === item.id ? 'page' : undefined} onClick={() => chooseView(item.id, true)}><span>{item.number}</span>{item.label}<FaArrowRight aria-hidden="true" /></button>)}{!staffOnly&&<a className="drawer-channel" href="/account">My Garage <FaArrowRight aria-hidden="true"/></a>}<External className="drawer-channel" href={channel.url} label="Subscribe to DualBore Media on YouTube"><FaYoutube aria-hidden="true" /> YouTube channel <FaArrowUpRightFromSquare aria-hidden="true" /></External></nav>
     </header>
 
     <div className="workspace-nav" hidden={!!page}><div className="tabs" role="tablist" aria-label="Explore DualBore Media">{views.map((item, index) => {
@@ -177,7 +179,7 @@ export function App() {
       </section>
     </main>
 
-    {testCommerceEnabled ? <StoreFooter onAlert={email=>openModal({type:'alert',email})}/> : (<PublicFooter onView={chooseView} policies={policyPages}/>)}
+    {testCommerceEnabled ? <StoreFooter onAlert={email=>openModal({type:'alert',email})}/> : (<PublicFooter staffOnly={staffOnly} onView={chooseView} policies={policyPages}/>)}
     <div className={`toast${toast ? ' visible' : ''}`} role="status" aria-live="polite" aria-atomic="true" aria-hidden={!!modal}>{toast && <><span className="status-dot" />{toast}<button aria-label="Dismiss notification" onClick={() => setToast('')}><FaXmark aria-hidden="true" /></button></>}</div>
 
     <dialog ref={dialog} aria-labelledby="modal-heading" onCancel={event => { event.preventDefault(); closeModal(); }} onClose={() => setModal(null)} onClick={event => { if (event.target === dialog.current) { const rect = dialog.current.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeModal(); } }}>
