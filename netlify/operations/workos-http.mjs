@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {EncryptJWT,jwtDecrypt} from 'jose';
+import {EncryptJWT,jwtDecrypt,errors} from 'jose';
 import pg from 'pg';
 import {createPostgresRepository} from '../commerce/repository.mjs';
 import {authenticateWorkos,cookieName,readCookie,workosConfig,workosClient} from './workos-auth.mjs';
@@ -14,7 +14,7 @@ const cookie=(name,value,env,age)=>`${name}=${value}; Path=/; HttpOnly; SameSite
 const statePrefix=env=>new URL(env.SITE_ORIGIN).protocol==='https:'?'__Host-dbm-oauth-':'dbm-local-oauth-';
 const stateCookie=(env,state)=>statePrefix(env)+createHash('sha256').update(state).digest('hex').slice(0,24);
 export function safeAuthDestination(value,fallback='/account'){
- try{const url=new URL(value,'https://return.invalid');if(url.origin!=='https://return.invalid'||!['/account','/staff','/admin'].includes(url.pathname)||url.hash||[...url.searchParams].some(([key,v])=>key!=='view'||!['overview','orders','inventory','activity','support','employees','shipments'].includes(v))||url.searchParams.getAll('view').length>1)return fallback;return url.pathname+url.search;}catch{return fallback;}
+ try{const url=new URL(value,'https://return.invalid');if(url.origin!=='https://return.invalid'||!['/account','/staff','/admin'].includes(url.pathname)||url.hash||[...url.searchParams].some(([key,v])=>key!=='view'||!['overview','orders','inventory','activity','support','employees','shipments','profile','help'].includes(v))||url.searchParams.getAll('view').length>1)return fallback;return url.pathname+url.search;}catch{return fallback;}
 }
 const redirect=(url,cookies=[])=>{const headers=new Headers(security);headers.set('Location',url);for(const value of cookies)headers.append('Set-Cookie',value);return new Response(null,{status:303,headers});};
 async function limit(repository,key,now){const id=createHash('sha256').update('workos:'+key).digest('hex');return repository.transaction(s=>{for(const[k,v]of Object.entries(s.limits))if(v.expiresAt<=now)delete s.limits[k];const row=s.limits[id]??={id,count:0,expiresAt:now+60000};return ++row.count<=20;});}
@@ -31,19 +31,26 @@ async function handleWorkos(request,{env=process.env,client,repository,clientIp=
   if(request.method==='GET'&&action==='sign-in'){
    const staff=url.searchParams.get('staff')==='1';if(staff&&!env.WORKOS_STAFF_ORGANIZATION_ID)return json({error:'Staff sign-in is not configured.'},503);
    const pending=(request.headers.get('Cookie')||'').split(';').filter(value=>value.trim().startsWith(statePrefix(env))).length;
-   if(pending>=5)return json({error:'Finish an open sign-in tab or wait ten minutes before starting another.',code:'too_many_sign_ins'},429);
+   if(pending>=5)return json({error:'Finish an open sign-in tab or wait thirty minutes before starting another.',code:'too_many_sign_ins'},429);
    returnTo=safeAuthDestination(url.searchParams.get('returnTo'),staff?'/staff':'/account');
-   if(!staff&&returnTo!=='/account')returnTo='/account';
+   if(!staff&&returnTo.split('?')[0]!=='/account')returnTo='/account';
    const pkce=await api.getAuthorizationUrlWithPKCE({provider:'authkit',clientId:config.clientId,redirectUri:config.origin+'/api/auth/callback',...(staff?{organizationId:env.WORKOS_STAFF_ORGANIZATION_ID}:{}),...(staff&&url.searchParams.get('step_up')==='1'?{maxAge:0}:{}),screenHint:url.searchParams.get('signup')==='1'?'sign-up':'sign-in'});
    const key=createHash('sha256').update(config.cookiePassword).digest();
    const sealed=await new EncryptJWT({state:pkce.state,verifier:pkce.codeVerifier,returnTo}).setProtectedHeader({alg:'dir',enc:'A256GCM'}).setIssuedAt().setExpirationTime('10m').setAudience('dbm-oauth').setIssuer(config.origin).encrypt(key);
-   return redirect(pkce.url,[cookie(stateCookie(env,pkce.state),sealed,env,600)]);
+   // Retain the encrypted destination briefly after state expiry for recovery only.
+   // Code exchange still requires the JWT's original ten-minute lifetime.
+   return redirect(pkce.url,[cookie(stateCookie(env,pkce.state),sealed,env,1800)]);
   }
   if(request.method==='GET'&&action==='callback'){
    const invalidState=()=>{throw new AuthError('invalid_auth_state','Sign-in could not be verified. Please try again.',400);};
    const requestedState=url.searchParams.get('state');if(!requestedState||requestedState.length>512)invalidState();callbackCookie=stateCookie(env,requestedState);
    const state=readCookie(request,callbackCookie);if(!state||!url.searchParams.get('code'))invalidState();
-   let payload;try{({payload}=await jwtDecrypt(state,createHash('sha256').update(config.cookiePassword).digest(),{issuer:config.origin,audience:'dbm-oauth',currentDate:new Date(now)}));}catch{invalidState();}
+   let payload;try{({payload}=await jwtDecrypt(state,createHash('sha256').update(config.cookiePassword).digest(),{issuer:config.origin,audience:'dbm-oauth',currentDate:new Date(now)}));}catch(error){
+    // jose authenticates/decrypts and checks issuer/audience before exp. An
+    // expired payload may select a safe recovery page, never authorize exchange.
+    if(error instanceof errors.JWTExpired&&error.payload?.state===requestedState)returnTo=safeAuthDestination(error.payload.returnTo);
+    invalidState();
+   }
    if(payload.state!==url.searchParams.get('state')||typeof payload.verifier!=='string')invalidState();
    returnTo=safeAuthDestination(payload.returnTo);
    const id=createHash('sha256').update('oauth-used:'+payload.state).digest('hex');

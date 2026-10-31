@@ -65,6 +65,31 @@ test('refresh preserves cookies on retryable failures and clears only terminal f
  const transient=await refresh();assert.equal(transient.status,503);assert.equal(transient.headers.get('Set-Cookie'),null);assert.equal((await transient.json()).code,'auth_refresh_unavailable');
  client.userManagement.loadSealedSession=()=>({refresh:async()=>({authenticated:false,retryable:false,reason:'invalid_grant'})});const terminal=await refresh();assert.equal(terminal.status,401);assert.match(terminal.headers.get('Set-Cookie'),/Max-Age=0/);
 });
+
+test('Account sign-in retains Profile and Help without allowing customer staff destinations',async()=>{
+ let state='',counter=0;const client={userManagement:{getAuthorizationUrlWithPKCE:async()=>({url:'https://auth.example',state:state='account-'+(++counter),codeVerifier:'fixture'}),authenticateWithCode:async()=>({sealedSession:'fixture-session'})}};
+ for(const [destination,expected] of [['/account?view=profile','/account?view=profile'],['/account?view=help','/account?view=help'],['/admin?view=inventory','/account']]){
+  const options={env,client,repository:createMemoryRepository(),now,log:()=>{}};
+  const start=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/sign-in?returnTo='+encodeURIComponent(destination)),options);
+  const response=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/callback?code=fixture&state='+state,{headers:{Cookie:start.headers.get('Set-Cookie').split(';')[0]}}),options);
+  assert.equal(response.headers.get('Location'),expected);
+ }
+});
+
+test('expired encrypted staff state preserves only its safe recovery destination and never exchanges a code',async()=>{
+ let exchanges=0;const client={userManagement:{getAuthorizationUrlWithPKCE:async()=>({url:'https://auth.example',state:'expired-staff',codeVerifier:'private-fixture'}),authenticateWithCode:async()=>{exchanges++;return{sealedSession:'must-not-issue'};}}};
+ const options={env,client,repository:createMemoryRepository(),now,log:()=>{}};
+ const start=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/sign-in?staff=1&returnTo='+encodeURIComponent('/admin?view=inventory')),options);
+ const saved=start.headers.get('Set-Cookie').split(';')[0];assert.match(start.headers.get('Set-Cookie'),/Max-Age=1800/);
+ const finish=value=>workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/callback?code=fixture&state=expired-staff',{headers:{Cookie:value}}),{...options,now:now+660000});
+ const expired=await finish(saved);assert.equal(expired.headers.get('Location'),'/admin?view=inventory&auth=state_expired');assert.ok(!expired.headers.get('Set-Cookie').includes('__Host-dbm-session='));
+ const tampered=await finish(saved.slice(0,-12)+'invalid');assert.equal(tampered.headers.get('Location'),'/account?auth=state_expired');assert.equal(exchanges,0);
+ for(const [issuer,audience,destination,state] of [[env.SITE_ORIGIN,'foreign','/admin','expired-staff'],['https://foreign.example','dbm-oauth','/admin','expired-staff'],[env.SITE_ORIGIN,'dbm-oauth','https://evil.example/admin','expired-staff'],[env.SITE_ORIGIN,'dbm-oauth','/admin','wrong-state']]){
+  const sealed=await new EncryptJWT({state,returnTo:destination,verifier:'fixture'}).setProtectedHeader({alg:'dir',enc:'A256GCM'}).setIssuer(issuer).setAudience(audience).setExpirationTime(Math.floor(now/1000)-1).encrypt(createHash('sha256').update(env.WORKOS_COOKIE_PASSWORD).digest());
+  assert.equal((await finish(saved.split('=')[0]+'='+sealed)).headers.get('Location'),'/account?auth=state_expired');
+ }
+ assert.equal(exchanges,0);
+});
 test('WorkOS binds session issuer to this client and rejects shared, foreign and lookalike issuers',async()=>{
  const sdk=await workosClient(env);assert.equal(sdk.options.issuer,'https://api.workos.com/user_management/client_fixture');
  for(const issuer of ['https://api.workos.com/','https://api.workos.com/user_management/client_other','https://api.workos.com.evil.example/user_management/client_fixture',workosIssuer(env)+'/']){

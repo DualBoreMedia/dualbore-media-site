@@ -23,6 +23,8 @@ The low-level browser network recorder later stalled and evicted its events; no 
 
 This rendered check also exposed a missing notice when a failed verification preserved an older signed-in session. A dismissible verification notice now explains the failure without discarding that session or restarting login. Dismissing it removes only the auth query flag and preserves the destination/view.
 
+The committed CodeRabbit review identified two minor destination-recovery gaps. Account Profile/Help views now survive sign-in. The encrypted attempt cookie is retained for thirty minutes, while its authorization state still expires at ten minutes. Only an authenticated, issuer/audience-checked expired payload matching the requested state can supply an allowlisted recovery destination; code exchange remains rejected and the attempt cookie is cleared. Missing or tampered state still falls back to Account. The five-attempt cookie bound remains, with its wait message matching the longer recovery retention. These follow-up paths are regression-tested, not claimed as another hosted MFA completion.
+
 ## Security boundaries
 
 Mandatory organization MFA, verified email, current TOTP enrollment, active session, exact organization, live membership/role reads, issuer/signature/expiry checks, same-origin mutations, rate limits, HttpOnly cookies and stable actor IDs remain required. Enrollment alone is insufficient. Sensitive changes require separate fresh verification. Customers and unapproved methods cannot obtain staff access. No form payload, secret or customer shipping information is placed in the return URL or persistent browser storage.
