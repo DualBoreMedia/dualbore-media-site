@@ -20,6 +20,12 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Phase 3 Admin blockers, November 1, 2026
+
+- Continue from 8dc19f3 on the existing development branch. Prioritize redacted provider/database/monitoring remediation and targeted reproduced public/Admin UI fixes, not new features or redesigns.
+- No deploy, main merge, provider activation, production secret/data changes, paid plans, payment/refund/email/signup activation or government login is authorized. Provider revocation, replacement, membership grants and database restores need specific approval. Do not expose credential-shaped Netlify labels. Distinguish the potentially exposed Resend secret from the non-secret Stripe test publishable key.
+- Two independent production Admin owners require approved private membership, Google primary authentication and mandatory TOTP. Staging credentials and verification flags are never production evidence. Preserve the fixed routine-session MFA behavior and fresh verification for sensitive actions.
+
 ### Production Admin readiness, October 31, 2026
 
 - Prepare an Admin/Staff-only release on codex/commerce-test-foundation with [skip netlify]. No deployment, main merge, billing details, paid usage activation, payments, refunds, emails or signup collection are authorized. Passing any gate is not deployment approval.

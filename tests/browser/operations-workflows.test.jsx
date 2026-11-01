@@ -24,6 +24,17 @@ function fixture(){
  const auth={isLoaded:true,isSignedIn:true,getToken:async()=> 'synthetic-token',fetcher,signOut:vi.fn()};return {auth,data,order,posts,fetcher};
 }
 const posted=(f,action)=>f.posts.findLast(p=>p.action===action);
+
+test('order result count uses singular for one and plural for zero or many',async()=>{
+ const f=fixture();f.data.pagination.total=1;root.render(<OperationsApp admin auth={f.auth}/>);
+ await expect.element(page.getByText('Page 1 of 1 | 1 order',{exact:true})).toBeVisible();
+ f.data.pagination.total=0;f.data.orders=[];
+ await page.getByLabelText('Search orders or customer').fill('no matches');
+ await expect.element(page.getByText('Page 1 of 1 | 0 orders',{exact:true})).toBeVisible();
+ f.data.pagination.total=2;
+ await page.getByLabelText('Search orders or customer').fill('two matches');
+ await expect.element(page.getByText('Page 1 of 1 | 2 orders',{exact:true})).toBeVisible();
+});
 test('resolved last category automatically reveals remaining attention tasks',async()=>{
  const f=fixture();f.data.failures=[{type:'email',status:'queued',eventId:'last-mail'},{type:'refund',status:'review',orderNumber:'REFUND-PENDING'}];
  const original=f.auth.fetcher;f.auth.fetcher=async(url,options)=>{if(options.method==='POST')f.data.failures=f.data.failures.filter(e=>e.type!=='email');return original(url,options);};

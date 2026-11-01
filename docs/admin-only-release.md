@@ -1,5 +1,7 @@
 # Admin-only production candidate: NO-GO until verified
 
+Latest continuation: [Phase 3 remediation and approval checklist](phase3-admin-remediation.md), November 1, 2026. The observations below retain their October 31 date unless that continuation explicitly records a fresh check.
+
 Audit date: October 31, 2026. Baseline: `4d220d3f8eaba69270c23b818dde2aa5a88f810b`, development branch `codex/commerce-test-foundation`. This document prepares a release; it does not authorize a deploy, main merge, provider activation, billing, payments, refunds, emails or signup collection. Record the final candidate SHA and six CI results in the handoff manifest after committing. Never substitute the baseline SHA for the final tested SHA.
 
 ## Independent remote observations

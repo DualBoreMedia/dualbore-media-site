@@ -206,6 +206,7 @@ try {
           await publicPage.getByRole('button', {name: 'Release updates',exact:true}).click();
           await publicPage.getByText(/signups are not open yet/i).waitFor();
           if (await publicPage.getByRole('dialog').locator('form').count()) throw Error('Public Drop Alert collected personal information while privacy readiness is blocked');
+          await capturePublic(publicPage, `${output}/${name}-release-updates.png`);
           const quickView = publicPage.getByRole('button', {name: /Quick View E92 Coupe/});
           await publicPage.getByRole('button', {name: 'Close details'}).click();
           await quickView.click();
