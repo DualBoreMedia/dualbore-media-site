@@ -182,7 +182,9 @@ test('public garage tabs, filters, details and waitlist remain usable without ch
   await expect.element(page.getByRole('heading',{name:/Two brothers/})).toBeVisible();
   await page.getByRole('button',{name:'Open navigation'}).click();
   await expect.element(page.getByRole('button',{name:'Close navigation',exact:true})).toBeVisible();
-  const backdrop=page.getByRole('button',{name:'Close navigation overlay'}),bounds=backdrop.element().getBoundingClientRect();
+  const backdrop=page.getByRole('button',{name:'Close navigation overlay'});
+  await expect.element(backdrop).toBeVisible();
+  const bounds=backdrop.element().getBoundingClientRect();
   // The menu covers the center of this full-screen backdrop with real fonts.
   // Click its visible lower edge, never force a click through the menu.
   expect(document.elementFromPoint(bounds.left+8,bounds.bottom-8)).toBe(backdrop.element());

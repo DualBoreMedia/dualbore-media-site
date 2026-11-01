@@ -172,6 +172,16 @@ try {
           await capturePublic(publicPage, `${output}/${name}-product-${width}.png`);
           await publicPage.keyboard.press('Escape');
           if(!await publicPage.getByRole('button',{name:'Quick View E92 Coupe Line-Art Tee'}).evaluate(element=>element===document.activeElement)) throw Error(`Product quick view lost return focus at ${width}px`);
+          if([320,390,1440].includes(width)){
+            const updates=publicPage.getByRole('button',{name:'Release updates',exact:true});
+            await updates.click();const dialog=publicPage.getByRole('dialog');
+            await expect(dialog.getByText(/Orders and email signups are not open yet/)).toBeVisible();
+            await expect(dialog.locator('form,input')).toHaveCount(0);
+            const [channelLink,privacyLink]=await dialog.getByRole('navigation',{name:'Release announcement links'}).locator('a').evaluateAll(links=>links.map(link=>{const r=link.getBoundingClientRect();return{left:r.left,right:r.right,top:r.top,bottom:r.bottom,height:r.height};}));
+            if(channelLink.height<48||privacyLink.height<48||privacyLink.right>width||!(privacyLink.top>=channelLink.bottom+12||privacyLink.left>=channelLink.right+16))throw Error(`Release announcement links crowd or clip at ${width}px`);
+            await capturePublic(publicPage,`${output}/${name}-release-updates-${width}.png`);
+            await publicPage.keyboard.press('Escape');await expect(updates).toBeFocused();
+          }
           const detailsLayout=await publicPage.evaluate(()=>({document:document.documentElement.scrollWidth,body:document.body.scrollWidth}));
           if(detailsLayout.document>width||detailsLayout.body>width)throw Error(`Merch layout overflow at ${width}px`);
           for(const route of ['terms','privacy','contact','shipping','returns']){

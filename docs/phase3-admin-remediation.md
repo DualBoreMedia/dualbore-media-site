@@ -87,3 +87,4 @@ Owner-dependent blockers: credential cleanup approval/matching, production WorkO
 
 - Admin: Daily workflow > Start production filters to one order but displayed `1 orders`. The counter now distinguishes zero, one and multiple results, with a rendered regression for each.
 - Public: Merch > Release updates placed the YouTube and privacy links directly against each other. A wrapping navigation group adds clear spacing and 48px targets. Rendered checks exercise 320px, 390px and desktop, preserving closed orders/signups and keyboard focus.
+- Initial CI for `e4bbe1a` exposed a synchronous drawer-backdrop lookup before visibility was established. The component journey now waits for the actual overlay before measuring its uncovered clickable edge. Responsive dialog geometry runs in the isolated three-browser journey, without resizing shared component-test viewports. The failed run remains evidence; a later green run must validate the follow-up commit.
