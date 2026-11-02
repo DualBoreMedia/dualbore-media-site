@@ -46,6 +46,7 @@ export function App() {
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [vaultFilms, setVaultFilms] = useState(films);
+   const [latestUpload,setLatestUpload] = useState(null);
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState('');
   const dialog = useRef(null);
@@ -57,7 +58,9 @@ export function App() {
   const toastTimer = useRef(null);
   const modalTrigger = useRef(null);
   const closeButton = useRef(null);
-  const shownFilms = vaultFilms.filter(film => (filter === 'All' || film.category === filter) && `${film.title} ${film.category} ${film.label}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const featuredFilm = latestUpload || films.find(film => film.id === 'c7gF1jjT9YQ');
+   const journalEpisodes = latestUpload ? [latestUpload,...projects.map(project=>films.find(film=>film.id===project.video)).filter(Boolean).filter(film=>film.id!==latestUpload.id)] : films;
+   const shownFilms = vaultFilms.filter(film => (filter === 'All' || film.category === filter) && `${film.title} ${film.category} ${film.label}`.toLowerCase().includes(search.trim().toLowerCase()));
   const reduceMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 
   const notify = message => {
@@ -96,7 +99,7 @@ export function App() {
     const controller=new AbortController();
     fetch('/api/video-vault',{signal:controller.signal})
       .then(response=>response.ok?response.json():null)
-      .then(data=>{if(!controller.signal.aborted&&Array.isArray(data?.items)&&data.items.length>0&&data.items.length<=50&&data.items.every(film=>/^[A-Za-z0-9_-]{11}$/.test(film?.id)&&typeof film.title==='string'&&typeof film.image==='string'&&/^https:\/\/i\.ytimg\.com\/vi\/[A-Za-z0-9_-]{11}\/hqdefault\.jpg$/.test(film.image)))setVaultFilms(data.items);})
+      .then(data=>{if(!controller.signal.aborted&&Array.isArray(data?.items)&&data.items.length>0&&data.items.length<=50&&data.items.every(film=>/^[A-Za-z0-9_-]{11}$/.test(film?.id)&&typeof film.title==='string'&&typeof film.image==='string'&&/^https:\/\/i\.ytimg\.com\/vi\/[A-Za-z0-9_-]{11}\/hqdefault\.jpg$/.test(film.image))){setVaultFilms([...data.items,...films.filter(film=>!data.items.some(item=>item.id===film.id))]);setLatestUpload(data.source==='youtube'?data.items[0]:null);}})
       .catch(()=>{});
     return()=>controller.abort();
   },[]);
@@ -157,12 +160,12 @@ export function App() {
     <main id="content" ref={panelTop} tabIndex="-1">
       {page&&(page==='order/test-checkout'?<TestCheckout/>:page.startsWith('order/')&&new URLSearchParams(window.location.search).has('session_id')?<OrderStatus cart={cart} onBack={()=>chooseView('merch',true)}/>:<StorePage page={page} draft={testCommerceEnabled} waitlistEnabled={false} onBrowse={()=>chooseView('merch',true)}/>)}
       <section id="panel-garage" role="tabpanel" aria-labelledby="tab-garage" tabIndex="0" hidden={view !== 'garage' || !!page} className="view">
-        <div className="garage-hero"><div><span className="eyebrow"><span className="status-dot" /> Inside the DualBore garage</span><h1>Four platforms.<br /><span>One obsession.</span></h1><p>Two brothers. Project cars. Motorcycles. Garage days.<br />Follow the builds, the fixes, and the next lap.</p><button className="button" onClick={() => chooseView('vault', true)}><FaPlay aria-hidden="true" /> Explore the video vault</button><button className="text-link hero-secondary" onClick={() => chooseView('merch', true)}>Discover Drop 01 <FaArrowRight aria-hidden="true"/></button></div><button onClick={event => openModal({type: 'video', item: films.find(film => film.id === 'c7gF1jjT9YQ')}, event.currentTarget)} aria-label="Play the Yamaha RD400 hills ride" className="hero-feature"><img src="/assets/rd400.jpg" alt="Yamaha RD400 channel ride thumbnail" width="480" height="360" loading="eager" fetchPriority="high" decoding="async" /><span className="hero-feature-caption"><small>Featured session / Two-strokes</small><strong>Into the hills.</strong><span><FaPlay aria-hidden="true" /> Watch the RD400 ride</span></span></button></div>
+        <div className="garage-hero"><div><span className="eyebrow"><span className="status-dot" /> Inside the DualBore garage</span><h1>Four platforms.<br /><span>One obsession.</span></h1><p>Two brothers. Project cars. Motorcycles. Garage days.<br />Follow the builds, the fixes, and the next lap.</p><button className="button" onClick={() => chooseView('vault', true)}><FaPlay aria-hidden="true" /> Explore the video vault</button><button className="text-link hero-secondary" onClick={() => chooseView('merch', true)}>Discover Drop 01 <FaArrowRight aria-hidden="true"/></button></div><button onClick={event => openModal({type: 'video', item: featuredFilm}, event.currentTarget)} aria-label={`Play ${featuredFilm.title}`} className="hero-feature"><img src={latestUpload?featuredFilm.image:'/assets/rd400.jpg'} alt={latestUpload?`${featuredFilm.title} verified upload thumbnail`:'Yamaha RD400 channel ride thumbnail'} width="480" height="360" loading="eager" fetchPriority="high" decoding="async" /><span className="hero-feature-caption"><small>{latestUpload?'Newest channel upload':'Featured session / Two-strokes'}</small><strong>{latestUpload?featuredFilm.title:'Into the hills.'}</strong><span><FaPlay aria-hidden="true" /> {latestUpload?'Watch latest upload':'Watch the RD400 ride'}</span></span></button></div>
         <div className="section-bar"><h2>The build roster</h2><span className="rule" /><span>04 platforms / Real channel projects</span></div>
         <div className="project-grid">{projects.map((project, index) => <button className="project-card" key={project.id} onClick={event => openModal({type: 'build', item: project}, event.currentTarget)} aria-label={`Explore ${project.name} platform details`}><div className="project-image"><img src={project.image} alt={`${project.name} channel thumbnail`} width="480" height="360" loading="lazy" decoding="async" /><span className="card-index">0{index + 1}</span><span className="image-action"><FaArrowUpRightFromSquare aria-hidden="true" /></span></div><div className="card-copy"><span className="eyebrow">{project.category}</span><h3>{project.name}</h3><p>{project.tag}</p><span className="card-bottom">Explore platform <FaArrowRight aria-hidden="true" /></span></div></button>)}</div>
         <nav className="build-permalinks" aria-label="Individual build logs">{projects.map(project=><a key={project.id} href={`/builds/${project.id}/`}>{project.name} build log</a>)}</nav>
         <div className="garage-footnote"><FaWrench aria-hidden="true" /><p>Every platform has a story. Open a card for project details and the videos behind it.</p></div>
-        <GarageStories episodes={vaultFilms} onView={chooseView} onDetails={(item,trigger)=>openModal({type:'merch',item},trigger)} onPlay={(item,trigger)=>openModal({type:'video',item},trigger)}/>
+        <GarageStories episodes={journalEpisodes} onView={chooseView} onDetails={(item,trigger)=>openModal({type:'merch',item},trigger)} onPlay={(item,trigger)=>openModal({type:'video',item},trigger)}/>
       </section>
 
       <section id="panel-vault" role="tabpanel" aria-labelledby="tab-vault" tabIndex="0" hidden={view !== 'vault' || !!page} className="view">
