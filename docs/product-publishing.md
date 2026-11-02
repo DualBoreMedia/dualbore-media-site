@@ -1,0 +1,11 @@
+# New merchandise product requirements
+
+There is no staff product-publishing form or API at this stage. New merchandise is added through reviewed catalog changes; **a validated file is not automatically published**. MX Bikes setups use a different digital-file intake process.
+
+For **every** new product in `src/content.js`, require: stable lowercase-hyphenated `id`, approved `name`, `detail`, `type`, truthful `notes`, actual owner artwork `image`, specific `category` (`tees`, `crewnecks`, `accessories`, `stickers`), `audience` (`men`, `women`, `unisex`, `kids`, or `unspecified` while pending approval), whole-dollar `previewPrice`, `listingStatus: "preview"`, and `testVariantsEnabled: false`. Do not use browse categories `all` or `apparel` as a product type. Do not invent fit, measurements, material, artwork or approval.
+
+Add the approved JPG plus its `-480.jpg` and `-768.jpg` derivatives under `public/assets`. Check intake before committing with `npm.cmd run products:validate -- --file=path/to/item.json`, then `npm.cmd run products:check`. The prebuild check enforces the same requirements. The existing three original apparel designs have explicit local-test enrollment; new drafts do not get checkout variants automatically.
+
+**For sale readiness**, also require `listingStatus: "published"`, verified audience, positive trusted `salePriceCents`, and true `ownerApproved`, `artworkRightsVerified`, `imagesVerified`, `fulfillmentVerified`, `shippingProfileVerified`. Apparel must have distinct verified `sizes`, `sizeGuideVerified`, `garmentLabelVerified`, `careInstructionsVerified`. Kids require `ageRange` and `childProductComplianceVerified`. Stickers require positive measured `dimensionsMm.width/height` and verified `material`. Accessories require approved `specifications`.
+
+Use `npm.cmd run products:validate -- --file=path/to/item.json --phase=publish` to check candidate eligibility. This doesn't create stock, Stripe objects or public sales. The production catalog API and checkout independently refuse unapproved products; all existing tax/shipping/legal/identity/security and launch gates continue to apply. Production remains disabled; no approvals should be fabricated.

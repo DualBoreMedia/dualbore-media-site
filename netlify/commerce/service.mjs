@@ -1,6 +1,9 @@
 import {createHash,randomUUID,randomBytes,timingSafeEqual} from 'node:crypto';
 import {inventoryPolicy,madeToOrder} from './inventory.mjs';
 import {validateItems} from '../../src/commerce/catalog.js';
+import {merch} from '../../src/content.js';
+import {productIsSaleReady} from '../../src/commerce/product-requirements.js';
+const saleReadyIds=new Set(merch.filter(productIsSaleReady).map(p=>p.id));
 import {deliverOrderEmails,deliverShipmentEmail} from './order-email.mjs';
 import {enqueueLifecycle} from '../operations/lifecycle.mjs';
 import {deliverLifecycleEmails} from './order-email.mjs';
@@ -45,7 +48,7 @@ export function createCommerceService({repository,stripe,env={},now=Date.now}) {
   let work=await repository.transaction(state=>{
    const existing=Object.values(state.orders).find(o=>o.requestKey===requestKey);
    if(existing){if(existing.cartHash!==cartHash)bad('request_conflict','This request belongs to a different cart.',409);if(existing.sessionUrl)return {order:existing,reused:true};if(existing.status!=='checkout_pending')bad('checkout_failed','Start a new checkout request.',409);if(existing.checkoutLeaseToken&&Date.parse(existing.checkoutLeaseUntil)>now())bad('checkout_in_progress','Checkout is already starting. Retry this request shortly.',409);existing.checkoutLeaseToken=attemptToken;existing.checkoutLeaseUntil=leaseUntil;return{order:existing,recovery:true};}
-   const lines=items.map(i=>{const v=state.variants[i.variantId];if(!v?.active)bad('inactive_variant','A selected design is no longer available.',409);if(!madeToOrder(v)&&v.availableQuantity<i.quantity)bad('insufficient_stock','A selected size has insufficient stock. Update your cart.',409);const priceId=live?v.liveStripePriceId:v.stripePriceId,amount=live?v.productionPriceCents:v.priceCents;if(!priceId||!Number.isSafeInteger(amount)||amount<1)bad('catalog_not_synced','The approved catalog is not configured.',503);return {...i,sku:v.sku,name:v.name,size:v.size,unitPriceCents:amount,lineTotalCents:amount*i.quantity,stripePriceId:priceId};});
+   const lines=items.map(i=>{const v=state.variants[i.variantId];if(!v?.active)bad('inactive_variant','A selected design is no longer available.',409);if(live&&!saleReadyIds.has(v.productId))bad('listing_not_approved','This listing is not approved for sale.',409);if(!madeToOrder(v)&&v.availableQuantity<i.quantity)bad('insufficient_stock','A selected size has insufficient stock. Update your cart.',409);const priceId=live?v.liveStripePriceId:v.stripePriceId,amount=live?v.productionPriceCents:v.priceCents;if(!priceId||!Number.isSafeInteger(amount)||amount<1)bad('catalog_not_synced','The approved catalog is not configured.',503);return {...i,sku:v.sku,name:v.name,size:v.size,unitPriceCents:amount,lineTotalCents:amount*i.quantity,stripePriceId:priceId};});
    const hash=digest(JSON.stringify(lines));
    if((live||lines.some(l=>l.unitPriceCents!==3000))&&quoteToken!==hash)bad('cart_changed','Review the current prices before checkout.',409,{quoteToken:hash,lines:lines.map(({stripePriceId,...line})=>line)});
    const id=randomUUID();const order={id,isTest:!live,testProvider:env.COMMERCE_MOCK==='true'?'mock':'stripe',orderNumber:'DBM-'+randomBytes(6).toString('hex').toUpperCase(),requestKey,cartHash,accessTokenHash:digest(accessToken),status:'checkout_pending',currency:'usd',subtotalCents:lines.reduce((s,l)=>s+l.lineTotalCents,0),shippingCents:shipping,taxCents:null,totalCents:null,items:lines,createdAt:iso(now),expiresAt:new Date(now()+35*60*1000).toISOString(),sessionId:null,customerEmail:null,fulfillmentStatus:'received',refundStatus:'none',refundedCents:0,stripeRefundIds:[]};

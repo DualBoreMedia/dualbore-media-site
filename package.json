@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "dev:commerce": "vite --mode commerce --host 127.0.0.1",
-    "prebuild": "node scripts/netlify-build-guard.mjs",
+    "prebuild": "node scripts/check-products.mjs && node scripts/netlify-build-guard.mjs",
+    "products:check": "node scripts/check-products.mjs",
+    "products:validate": "node scripts/check-products.mjs",
     "build": "vite build && node scripts/prerender-public-details.mjs && node scripts/protect-source-maps.mjs && node scripts/prepare-security-headers.mjs && node scripts/prepare-sites-build.mjs",
     "preview": "vite preview",
     "test:sites": "node --test tests/sites-worker.test.mjs",

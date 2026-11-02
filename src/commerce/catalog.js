@@ -1,10 +1,11 @@
 import { merch, previewSizes } from '../content.js';
 
 // Draft catalog only. No stock, confirmed fabric specifications or Stripe IDs.
-const skuRoots = { 'e92-tee': 'DBM-E92-TEE', 'e90-crewneck': 'DBM-E90-CREW', 'sv1000s-silhouette': 'DBM-SV1000S-CREW' };
-export const variants = Object.freeze(merch.flatMap(product => previewSizes.map(size => Object.freeze({
+// Explicitly enrolled legacy local test items only; new previews are not purchasable automatically.
+const localTestProducts=merch.filter(p=>p.testVariantsEnabled);
+export const variants = Object.freeze(localTestProducts.flatMap(product => previewSizes.map(size => Object.freeze({
   id: `${product.id}-${size.toLowerCase()}`, productId: product.id,
-  sku: `${skuRoots[product.id]}-${size}`, size, unitAmount: 3000, currency: 'usd',
+  sku: `${product.skuRoot}-${size}`, size, unitAmount: 3000, currency: 'usd',
 }))));
 export const variantById = id => variants.find(variant => variant.id === id);
 export const money = cents => new Intl.NumberFormat('en-US', {style:'currency',currency:'USD'}).format(cents / 100);
