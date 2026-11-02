@@ -20,6 +20,13 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Channel header and navigation refinement, November 2, 2026
+
+- Preserve the existing working Garage-home button and real `/assets/channel-logo.jpg` avatar; refine it as a circular 42px badge with subtle bezel/red hover and keyboard-focus treatment, not a duplicate header link or generated logo.
+- Keep the four existing tab routes, numbered labels, arrow-key behavior, two-column mobile tab layout and 48px-or-larger pointer targets. Avoid horizontal overflow at 320px and respect reduced-motion preferences.
+- Future interactive build specifications require verified vehicle parts and progress; do not invent turbo setup, dyno figures, garment fabric, size measurements or product photography. Generating a packing slip alone must never mark an order physically packed or handed to a carrier.
+
+
 ### Public-first channel content, November 1–2, 2026
 
 - The YouTube channel is the primary product. Focus on a current Video Vault, individual public build and video URLs, factual project episode logs, and genuine owner-shot garment photos. Do not fabricate build milestones or create AI garment mockups.

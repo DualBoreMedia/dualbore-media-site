@@ -34,3 +34,43 @@ html,body{overflow-x:hidden}main,.view,.dialog-copy{min-width:0}.brand-logo{widt
 .production-cart-line{display:grid;gap:12px;padding:20px 0;border-bottom:1px solid #526078}
 .production-cart label,.production-store label{display:grid;gap:8px}.production-cart input,.production-store select{min-height:48px;background:#0b0d10;color:#fff;border:1px solid #526078;padding:10px;width:100%}
 .production-cart .production-checkout{position:sticky;bottom:0;width:100%}.production-store .retail-copy{display:grid;gap:20px}.production-store fieldset{border:0;padding:0}.production-cart .order-actions{flex-wrap:wrap}
+
+
+/* DualBore's existing channel avatar, not a second logo, anchors the motorsport lockup. */
+.header .brand.nav-brand{display:inline-flex;align-items:center;gap:12px;min-height:48px;min-width:0}
+.header .brand.nav-brand .nav-brand__logo{
+  display:block;width:42px;height:42px;flex:0 0 42px;object-fit:cover;border-radius:50%;
+  border:2px solid #232834;box-shadow:0 0 10px rgb(0 0 0 / 60%);
+  transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease;
+}
+.header .brand.nav-brand:hover .nav-brand__logo,
+.header .brand.nav-brand:focus-visible .nav-brand__logo{
+  border-color:#ff2a3b;box-shadow:0 0 14px rgb(255 42 59 / 45%);transform:scale(1.04);
+}
+.header .brand.nav-brand .nav-brand__copy{display:block;min-width:0}
+.header .brand.nav-brand .nav-brand__title{font-family:var(--display);font-size:30px;letter-spacing:.06em;line-height:1;white-space:nowrap}
+.header .brand.nav-brand .nav-brand__title span{color:#ff2a3b}
+.workspace-nav .tabs button{column-gap:12px;min-height:48px}
+.workspace-nav .tabs button[aria-selected="true"]{box-shadow:inset 0 -1px 0 #ff2a3b33}
+.workspace-nav .tabs button[aria-selected="true"]::after{
+  content:"";position:absolute;left:16px;right:16px;bottom:0;height:2px;
+  background:#ff2a3b;box-shadow:0 -1px 10px rgb(255 42 59 / 38%);pointer-events:none;
+}
+.mobile-drawer__label{min-width:0}
+@media(max-width:700px){
+  .header .brand.nav-brand{gap:8px;min-height:48px}
+  .header .brand.nav-brand .nav-brand__title{font-size:22px;letter-spacing:.035em}
+  .workspace-nav .tabs button{min-height:60px;column-gap:9px}
+  .workspace-nav .tabs button[aria-selected="true"]::after{left:10px;right:10px}
+}
+@media(max-width:380px){
+  .header{gap:8px}
+  .header .brand.nav-brand{gap:6px}
+  .header .brand.nav-brand .nav-brand__title{font-size:19px;letter-spacing:.02em}
+  .header .brand.nav-brand .nav-brand__copy small{font-size:6px;letter-spacing:.16em}
+  .workspace-nav .tabs button{padding-inline:8px;column-gap:7px}
+  .workspace-nav .tabs button svg{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+  .header .brand.nav-brand .nav-brand__logo{transition:none;transform:none!important}
+}
