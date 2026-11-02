@@ -150,3 +150,20 @@ test('channel avatar is the visible, accessible motorsport badge and all tab num
  await brand.click();
  await expect.element(page.getByRole('tab',{name:'01 Garage Builds'})).toHaveAttribute('aria-selected','true');
 });
+
+test('verified upload becomes hero and journal feature, while curated builds remain',async()=>{
+ const video={id:'aB1cD2eF3gH',title:'Synthetic latest ride',image:'https://i.ytimg.com/vi/aB1cD2eF3gH/hqdefault.jpg',category:'V-Twins',label:'CHANNEL UPLOAD',duration:'0:30'};
+ vi.stubGlobal('fetch',vi.fn(async()=>json({source:'youtube',items:[video]})));
+ root.render(<App/>);
+ await vi.waitFor(()=>expect(host.querySelector('.hero-feature-caption strong')?.textContent).toBe('Synthetic latest ride'));
+ expect(host.querySelector('.hero-feature img')?.getAttribute('src')).toBe(video.image);
+ expect(host.querySelectorAll('.journal-card').length).toBe(5);
+ expect(host.querySelector('.journal-card h3')?.textContent).toBe('Synthetic latest ride');
+});
+test('provider failure retains curated hero and makes no live-sync claim',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>{throw Error('synthetic outage')}));
+ root.render(<App/>);
+ await expect.element(page.getByRole('button',{name:/Play Into the hills on the 1977 RD400/})).toBeVisible();
+ expect(host.querySelector('.hero-feature-caption strong')?.textContent).toBe('Into the hills.');
+ expect(host.querySelector('.hero-feature-caption small')?.textContent).toContain('Featured session');
+});
