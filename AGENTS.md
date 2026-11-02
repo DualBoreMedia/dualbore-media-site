@@ -20,6 +20,11 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### TC125 setup file intake, November 2, 2026
+
+- User supplied three 244-byte STP files with embedded bike ID MX2OEM_2023_Husqvarna_TC_125: Supercross.stp (general SX, proposed $2); ASSEN.stp (Assen, $1); Maryland.stp (Maryland, $1). Separate exact hashes are recorded in netlify/setups/received.mjs. None is verified in-game or placed in private production storage. Never commit the raw STP file bytes to this public repo or deploy download links.
+- Public catalog previews may disclose that three files were received, but must remain not for sale. Preserve existing sales/email/launch gates. The owner has not supplied exact game or OEM pack version nor authorized provider activation.
+
 ### MX Bikes setup shop foundation, November 2, 2026
 
 - The owner requested an MX Bikes OEM setup storefront: $1 track-specific per bike+track, $2 general motocross or supercross per bike. Actual setup files and supported bike inventory are pending. Never fabricate downloadable inventory, paid order success, compatibility or setup screenshots.

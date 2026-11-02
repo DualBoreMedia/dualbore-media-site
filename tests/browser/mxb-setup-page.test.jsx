@@ -23,6 +23,9 @@ test('setup shop renders proposed pricing but no purchase or download action',as
   await expect.element(page.getByText('Examples, not purchasable products')).toBeVisible();
   await expect.element(page.getByRole('heading',{name:'MXB Club'})).toBeVisible();
   await expect.element(page.getByRole('heading',{name:'Forest'})).toBeVisible();
+  await expect.element(page.getByRole('heading',{name:'2023 Husqvarna TC 125 — Assen'})).toBeVisible();
+  await expect.element(page.getByRole('heading',{name:'2023 Husqvarna TC 125 — Maryland'})).toBeVisible();
+  await expect.element(page.getByText('Files received (3)')).toBeVisible();
   expect(host.querySelectorAll('.mxb-card:not(.mxb-preview)')).toHaveLength(0);
   expect(host.querySelectorAll('button, a[href]')).not.toContainEqual(expect.objectContaining({textContent:'Buy'}));
   expect(host.querySelectorAll('a[href*="checkout"],a[download]')).toHaveLength(0);
@@ -32,11 +35,25 @@ test('track search and filters never convert a planned product into inventory',a
   root.render(<SetupShop/>);
   await page.getByRole('searchbox',{name:'Search'}).fill('forest');
   await expect.element(page.getByRole('heading',{name:'Forest'})).toBeVisible();
-  await expect.element(page.getByRole('heading',{name:'Assen'})).not.toBeInTheDocument();
+  await expect.element(page.getByRole('heading',{name:'2023 Husqvarna TC 125 — Assen'})).not.toBeInTheDocument();
   await page.getByRole('button',{name:'Clear filters'}).click();
-  await expect.element(page.getByRole('heading',{name:'Assen'})).toBeVisible();
+  await expect.element(page.getByRole('heading',{name:'2023 Husqvarna TC 125 — Assen'})).toBeVisible();
   await page.getByRole('combobox',{name:'Setup type'}).selectOptions('general-sx');
   await expect.element(page.getByRole('heading',{name:'General Supercross'})).toBeVisible();
+  await expect.element(page.getByRole('heading',{name:'2023 Husqvarna TC 125 — Supercross'})).toBeVisible();
   await expect.element(page.getByRole('heading',{name:'Forest'})).not.toBeInTheDocument();
   await expect.element(page.getByText('No verified setups listed yet.')).toBeVisible();
+});
+
+
+test('received TC125 previews can be filtered to the bike without exposing a download', async () => {
+  root.render(<SetupShop/>);
+  await page.getByRole('combobox',{name:'OEM bike'}).selectOptions('mx2oem-2023-husqvarna-tc-125');
+  await expect.element(page.getByRole('heading',{name:'2023 Husqvarna TC 125 — Supercross'})).toBeVisible();
+  await expect.element(page.getByRole('heading',{name:'2023 Husqvarna TC 125 — Maryland'})).toBeVisible();
+  await page.getByRole('combobox',{name:'Track'}).selectOptions('maryland');
+  await expect.element(page.getByRole('heading',{name:'2023 Husqvarna TC 125 — Maryland'})).toBeVisible();
+  await expect.element(page.getByRole('heading',{name:'2023 Husqvarna TC 125 — Assen'})).not.toBeInTheDocument();
+  await expect.element(page.getByText('No verified setups listed yet.')).toBeVisible();
+  expect(host.querySelectorAll('a[download],a[href*="checkout"]')).toHaveLength(0);
 });

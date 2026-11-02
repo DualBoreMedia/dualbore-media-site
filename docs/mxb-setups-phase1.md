@@ -25,3 +25,21 @@
 
 ## Files needed from the owner
 Send the setup files and for each: **bike + bike version, setup type, track if relevant, MX Bikes version, and any adjustment notes**. The shop must not publish or sell a listing until its exact file passes verification. Keep payment and download operations disabled until the owner explicitly approves a separate activation.
+
+
+## Owner file intake — TC125, November 2, 2026
+
+Three attachments received in the conversation for the same embedded identifier: `MX2OEM_2023_Husqvarna_TC_125`.
+
+| Owner filename | Product type | Planned price | File size | SHA-256 |
+|---|---|---:|---:|---|
+| `Supercross.stp` | General Supercross | $2.00 | 244 bytes | `a9ca360a2e99d5f09a5b3bf3ec22b02c522a4b3788cb14ab22aa57f34117010f` |
+| `ASSEN.stp` | Assen (track) | $1.00 | 244 bytes | `3ff595be4d77be611b89dc46f0b00ca217485a96507f35e12cf0d5a1522aa1f0` |
+| `Maryland.stp` | Maryland (track) | $1.00 | 244 bytes | `d36dc00054e3afe6dfedcffe822189e09949cc7bff20e786cd920a7dee3e600a` |
+
+The first six bytes of each supplied sample matched `c85393451601`, and the embedded ASCII bike identifier matched. This establishes sample identity and file integrity **only**, not gameplay validation or OEM-pack compatibility. The user's shorthand `MX2OEM_2023_TC_125` is recorded as the longer embedded ID above; exact OEM pack release and game version were not supplied.
+
+- Files live only as original chat attachments at intake time. **No file bytes were added to this public repository, Netlify/public assets or a private object store.** The server draft ledger is a checksum reference for future private ingestion.
+- All three records are `published=false`, `tested=false`, `fileVerified=false`, `deliveryReady=false` and have no private asset reference. `fileVerified` remains false until the actual private storage object has been verified, even though intake checksums were computed.
+- UI can show these as **files received / not for sale**. The production/approved `SETUP_CATALOG` remains empty, and no checkout, email, entitlements or public downloads are activated.
+- The owner still needs to confirm exact in-game OEM pack and MX Bikes versions and test each setup in MX Bikes. After approval and secure object-storage architecture, an authorized staff-only upload can recompute these SHA-256 hashes before moving drafts to publishable inventory.

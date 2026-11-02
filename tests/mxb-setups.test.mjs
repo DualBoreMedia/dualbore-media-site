@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {PLANNED_PREVIEWS, SETUP_CATALOG, SETUP_TYPES, filterSetupListings, setupPriceCents} from '../src/setups/catalog.js';
+import {PLANNED_PREVIEWS, RECEIVED_SETUP_PREVIEWS, SETUP_CATALOG, SETUP_TYPES, filterSetupListings, setupPriceCents} from '../src/setups/catalog.js';
 import {preparePublicSetupCatalog} from '../netlify/setups/manifest.mjs';
 
 const verified = {
@@ -12,7 +12,8 @@ const verified = {
 
 test('setup previews are not inventory and prices are fixed by kind', () => {
   assert.equal(SETUP_CATALOG.length, 0);
-  assert.equal(PLANNED_PREVIEWS.length, 5);
+  assert.equal(PLANNED_PREVIEWS.length, 4);
+  assert.equal(RECEIVED_SETUP_PREVIEWS.length, 3);
   assert.equal(setupPriceCents('track'), 100);
   assert.equal(setupPriceCents('general-mx'), 200);
   assert.equal(setupPriceCents('general-sx'), 200);
@@ -52,4 +53,17 @@ test('general product must omit a track and publish with its $2 fixed price', ()
   assert.equal(result[0].priceCents, 200);
   assert.equal(result[0].trackId, null);
   assert.throws(()=>preparePublicSetupCatalog([{...verified,id:'synthetic-bike-general-mx',kind:'general-mx'}]), /Invalid track/);
+});
+
+
+test('three file-received TC125 drafts are distinct products and never purchasable inventory', () => {
+  assert.deepEqual(RECEIVED_SETUP_PREVIEWS.map(item => item.kind), ['general-sx', 'track', 'track']);
+  assert.deepEqual(RECEIVED_SETUP_PREVIEWS.map(item => setupPriceCents(item.kind)), [200, 100, 100]);
+  assert.deepEqual(RECEIVED_SETUP_PREVIEWS.map(item => item.trackId), [null, 'assen', 'maryland']);
+  assert.ok(RECEIVED_SETUP_PREVIEWS.every(item => item.bikeId === 'mx2oem-2023-husqvarna-tc-125'));
+  assert.deepEqual(filterSetupListings(RECEIVED_SETUP_PREVIEWS, {bike: 'mx2oem-2023-husqvarna-tc-125', kind: 'track'}).map(item => item.trackId), ['assen', 'maryland']);
+  assert.deepEqual(filterSetupListings(RECEIVED_SETUP_PREVIEWS, {track: 'assen'}).map(item => item.id), ['mx2oem-2023-husqvarna-tc-125-assen']);
+  assert.deepEqual(SETUP_CATALOG, []);
+  assert.equal(PLANNED_PREVIEWS.some(item => item.trackId === 'assen'), false);
+  assert.equal(PLANNED_PREVIEWS.some(item => item.trackId === 'maryland'), false);
 });
