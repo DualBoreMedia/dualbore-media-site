@@ -19,6 +19,16 @@ export function createVideoStore({databaseUrl=process.env.DATABASE_URL,Pool=pg.P
    await pool.query("INSERT INTO public_video_sync_runs (attempted_at,updated,reason,item_count) VALUES ($1,$2,$3,$4)",
     [time,updated,reason,count]);
   },
+  async status(){
+   try{
+    const [runs,snapshots]=await Promise.all([
+     pool.query('SELECT attempted_at, updated, reason, item_count FROM public_video_sync_runs ORDER BY attempted_at DESC LIMIT 1'),
+     pool.query("SELECT updated_at, jsonb_array_length(payload->'items') AS item_count FROM public_video_snapshots WHERE id = $1",['latest'])
+    ]);
+    const last=runs.rows[0],good=snapshots.rows[0];
+    return {lastAttemptAt:last?.attempted_at||null,updated:last?.updated===true,reason:last?.reason||'not_run',itemCount:last?.item_count||0,lastGoodAt:good?.updated_at||null,savedItemCount:good?.item_count||0};
+   }catch{return null;}
+  },
   async close(){await pool.end();}
  };
 }
