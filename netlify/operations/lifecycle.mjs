@@ -24,7 +24,8 @@ export function lifecycleTemplate(order, type, shipment) {
 export function enqueueLifecycle(state,order,type,{shipment,eventKey,env={},now=new Date().toISOString()}={}) {
   if(['packing','ready_to_ship'].includes(type)&&env.CUSTOMER_PROGRESS_EMAILS!=='true')return false;
   const id=`${order.id}:lifecycle-${type}:${eventKey || shipment?.id || 'order'}:v1`;
-  if(state.emails[id]) return false;
-  state.emails[id]={id,orderId:order.id,emailType:`lifecycle-${type}:${eventKey || shipment?.id || 'order'}`,provider:'resend',status:'pending',attemptCount:0,createdAt:now,template:lifecycleTemplate(order,type,shipment)};
+  const emailType=shipment?.id?`lifecycle-${type}:${shipment.id}`:`lifecycle-${type}`;
+  if(state.emails[id]||Object.values(state.emails).some(event=>event.orderId===order.id&&event.emailType===emailType)) return false;
+  state.emails[id]={id,orderId:order.id,emailType,provider:'resend',status:'pending',attemptCount:0,createdAt:now,template:lifecycleTemplate(order,type,shipment)};
   return true;
 }
