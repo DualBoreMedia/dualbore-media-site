@@ -6,6 +6,7 @@ import {operationsRuntime} from './runtime.mjs';
 import {CommerceError} from '../commerce/service.mjs';
 import {readBounded} from '../commerce/http.mjs';
 import {createStaffManagement} from './staff-management.mjs';
+import {createVideoStore} from '../media/video-database.mjs';
 import {observeHttp,reportUnexpected,requestContext} from '../observability/index.mjs';
 import {serverErrorReporter} from '../observability/server.mjs';
 const headers={'Cache-Control':'no-store','Vary':'Authorization, Cookie','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"};
@@ -32,7 +33,15 @@ async function operationsHandler(request,{env,runtime,auth,clientIp,clerkClient,
   if(!await consumeLimit(r.repository,principal.userId,request.method==='POST'?'write':'read',{limit:request.method==='POST'?30:90}))return json({error:'Too many requests. Try again shortly.'},429);
   const service=createOperationsService({repository:r.repository,stripe:r.stripe,env});
   if(request.method==='GET'&&url.searchParams.get('staffManagement')==='true')return json(await createStaffManagement({repository:r.repository,env,client:clerkClient}).read(principal,{search:url.searchParams.get('search')||'',page:url.searchParams.get('page')||1}));
-  if(request.method==='GET')return json(await service.read(principal,{admin,staff,...Object.fromEntries([...url.searchParams].filter(([key])=>['orderNumber','search','page','status','fulfillmentStatus','customer','dateFrom','dateTo','sort','shipmentStatus'].includes(key)))}));
+  if(request.method==='GET'){
+    const data=await service.read(principal,{admin,staff,...Object.fromEntries([...url.searchParams].filter(([key])=>['orderNumber','search','page','status','fulfillmentStatus','customer','dateFrom','dateTo','sort','shipmentStatus'].includes(key)))});
+    if(admin){
+      const store=createVideoStore({databaseUrl:env.DATABASE_URL});
+      try{data.publicVideoSync=store?await store.status():null;}
+      finally{if(store)try{await store.close();}catch{}}
+    }
+    return json(data);
+   }
   if(request.headers.get('Content-Type')?.split(';')[0]!=='application/json')return json({error:'Use JSON.'},415);
   let input;try{input=JSON.parse((await readBounded(request,16384)).toString('utf8'));}catch{return json({error:'Check the information and try again.'},400);}
   if(typeof input?.action==='string'&&input.action.startsWith('staff-'))return json(await createStaffManagement({repository:r.repository,env,client:clerkClient}).mutate(principal,input));
