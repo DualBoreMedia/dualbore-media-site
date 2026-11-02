@@ -43,3 +43,12 @@ export function validateProductListings(items,{phase='preview'}={}){
  return items;
 }
 export const productIsSaleReady=p=>productListingIssues(p,{phase:'publish'}).length===0;
+
+// A released apparel product is sellable only for an approved size and exact approved price.
+// Other categories need their own variant/fulfillment implementation, not a fake S-2XL SKU.
+export function productionVariantIsApproved(variant,products){
+ const p=products.find(item=>item.id===variant?.productId);
+ return Boolean(p&&productIsSaleReady(p)&&apparel(p.category)
+  &&p.sizes.includes(variant.size)
+  &&variant.productionPriceCents===p.salePriceCents);
+}

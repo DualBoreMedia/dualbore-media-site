@@ -1,7 +1,6 @@
 import {inventoryPolicy,madeToOrder,publicAvailableQuantity} from './inventory.mjs';
 import {merch} from '../../src/content.js';
-import {productIsSaleReady} from '../../src/commerce/product-requirements.js';
-const saleReadyIds=new Set(merch.filter(productIsSaleReady).map(p=>p.id));
+import {productionVariantIsApproved} from '../../src/commerce/product-requirements.js';
 import {commerceRuntime,loopback,hostedEnvironment} from './runtime.mjs';
 import {CommerceError} from './service.mjs';
 import {operationLog} from '../operations/log.mjs';
@@ -39,7 +38,7 @@ async function commerceHandler(request,{env,runtime,clientIp,reporter}){
   if(route==='catalog'){
    if(request.method!=='GET')return json({error:'Use GET.'},405);
    if(!live||env.PAYMENTS_ENABLED!=='true'||env.LIVE_CATALOG_APPROVED!=='true')return json({enabled:false,variants:[]});
-   const variants=await r.repository.transaction(s=>Object.values(s.variants).filter(v=>saleReadyIds.has(v.productId)&&v.active&&v.liveStripePriceId&&Number.isSafeInteger(v.productionPriceCents)&&v.productionPriceCents>0).map(v=>({id:v.id,productId:v.productId,name:v.name,size:v.size,sku:v.sku,unitAmount:v.productionPriceCents,inventoryPolicy:inventoryPolicy(v),availableQuantity:publicAvailableQuantity(v),available:madeToOrder(v)||v.availableQuantity>0})));
+   const variants=await r.repository.transaction(s=>Object.values(s.variants).filter(v=>productionVariantIsApproved(v,merch)&&v.active&&v.liveStripePriceId&&Number.isSafeInteger(v.productionPriceCents)&&v.productionPriceCents>0).map(v=>({id:v.id,productId:v.productId,name:v.name,size:v.size,sku:v.sku,unitAmount:v.productionPriceCents,inventoryPolicy:inventoryPolicy(v),availableQuantity:publicAvailableQuantity(v),available:madeToOrder(v)||v.availableQuantity>0})));
    return json({enabled:true,mode:'production',shippingCents:Number(env.SHIPPING_RATE_CENTS),variants});
   }
   if(route==='webhook'){
