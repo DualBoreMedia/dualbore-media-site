@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {loadYouTubeVault,formatYouTubeDuration,categoryForUpload} from '../netlify/media/youtube.mjs';
-import videoVault,{config as vaultConfig} from '../netlify/functions/video-vault.mjs';
+import videoVault,{config as vaultConfig,resolvePublicVideoVault} from '../netlify/functions/video-vault.mjs';
+import {readVideoSnapshot,writeVideoSnapshot} from '../netlify/media/video-cache.mjs';
+import {runDailyVideoSync,config as scheduleConfig} from '../netlify/functions/daily-video-sync.mjs';
 
 const channelId='UC'+'A'.repeat(22),uploadsId='UU'+'A'.repeat(22),id='aB0_9-hT3YQ';
 function fixtureFetcher({status=200,invalid=false}={}){
@@ -61,4 +63,32 @@ test('public video endpoint never reveals provider credentials and does not acce
   const head=await videoVault(new Request('https://dualboremedia.com/api/video-vault',{method:'HEAD'}));
   assert.equal(head.status,200);assert.equal(await head.text(),'');
  }finally{if(original===undefined)delete process.env.YOUTUBE_API_KEY;else process.env.YOUTUBE_API_KEY=original;}
+});
+
+function fakeCache(){
+ const data=new Map();
+ return {open:async()=>({
+  match:async key=>data.get(key.url)?.clone(),
+  put:async(key,response)=>{data.set(key.url,response.clone());}
+ })};
+}
+test('a successful scheduled upload snapshot survives later provider outages',async()=>{
+ assert.equal(scheduleConfig.schedule,'0 10 * * *');
+ const storage=fakeCache(),ok=fixtureFetcher();
+ const saved=await runDailyVideoSync({enabled:'true',apiKey:'synthetic-key',fetcher:ok.fetcher,cacheApi:storage});
+ assert.equal(saved.updated,true);assert.equal(saved.count,1);
+ const previous=await readVideoSnapshot(storage);assert.equal(previous.items[0].title,'New N54 Test Episode');
+ const unavailable=await runDailyVideoSync({enabled:'true',apiKey:'synthetic-key',fetcher:fixtureFetcher({status:503}).fetcher,cacheApi:storage});
+ assert.equal(unavailable.updated,false);assert.deepEqual(await readVideoSnapshot(storage),previous);
+ const noNetwork=async()=>{throw Error('must not fetch when cache exists');};
+ const displayed=await resolvePublicVideoVault({enabled:'true',apiKey:'synthetic-key',fetcher:noNetwork,cacheApi:storage});
+ assert.deepEqual(displayed,previous);
+});
+test('scheduled YouTube sync is disabled by default and never caches fallback fixtures',async()=>{
+ const storage=fakeCache();
+ const result=await runDailyVideoSync({enabled:'false',apiKey:'synthetic-key',fetcher:async()=>{throw Error('unexpected request');},cacheApi:storage});
+ assert.equal(result.updated,false);assert.equal(await readVideoSnapshot(storage),null);
+ const fallback=await resolvePublicVideoVault({enabled:'false',apiKey:'synthetic-key',fetcher:async()=>{throw Error('unexpected request');},cacheApi:storage});
+ assert.equal(fallback.source,'curated');
+ assert.equal(await writeVideoSnapshot(fallback,storage),false);
 });
