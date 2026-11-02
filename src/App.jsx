@@ -6,6 +6,7 @@ import { Waitlist } from './Waitlist.jsx';
 import {GarageStories,RelatedEpisodes,ProductReleaseDetails,CrewPrinciples,PublicFooter} from './Editorial.jsx';
 import { testCommerceEnabled, useTestCart } from './commerce/Commerce.jsx';
 import { CartDrawer, ProductOptions, RetailMerch } from './commerce/Storefront.jsx';
+import {ShopEmpty,ShopFilters,useShopDiscovery} from './commerce/ShopFilters.jsx';
 import { StoreFooter, StorePage, readPage, policyPages } from './commerce/Pages.jsx';
 import { channel, views, filters, projects, films, merch, previewSizes, madeToOrder } from './content';
 
@@ -39,6 +40,7 @@ export function App() {
   const buildEnvironment=import.meta.env;
   const staffOnly=buildEnvironment.VITE_AUTH_ACCESS_MODE==='staff-only';
   const cart = useTestCart();
+  const merchShop = useShopDiscovery(merch);
   const [cartOpen,setCartOpen]=useState(false);
   const [page,setPage]=useState(()=>{const p=readPage();return testCommerceEnabled||p&&!p.startsWith('order/')?p:null;});
   const [view, setView] = useState(readView);
@@ -181,7 +183,9 @@ export function App() {
         {testCommerceEnabled ? <RetailMerch cart={cart} onAdded={notify} onReview={openCart} onDetails={item=>openModal({type:'merch',item})} onAlert={()=>openModal({type:'alert'})}/> : <>
         <SectionTitle eyebrow="Drop 01 / Apparel preview" title="Garage bred." accent="Ride inspired."><p>The machines that bring us together. The first DualBore designs, made for life beyond the screen.</p><button className="button" onClick={event => openModal({type: 'alert'}, event.currentTarget)}><FaYoutube aria-hidden="true" /> Release updates</button></SectionTitle>
         <div className="drop-banner"><span className="pulse-dot" /><strong>Drop 01 Preview</strong><span>Coming soon · Orders aren’t open yet.</span></div>
-        <div className="merch-grid">{merch.map((item, index) => <article className="merch-card" key={item.id}><button className="merch-image" onClick={event => openModal({type:'merch', item}, event.currentTarget)} aria-label={`Quick View ${item.name}`}><span className="merch-art-window"><img src={item.image.replace('.jpg', '-768.jpg')} srcSet={merchSources(item)} sizes="(max-width: 700px) 90vw, 420px" alt={`${item.name} supplied mockup`} width="1290" height="2796" loading="lazy" decoding="async" /></span><span className="drop-badge">DBM / 0{index + 1}</span><span className="quick-view-label">Quick View <FaArrowUpRightFromSquare aria-hidden="true" /></span></button><div className="card-copy"><span className="eyebrow">{item.type}</span><h3>{item.name}</h3><p className="product-subtitle">{item.detail}</p><div className="merch-preview-price"><strong>${item.previewPrice}</strong><span>USD / Planned release price</span></div><p className="merch-size-plan">Planned sizes <span>S / M / L / XL / 2XL</span></p><div className="merch-card-footer"><span className="coming">Coming soon</span><MerchAction item={item} className="text-link" onTest={()=>openModal({type:'merch',item})} onAction={(item, trigger) => openModal({type: 'merch', item}, trigger)} /></div></div></article>)}</div>
+        <ShopFilters shop={merchShop}/>
+        {!merchShop.results.length&&<ShopEmpty shop={merchShop}/>}
+        <div className="merch-grid">{merchShop.results.map(item => {const index=merch.findIndex(product=>product.id===item.id);return <article className="merch-card" key={item.id}><button className="merch-image" onClick={event => openModal({type:'merch', item}, event.currentTarget)} aria-label={`Quick View ${item.name}`}><span className="merch-art-window"><img src={item.image.replace('.jpg', '-768.jpg')} srcSet={merchSources(item)} sizes="(max-width: 700px) 90vw, 420px" alt={`${item.name} supplied mockup`} width="1290" height="2796" loading="lazy" decoding="async" /></span><span className="drop-badge">DBM / 0{index + 1}</span><span className="quick-view-label">Quick View <FaArrowUpRightFromSquare aria-hidden="true" /></span></button><div className="card-copy"><span className="eyebrow">{item.type}</span><h3>{item.name}</h3><p className="product-subtitle">{item.detail}</p><div className="merch-preview-price"><strong>${item.previewPrice}</strong><span>USD / Planned release price</span></div><p className="merch-size-plan">Planned sizes <span>S / M / L / XL / 2XL</span></p><div className="merch-card-footer"><span className="coming">Coming soon</span><MerchAction item={item} className="text-link" onTest={()=>openModal({type:'merch',item})} onAction={(item, trigger) => openModal({type: 'merch', item}, trigger)} /></div></div></article>;})}</div>
         <p className="shop-note">Original artwork. Planned sizes S through 2XL. Fit guidance and garment details will be shared before orders open.</p>
         </>}
       </section>

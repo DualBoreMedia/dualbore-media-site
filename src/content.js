@@ -49,9 +49,9 @@ export const films = [
 ];
 
 export const merch = [
-  { id: 'e92-tee', name: 'E92 Coupe Line-Art Tee', detail: 'E92 coupe · Line-art study', image: '/assets/IMG_5076.jpg', type: 'Graphic tee', previewPrice: 30, notes: 'A three-quarter coupe outline with the Dual Bore Media wordmark. A clean line-art tribute to the coupe, shown here on the original black-garment design mockup.' },
-  { id: 'e90-crewneck', name: 'E90 Sedan Front-Clip Crewneck', detail: 'E90 sedan · Front elevation', image: '/assets/IMG_5077.jpg', type: 'Crewneck', previewPrice: 50, notes: 'A front-facing E90 illustration centered above the DualBore Media wordmark. Headlights, grille, and body lines carry the design.' },
-  { id: 'sv1000s-silhouette', name: 'SV1000S Silhouette Crewneck', detail: 'SV1000S · Side profile', image: '/assets/IMG_5078.jpg', type: 'Crewneck', previewPrice: 50, notes: 'A high-contrast side-profile silhouette of the SV1000S with the DualBore Media wordmark below. For the days when the V-twin stays in the garage.' },
+  { id: 'e92-tee', name: 'E92 Coupe Line-Art Tee', detail: 'E92 coupe · Line-art study', image: '/assets/IMG_5076.jpg', type: 'Graphic tee', category: 'tees', audience: 'unspecified', previewPrice: 30, notes: 'A three-quarter coupe outline with the Dual Bore Media wordmark. A clean line-art tribute to the coupe, shown here on the original black-garment design mockup.' },
+  { id: 'e90-crewneck', name: 'E90 Sedan Front-Clip Crewneck', detail: 'E90 sedan · Front elevation', image: '/assets/IMG_5077.jpg', type: 'Crewneck', category: 'crewnecks', audience: 'unspecified', previewPrice: 50, notes: 'A front-facing E90 illustration centered above the DualBore Media wordmark. Headlights, grille, and body lines carry the design.' },
+  { id: 'sv1000s-silhouette', name: 'SV1000S Silhouette Crewneck', detail: 'SV1000S · Side profile', image: '/assets/IMG_5078.jpg', type: 'Crewneck', category: 'crewnecks', audience: 'unspecified', previewPrice: 50, notes: 'A high-contrast side-profile silhouette of the SV1000S with the DualBore Media wordmark below. For the days when the V-twin stays in the garage.' },
 ];
 export const previewSizes = ['S', 'M', 'L', 'XL', '2XL'];
 export const madeToOrder = {
