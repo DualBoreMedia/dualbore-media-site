@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import {afterEach,beforeEach,expect,test,vi} from 'vitest';
 import {page} from 'vitest/browser';
 import OperationsApp from '../../src/operations/OperationsApp.jsx';
+import StaffApp from '../../src/operations/StaffApp.jsx';
 import '../../src/styles.css';
 
 let root,host;
@@ -200,4 +201,28 @@ test('support requests can be reopened and the empty inventory view remains usab
  root.render(<OperationsApp admin auth={f.auth}/>);await page.getByRole('button',{name:'Inventory',exact:true}).click();await expect.element(page.getByRole('heading',{name:'No inventory configured'})).toBeVisible();
  await page.getByRole('button',{name:'Support',exact:true}).click();await page.getByLabelText('Internal resolution note').fill('Synthetic review reopened');await page.getByRole('button',{name:'Reopen request'}).click();
  await expect.poll(()=>posted(f,'support-status')).toMatchObject({status:'open',expectedVersion:0});
+});
+
+test('Admin refresh rereads the current dashboard without posting or changing its view',async()=>{
+ const f=fixture();root.render(<OperationsApp admin auth={f.auth}/>);
+ await expect.element(page.getByRole('button',{name:'Refresh dashboard'})).toBeVisible();
+ await expect.element(page.getByText(/^Checked /)).toBeVisible();
+ await page.getByRole('button',{name:'Inventory',exact:true}).click();
+ const readsBefore=f.fetcher.mock.calls.filter(([,options])=>options.method==='GET').length;
+ await page.getByRole('button',{name:'Refresh dashboard'}).click();
+ await expect.poll(()=>f.fetcher.mock.calls.filter(([,options])=>options.method==='GET').length).toBe(readsBefore+1);
+ await expect.element(page.getByRole('heading',{name:'Inventory'})).toBeVisible();
+ expect(f.posts).toHaveLength(0);
+});
+
+test('Staff queue refresh rereads orders without performing a fulfillment write',async()=>{
+ const f=fixture();f.data.role='employee';root.render(<StaffApp auth={f.auth}/>);
+ await expect.element(page.getByRole('heading',{name:'Fulfillment workspace'})).toBeVisible();
+ await expect.element(page.getByRole('button',{name:'Refresh queue'})).toBeVisible();
+ await expect.element(page.getByText(/^Checked /)).toBeVisible();
+ const readsBefore=f.fetcher.mock.calls.filter(([,options])=>options.method==='GET').length;
+ await page.getByRole('button',{name:'Refresh queue'}).click();
+ await expect.poll(()=>f.fetcher.mock.calls.filter(([,options])=>options.method==='GET').length).toBe(readsBefore+1);
+ await expect.element(page.getByRole('heading',{name:'Orders',exact:true})).toBeVisible();
+ expect(f.posts).toHaveLength(0);
 });
