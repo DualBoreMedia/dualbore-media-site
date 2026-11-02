@@ -31,8 +31,8 @@ export default function OperationsApp({admin=false,auth={}}){
    const controls=[...inspector.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]')].filter(el=>el.getClientRects().length);
    if(!controls.length)return;
    const first=controls[0],last=controls.at(-1);
-   if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
-   else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+   if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();return;}
+   if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
   };
   document.addEventListener('keydown',onKey);
   return()=>{document.body.style.overflow=oldOverflow;document.removeEventListener('keydown',onKey);};
