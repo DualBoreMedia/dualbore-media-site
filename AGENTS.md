@@ -20,6 +20,12 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### MX Bikes setup shop foundation, November 2, 2026
+
+- The owner requested an MX Bikes OEM setup storefront: $1 track-specific per bike+track, $2 general motocross or supercross per bike. Actual setup files and supported bike inventory are pending. Never fabricate downloadable inventory, paid order success, compatibility or setup screenshots.
+- Initial work adds a /setups catalog and fail-closed manifest preparation only. Preserve the four existing home tabs and all commerce/auth/coverage gates; no activation, main merge, preview or Netlify deployment is authorized. Separate file upload, secure entitlement delivery, tax/legal review and real testing remain required before digital sales.
+
+
 ### Channel header and navigation refinement, November 2, 2026
 
 - Preserve the existing working Garage-home button and real `/assets/channel-logo.jpg` avatar; refine it as a circular 42px badge with subtle bezel/red hover and keyboard-focus treatment, not a duplicate header link or generated logo.
