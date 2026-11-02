@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {loadYouTubeVault,formatYouTubeDuration,categoryForUpload} from '../netlify/media/youtube.mjs';
+import videoVault,{config as vaultConfig} from '../netlify/functions/video-vault.mjs';
 
 const channelId='UC'+'A'.repeat(22),uploadsId='UU'+'A'.repeat(22),id='aB0_9-hT3YQ';
 function fixtureFetcher({status=200,invalid=false}={}){
@@ -42,4 +43,22 @@ test('provider failure, absent key and mismatched channel never erase curated co
   assert.equal(result.source,'curated');assert.equal(result.items.length,5);
   assert.equal(JSON.stringify(result).includes('synthetic-key'),false);
  }
+});
+
+test('public video endpoint never reveals provider credentials and does not accept writes',async()=>{
+ const original=process.env.YOUTUBE_API_KEY;delete process.env.YOUTUBE_API_KEY;
+ try{
+  assert.equal(vaultConfig.path,'/api/video-vault');
+  const get=await videoVault(new Request('https://dualboremedia.com/api/video-vault'));
+  assert.equal(get.status,200);
+  const body=await get.json();
+  assert.equal(body.source,'curated');
+  assert.equal(body.items.length,5);
+  assert.equal(get.headers.get('X-Content-Type-Options'),'nosniff');
+  assert.ok(get.headers.get('Netlify-CDN-Cache-Control').includes('max-age=180'));
+  const blocked=await videoVault(new Request('https://dualboremedia.com/api/video-vault',{method:'POST'}));
+  assert.equal(blocked.status,405);
+  const head=await videoVault(new Request('https://dualboremedia.com/api/video-vault',{method:'HEAD'}));
+  assert.equal(head.status,200);assert.equal(await head.text(),'');
+ }finally{if(original===undefined)delete process.env.YOUTUBE_API_KEY;else process.env.YOUTUBE_API_KEY=original;}
 });

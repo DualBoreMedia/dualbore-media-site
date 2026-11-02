@@ -94,7 +94,7 @@ export function App() {
   },[]);
   useEffect(()=>{
     const controller=new AbortController();
-    fetch('/api/video-vault',{signal:controller.signal,cache:'no-store'})
+    fetch('/api/video-vault',{signal:controller.signal})
       .then(response=>response.ok?response.json():null)
       .then(data=>{if(!controller.signal.aborted&&Array.isArray(data?.items)&&data.items.length>0&&data.items.length<=50&&data.items.every(film=>/^[A-Za-z0-9_-]{11}$/.test(film?.id)&&typeof film.title==='string'&&typeof film.image==='string'&&/^https:\/\/i\.ytimg\.com\/vi\/[A-Za-z0-9_-]{11}\/hqdefault\.jpg$/.test(film.image)))setVaultFilms(data.items);})
       .catch(()=>{});

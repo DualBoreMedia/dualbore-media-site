@@ -31,7 +31,9 @@ function usePageMetadata(title,description,canonical,notFound=false){
   update('meta[property="og:title"]','content',title);
   update('meta[property="og:description"]','content',description);
   update('meta[property="og:url"]','content',canonical);
-  update('link[rel="canonical"]','href',canonical);
+  let canonicalLink=document.head.querySelector('link[rel="canonical"]');
+  if(!canonicalLink){canonicalLink=document.createElement('link');canonicalLink.rel='canonical';document.head.append(canonicalLink);}
+  canonicalLink.href=canonical;
   if(notFound){const meta=document.createElement('meta');meta.name='robots';meta.content='noindex';document.head.append(meta);return()=>meta.remove();}
  },[title,description,canonical,notFound]);
 }

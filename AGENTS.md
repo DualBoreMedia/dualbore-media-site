@@ -20,6 +20,14 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Public-first channel content, November 1–2, 2026
+
+- The YouTube channel is the primary product. Focus on a current Video Vault, individual public build and video URLs, factual project episode logs, and genuine owner-shot garment photos. Do not fabricate build milestones or create AI garment mockups.
+- Prefer safe content synchronization and low-maintenance workflows over new customer accounts, blogs, chat, points, duplicated checkout or a second store. The existing checkout/accounts/email integrations remain gated and closed; do not delete their tested code.
+- Public content is independently useful, but it does not override the controlling no-production-deployment instruction. A live YouTube API key, scheduled function or persistent store needs explicit provider configuration/billing review and real testing.
+- Preserve the original curated five videos whenever the YouTube API is unavailable. Newly synced video pages may lack server-generated social metadata until separately implemented and verified; do not claim otherwise.
+
+
 ### Phase 3 Admin blockers, November 1, 2026
 
 - Continue from 8dc19f3 on the existing development branch. Prioritize redacted provider/database/monitoring remediation and targeted reproduced public/Admin UI fixes, not new features or redesigns.
