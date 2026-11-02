@@ -16,7 +16,7 @@ export function RelatedEpisodes({film,onPlay,onProject,episodes=films}){
 }
 
 export function ProductReleaseDetails({item}){
- return <section className="product-release-details" aria-label="Drop 01 release details"><div className="preview-price"><strong>${item.previewPrice}</strong><span>USD / Planned release price</span></div><p>Made to order, with the design applied and each package prepared by DualBore Media. This is an artwork preview; orders are not open yet.</p><h3>Planned sizes</h3><div className="planned-sizes" aria-label="Planned sizes, not available to order">{previewSizes.map(size=><span key={size}>{size}</span>)}</div><p className="fine-print">Fit guidance, garment details and shipping information will be available before ordering opens. No size or stock is reserved by viewing this preview.</p></section>;
+ return <section className="product-release-details" aria-label="Drop 01 release details"><div className="preview-price"><strong>${item.previewPrice}</strong><span>USD / Planned release price</span></div><p>This is an artwork preview; orders are not open yet. Processing, fulfillment and product details must be approved before sale.</p>{item.testVariantsEnabled&&<><h3>Planned sizes</h3><div className="planned-sizes" aria-label="Planned sizes, not available to order">{previewSizes.map(size=><span key={size}>{size}</span>)}</div></>}<p className="fine-print">Fit guidance, specifications and shipping information will be available before ordering opens. No size or stock is reserved by viewing this preview.</p></section>;
 }
 
 export function CrewPrinciples(){
