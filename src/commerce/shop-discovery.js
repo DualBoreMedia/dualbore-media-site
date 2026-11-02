@@ -31,7 +31,11 @@ export function filterShopProducts(products,{query='',category='all',audience='a
     const keywords=product.category==='tees'?'t-shirt tshirt t shirt shirts tee tees'
       :product.category==='crewnecks'?'crewneck sweatshirt sweatshirts sweater pullover':'';
     const index=normalized([product.name,product.detail,product.type,product.notes,product.id,keywords].join(' '));
-    return terms.every(term=>index.includes(term));
+    // Explicit garment-type terms must not substring-match a different garment.
+    // For example "tshirt" is a substring of "sweatshirt".
+    const exactTypes={'tshirt':'tees','t-shirt':'tees','sweatshirt':'crewnecks','sweatshirts':'crewnecks'};
+    return terms.every(term=>Object.hasOwn(exactTypes,term)
+      ?product.category===exactTypes[term]:index.includes(term));
   });
   if(sort==='price-low'||sort==='price-high'){
     const direction=sort==='price-low'?1:-1;
