@@ -8,7 +8,7 @@ export function attentionQueue(failures){
   const key=[f.type,f.status,f.orderNumber||f.eventId||index].join(':');
   const existing=groups.get(key);
   if(existing){existing.count++;continue;}
-  const priority=['refund_required','cancel_refund_due'].includes(f.status)||f.type==='refund'?0:['webhook','reservation','shipment','inventory','account','account_deletion'].includes(f.type)||f.status==='failed'||f.status==='manual-review'?1:f.status==='queued'?3:2;
+  const priority=['refund_required','cancel_refund_due'].includes(f.status)||f.type==='refund'?0:['webhook','invalid_signature','reservation','shipment','inventory','account','account_deletion'].includes(f.type)||f.status==='failed'||f.status==='manual-review'?1:f.status==='queued'?3:2;
   groups.set(key,{...f,key,count:1,priority});
  }
  return [...groups.values()].sort((a,b)=>a.priority-b.priority);
