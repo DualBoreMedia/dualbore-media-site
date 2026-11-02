@@ -14,16 +14,19 @@ const cookie=(name,value,env,age)=>`${name}=${value}; Path=/; HttpOnly; SameSite
 const statePrefix=env=>new URL(env.SITE_ORIGIN).protocol==='https:'?'__Host-dbm-oauth-':'dbm-local-oauth-';
 const stateCookie=(env,state)=>statePrefix(env)+createHash('sha256').update(state).digest('hex').slice(0,24);
 export function safeAuthDestination(value,fallback='/account'){
- try{const url=new URL(value,'https://return.invalid');if(url.origin!=='https://return.invalid'||!['/account','/staff','/admin'].includes(url.pathname)||url.hash||[...url.searchParams].some(([key,v])=>key!=='view'||!['overview','orders','inventory','activity','support','employees','shipments','profile','help'].includes(v))||url.searchParams.getAll('view').length>1)return fallback;return url.pathname+url.search;}catch{return fallback;}
+ try{const url=new URL(value,'https://return.invalid');if(url.origin!=='https://return.invalid'||!['/account','/staff','/admin'].includes(url.pathname)||url.hash||[...url.searchParams].some(([key,v])=>key!=='view'||!['overview','orders','products','inventory','activity','support','employees','shipments','profile','help'].includes(v))||url.searchParams.getAll('view').length>1)return fallback;return url.pathname+url.search;}catch{return fallback;}
 }
 const redirect=(url,cookies=[])=>{const headers=new Headers(security);headers.set('Location',url);for(const value of cookies)headers.append('Set-Cookie',value);return new Response(null,{status:303,headers});};
-async function limit(repository,key,now){const id=createHash('sha256').update('workos:'+key).digest('hex');return repository.transaction(s=>{for(const[k,v]of Object.entries(s.limits))if(v.expiresAt<=now)delete s.limits[k];const row=s.limits[id]??={id,count:0,expiresAt:now+60000};return ++row.count<=20;});}
+async function limit(repository,key,now){const id=createHash('sha256').update('workos:'+key).digest('hex');if(typeof repository.consumeRateLimit==='function')return repository.consumeRateLimit(id,{limit:20,windowMs:60000,now});return repository.transaction(s=>{for(const[k,v]of Object.entries(s.limits))if(v.expiresAt<=now)delete s.limits[k];const row=s.limits[id]??={id,count:0,expiresAt:now+60000};return ++row.count<=20;});}
 async function handleWorkos(request,{env=process.env,client,repository,clientIp='unavailable',now=Date.now(),reporter,log}={}){
  let callback=false,callbackCookie,returnTo='/account';
  try{
   if(env.AUTH_PROVIDER!=='workos')return json({error:'Secure sign-in is unavailable.'},503);
   const config=workosConfig(env),url=new URL(request.url),action=url.pathname.split('/').at(-1);
   if(url.origin!==config.origin||request.headers.has('Origin')&&request.headers.get('Origin')!==config.origin||request.method==='POST'&&request.headers.get('Origin')!==config.origin)return json({error:'Request origin rejected.'},403);
+  const methods={'sign-in':'GET',callback:'GET',session:'GET',refresh:'POST',logout:'POST'};
+  if(!Object.hasOwn(methods,action)||url.pathname!=='/api/auth/'+action)return json({error:'Not found.'},404);
+  if(request.method!==methods[action])return new Response(null,{status:405,headers:{...security,Allow:methods[action]}});
   callback=request.method==='GET'&&action==='callback';
   if(env.AUTH_ACCESS_MODE==='staff-only'&&action==='sign-in'&&(url.searchParams.get('staff')!=='1'||url.searchParams.has('signup')))return json({error:'Customer accounts are not open yet.',code:'accounts_closed'},403);
   repository||=repositoryFor(env);if(!await limit(repository,clientIp,now))return json({error:'Too many attempts. Try again shortly.'},429);

@@ -50,6 +50,7 @@ export async function runMigrations(pool, directory = migrationDirectory) {
 }
 
 const schemas = {
+  products: ['managed_products', 'id', {id:'id'}],
   supportTickets: ['support_tickets', 'id', {id:'id'}],
   marketingContacts: ['marketing_contacts', 'id', {id:'id'}],
   marketingEvents: ['marketing_events', 'id', {id:'id'}],
@@ -105,7 +106,7 @@ async function upsert(client, table, primaryKey, fields, object) {
 }
 
 async function persist(client, state) {
-  const sequence=['variants','orders','events','reservations','emails','profiles','shipments','shipmentItems','trackingEvents','audit','refundRequests','limits','supportTickets','marketingContacts','marketingEvents'];
+  const sequence=['products','variants','orders','events','reservations','emails','profiles','shipments','shipmentItems','trackingEvents','audit','refundRequests','limits','supportTickets','marketingContacts','marketingEvents'];
   const auditIds=(await client.query('SELECT id FROM audit_events')).rows.map(row=>row.id);
   if(auditIds.some(id=>!state.audit[id])) throw new Error('Audit history is immutable.');
   for (const key of sequence) {
@@ -123,7 +124,7 @@ async function persist(client, state) {
       await client.query('INSERT INTO order_items (id, order_id, position, variant_id, sku_snapshot, product_name_snapshot, size_snapshot, quantity, unit_price_cents, line_total_cents, data) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)', [`${order.id}:${position}`, order.id, position, item.variantId, item.sku, item.name, item.size, item.quantity, item.unitPriceCents, item.lineTotalCents, JSON.stringify(item)]);
     }
   }
-  for (const key of ['marketingEvents','marketingContacts','supportTickets','limits', 'refundRequests', 'trackingEvents', 'shipmentItems', 'shipments', 'profiles', 'emails', 'reservations', 'events', 'orders', 'variants']) {
+  for (const key of ['products','marketingEvents','marketingContacts','supportTickets','limits', 'refundRequests', 'trackingEvents', 'shipmentItems', 'shipments', 'profiles', 'emails', 'reservations', 'events', 'orders', 'variants']) {
     const [table, primaryKey] = schemas[key];
     await client.query(`DELETE FROM ${table} WHERE NOT (${primaryKey} = ANY($1::text[]))`, [Object.keys(state[key])]);
   }
@@ -132,6 +133,31 @@ async function persist(client, state) {
 export function createPostgresRepository(pool) {
   protectPool(pool);
   return {
+    async readPublishedProducts() {
+      const client=await pool.connect();
+      try{return (await client.query("SELECT data FROM managed_products WHERE data->'published' IS NOT NULL ORDER BY id LIMIT 1000")).rows.map(r=>typeof r.data==='string'?JSON.parse(r.data):r.data);}
+      finally{client.release();}
+    },
+    async consumeRateLimit(id, {limit,windowMs,now}) {
+      if(typeof id!=='string'||id.length>160||!Number.isSafeInteger(limit)||limit<1||!Number.isSafeInteger(windowMs)||windowMs<1||!Number.isSafeInteger(now)||now<0)throw new Error('Invalid rate limit configuration.');
+      const client=await pool.connect();
+      try {
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        // The same lock coordinates with full-state writes which also own limits.
+        await client.query(lockSql);
+        const previous=(await client.query('SELECT data FROM request_limits WHERE id = $1',[id])).rows[0]?.data;
+        const stored=typeof previous==='string'?JSON.parse(previous):previous;
+        const reset=!stored||stored.expiresAt<=now;
+        const row=reset?{id,count:0,expiresAt:now+windowMs}:stored;
+        if(row.count>=limit){await client.query('COMMIT');return false;}
+        row.count++;
+        await client.query('INSERT INTO request_limits (id, data) VALUES ($1,$2) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data',[id,JSON.stringify(row)]);
+        // Retain expiry cleanup (including expired OAuth replay markers), but
+        // bound deletion and do it only at a new window, never on a denial.
+        if(reset)await client.query("DELETE FROM request_limits WHERE id IN (SELECT id FROM request_limits WHERE id <> $1 AND (data->>'expiresAt')::numeric <= $2 LIMIT 100)",[id,now]);
+        await client.query('COMMIT');return true;
+      }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+    },
     async transaction(callback) {
       const client = await pool.connect();
       try {

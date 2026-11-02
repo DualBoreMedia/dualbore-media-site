@@ -36,7 +36,9 @@ test('Postgres migrations, normalized persistence, reload, uniqueness and rollba
   const pool = { connect: async () => client };
   try {
     await runMigrations(pool); await runMigrations(pool);
-    assert.equal((await database.query('SELECT count(*)::int AS n FROM commerce_migrations')).rows[0].n, 4);
+    assert.equal((await database.query('SELECT count(*)::int AS n FROM commerce_migrations')).rows[0].n, 6);
+    assert.deepEqual((await database.query('SELECT id FROM public_video_snapshots')).rows,[]);
+    assert.deepEqual((await database.query('SELECT id FROM public_video_sync_runs')).rows,[]);
     const repository = createPostgresRepository(pool);
     await repository.transaction(state => {
       state.variants[variant.id] = structuredClone(variant);

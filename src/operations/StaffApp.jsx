@@ -15,7 +15,14 @@ export default function StaffApp({auth,adminView=false,renderAdmin}){
  const [data,setData]=useState(null),[lastChecked,setLastChecked]=useState(null),[refreshing,setRefreshing]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[query,setQuery]=useState(()=>({page:1,...(new URLSearchParams(window.location.search).get('view')==='shipments'?{shipmentStatus:'packed'}:{})})),[order,setOrder]=useState(null),[slip,setSlip]=useState(null),[employees,setEmployees]=useState(()=>new URLSearchParams(window.location.search).get('view')==='employees');
  const opener=useRef(null),heading=useRef(null);
  const request=useCallback((payload,options={})=>operationsRequest(auth.getToken,payload,{fetcher:auth.fetcher,...options}),[auth.getToken,auth.fetcher]);
- const load=useCallback(async(signal)=>{try{const result=await request(undefined,{staff:true,query,signal});if(!['employee','admin'].includes(result.role))throw Error('This page is unavailable.');setData(result);setLastChecked(new Date());setError('');}catch(e){if(e.name!=='AbortError'){setData(null);setOrder(null);setSlip(null);setError(e.message);}}},[request,query]);
+ // Do not replace current staff queue with late responses from an older filter.
+ const loadGeneration=useRef(0);
+ const load=useCallback(async(signal)=>{const generation=++loadGeneration.current;try{
+  const result=await request(undefined,{staff:true,query,signal});
+  if(signal?.aborted||generation!==loadGeneration.current)return;
+  if(!['employee','admin'].includes(result.role))throw Error('This page is unavailable.');
+  setData(result);setLastChecked(new Date());setError('');
+ }catch(e){if(e.name!=='AbortError'&&!signal?.aborted&&generation===loadGeneration.current){setData(null);setOrder(null);setSlip(null);setError(e.message);}}},[request,query]);
  useEffect(()=>{document.title='Staff | DualBore Media';if(!auth.isSignedIn)return;const controller=new AbortController();load(controller.signal);return()=>controller.abort();},[load,auth.isSignedIn]);
  useLayoutEffect(()=>{if(order)heading.current?.focus();},[order?.orderNumber]);
  const act=async(payload,message)=>{if(busy)return false;setBusy(true);try{await request(payload);await load();if(order){const result=await request(undefined,{staff:true,query:{orderNumber:order.orderNumber}});setOrder(result.orders[0]);}setNotice(message);return true;}catch(e){setError(e.message);setData(null);setOrder(null);setSlip(null);return false;}finally{setBusy(false);}};

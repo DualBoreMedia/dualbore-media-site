@@ -150,3 +150,34 @@ test('channel avatar is the visible, accessible motorsport badge and all tab num
  await brand.click();
  await expect.element(page.getByRole('tab',{name:'01 Garage Builds'})).toHaveAttribute('aria-selected','true');
 });
+
+test('verified upload becomes hero and journal feature, while curated builds remain',async()=>{
+ const video={id:'aB1cD2eF3gH',title:'Synthetic latest ride',image:'https://i.ytimg.com/vi/aB1cD2eF3gH/hqdefault.jpg',category:'V-Twins',label:'CHANNEL UPLOAD',duration:'0:30'};
+ vi.stubGlobal('fetch',vi.fn(async()=>json({source:'youtube',items:[video]})));
+ root.render(<App/>);
+ await vi.waitFor(()=>expect(host.querySelector('.hero-feature-caption strong')?.textContent).toBe('Synthetic latest ride'));
+ expect(host.querySelector('.hero-feature img')?.getAttribute('src')).toBe(video.image);
+ expect(host.querySelectorAll('.journal-card').length).toBe(5);
+ expect(host.querySelector('.journal-card h3')?.textContent).toBe('Synthetic latest ride');
+});
+test('provider failure retains curated hero and makes no live-sync claim',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>{throw Error('synthetic outage')}));
+ root.render(<App/>);
+ await expect.element(page.getByRole('button',{name:/Play Into the hills on the 1977 RD400/})).toBeVisible();
+ expect(host.querySelector('.hero-feature-caption strong')?.textContent).toBe('Into the hills.');
+ expect(host.querySelector('.hero-feature-caption small')?.textContent).toContain('Featured session');
+});
+
+test('admin overview places attention first and opens existing orders from bench lists',async()=>{
+ const order={orderNumber:'DBM-BENCH',status:'paid',paymentStatus:'paid',fulfillmentStatus:'making',createdAt:'2026-11-01T00:00:00Z',totalCents:3000,subtotalCents:3000,shippingCents:0,taxCents:0,items:[],shipments:[],timeline:[],shippingReview:{status:'due_today',dueDate:'2026-11-02'}};
+ vi.stubGlobal('fetch',vi.fn(async url=>url==='/api/auth/session'?json({signedIn:true}):json({role:'admin',orders:[order],variants:[],failures:[],audit:[],overview:{making:1}})));
+ history.replaceState(null,'','/admin');root.render(<WorkosOperations admin/>);
+ await expect.element(page.getByRole('heading',{name:'Needs attention'})).toBeVisible();
+ const attention=host.querySelector('.ops-attention'),daily=host.querySelector('.ops-daily');
+ expect(Boolean(attention.compareDocumentPosition(daily)&Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+ const list=host.querySelector('.ops-bench');expect(list.textContent).toContain('Carrier handoff due or overdue');
+ const opener=list.querySelector('button');opener.click();
+ await expect.element(page.getByRole('heading',{name:'DBM-BENCH'})).toBeVisible();
+ await page.getByRole('button',{name:'Close',exact:true}).click();
+ await vi.waitFor(()=>expect(document.activeElement).toBe(opener));
+});

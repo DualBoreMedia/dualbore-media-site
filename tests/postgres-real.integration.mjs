@@ -2,6 +2,24 @@ import test from 'node:test';import assert from 'node:assert/strict';import pg f
 import{createPostgresRepository,runMigrations}from'../netlify/commerce/repository.mjs';import{seedTestCatalog}from'../netlify/commerce/catalog.mjs';
 import {createCommerceService} from '../netlify/commerce/service.mjs';
 import {randomUUID} from 'node:crypto';
+
+test('real PostgreSQL rate counters are atomic, bounded and independent of order writes',{skip:process.env.DBM_REAL_POSTGRES_TEST!=='true',timeout:30000},async()=>{
+ const url=new URL(process.env.DATABASE_URL);assert.equal(url.hostname,'127.0.0.1');assert.equal(url.pathname,'/dbm_sandbox');
+ const schema='dbm_rate_qa_'+randomBytes(8).toString('hex'),admin=new pg.Pool({connectionString:process.env.DATABASE_URL});let pool;
+ try{
+  await admin.query('CREATE SCHEMA '+schema);pool=new pg.Pool({connectionString:process.env.DATABASE_URL,options:'-c search_path='+schema,max:4});await runMigrations(pool);
+  await pool.query("CREATE FUNCTION reject_order_writes() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Unexpected order write'; END; $$; CREATE TRIGGER no_rate_order_writes BEFORE INSERT OR UPDATE OR DELETE ON order_items FOR EACH STATEMENT EXECUTE FUNCTION reject_order_writes()");
+  const repo=createPostgresRepository(pool),settings={limit:20,windowMs:1000,now:100};
+  const results=await Promise.all(Array.from({length:30},()=>repo.consumeRateLimit('fixture',settings)));
+  assert.equal(results.filter(Boolean).length,20);let row=(await pool.query('SELECT data FROM request_limits WHERE id=$1',['fixture'])).rows[0].data;assert.equal(row.count,20);assert.equal(row.expiresAt,1100);
+  await pool.query('INSERT INTO request_limits (id,data) VALUES ($1,$2),($3,$4)',['expired',JSON.stringify({id:'expired',count:1,expiresAt:1000}),'pending',JSON.stringify({id:'pending',count:1,expiresAt:10000})]);
+  assert.equal(await repo.consumeRateLimit('fixture',{...settings,now:1100}),true);
+  const rows=(await pool.query('SELECT id,data FROM request_limits')).rows;assert.ok(!rows.some(r=>r.id==='expired'));assert.ok(rows.some(r=>r.id==='pending'));assert.equal(rows.find(r=>r.id==='fixture').data.count,1);
+  await pool.query('DROP TRIGGER no_rate_order_writes ON order_items');
+  await Promise.all([repo.transaction(s=>{s.limits.marker={id:'marker',count:1,expiresAt:20000};}),repo.consumeRateLimit('fixture',{...settings,now:1100})]);
+  row=(await pool.query('SELECT data FROM request_limits WHERE id=$1',['fixture'])).rows[0].data;assert.equal(row.count,2);assert.equal((await pool.query('SELECT count(*)::int n FROM request_limits WHERE id=$1',['marker'])).rows[0].n,1);
+ }finally{await pool?.end();await admin.query('DROP SCHEMA '+schema+' CASCADE');await admin.end();}
+});
 // Explicit opt-in. Tests use only a generated schema in the dedicated local sandbox.
 test('real PostgreSQL migrations, counters and cross-process last-unit checkout locking',{skip:process.env.DBM_REAL_POSTGRES_TEST!=='true',timeout:30000},async()=>{
  const url=new URL(process.env.DATABASE_URL);assert.equal(url.hostname,'127.0.0.1');assert.equal(url.pathname,'/dbm_sandbox');

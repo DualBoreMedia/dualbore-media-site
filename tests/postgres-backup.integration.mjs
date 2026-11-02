@@ -28,7 +28,9 @@ test('real PostgreSQL backup restores checksums, stock and immutable actor audit
   const repository=createPostgresRepository(app);await seedTestCatalog(repository,{quantity:2});
   const actor={userId:'workos:backup_fixture',email:'fixture@example.invalid',role:'admin',mfa:true,mfaFresh:true};
   await createOperationsService({repository,env:{AUTH_ACCESS_MODE:'staff-only'}}).mutate(actor,{action:'inventory',variantId:'e92-tee-m',availableQuantity:3,active:false,reason:'Synthetic restore rehearsal',expectedVersion:0});
-  const migrations=(await app.query('SELECT name,checksum FROM commerce_migrations ORDER BY name')).rows;assert.equal(migrations.length,4);
+  const migrations=(await app.query('SELECT name,checksum FROM commerce_migrations ORDER BY name')).rows;
+  assert.deepEqual(migrations.map(row=>row.name),['001_commerce.sql','002_operations.sql','003_support_marketing.sql','004_fulfillment_attribution.sql','005_public_video_sync.sql','006_managed_products.sql']);
+  assert.ok(migrations.every(row=>/^[a-f0-9]{64}$/.test(row.checksum)),'Every migrated schema must have a SHA-256 checksum.');
   const dump=tool('pg_dump',['--format=custom','--inserts','--no-owner','--no-acl','--schema='+schema]);assert.ok(dump.length>0);
   // Restore only the generated synthetic schema under another generated name.
   // No elevated CREATEDB permission or production restore operation is needed.

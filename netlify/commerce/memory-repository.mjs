@@ -1,4 +1,4 @@
-export const initialEmptyState = Object.freeze(Object.fromEntries(['variants', 'orders', 'events', 'emails', 'reservations', 'profiles', 'shipments', 'shipmentItems', 'trackingEvents', 'audit', 'refundRequests', 'limits', 'supportTickets', 'marketingContacts', 'marketingEvents'].map(key => [key, Object.freeze({})])));
+export const initialEmptyState = Object.freeze(Object.fromEntries(['products', 'variants', 'orders', 'events', 'emails', 'reservations', 'profiles', 'shipments', 'shipmentItems', 'trackingEvents', 'audit', 'refundRequests', 'limits', 'supportTickets', 'marketingContacts', 'marketingEvents'].map(key => [key, Object.freeze({})])));
 export const emptyState = () => structuredClone(initialEmptyState);
 
 /** Deterministic test adapter only. It is NOT durable persistence. */

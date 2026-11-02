@@ -20,6 +20,32 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Product Manager, November 2, 2026
+
+- Extend the existing search/filter and MX Bikes foundation; do not duplicate it. Managed product drafts and published snapshots are separate. Only current MFA-verified Admins with fresh sensitive-action verification can change products.
+- Physical listing publication is not sales approval. Preserve strict existing product, Stripe, tax, shipping and payment checks. Digital setup publication remains blocked pending actual-file/private-storage/compatibility/delivery verification; never expose setup files.
+- No deployment, main merge, provider activation, production migration, payment/refund/email/signup activation. Commit tested development work with [skip netlify].
+
+
+### November 2, 2026 website regression audit
+
+- Prevent older operations/fulfillment responses from replacing newer search/filter results. Keep staff permissions, security, payment and deployment gates unchanged.
+- MX Bikes setup search recognizes TC125 and owner-supplied bike-ID shorthand, but files remain private and not for sale.
+- Apparel search recognizes t-shirt and sweatshirt synonyms without inventing products or confirmed apparel fit.
+- No main merge, Netlify preview/deployment, live payments or outbound email. Development commits require [skip netlify].
+
+
+### TC125 setup file intake, November 2, 2026
+
+- User supplied three 244-byte STP files with embedded bike ID MX2OEM_2023_Husqvarna_TC_125: Supercross.stp (general SX, proposed $2); ASSEN.stp (Assen, $1); Maryland.stp (Maryland, $1). Separate exact hashes are recorded in netlify/setups/received.mjs. None is verified in-game or placed in private production storage. Never commit the raw STP file bytes to this public repo or deploy download links.
+- Public catalog previews may disclose that three files were received, but must remain not for sale. Preserve existing sales/email/launch gates. The owner has not supplied exact game or OEM pack version nor authorized provider activation.
+
+### MX Bikes setup shop foundation, November 2, 2026
+
+- The owner requested an MX Bikes OEM setup storefront: $1 track-specific per bike+track, $2 general motocross or supercross per bike. Actual setup files and supported bike inventory are pending. Never fabricate downloadable inventory, paid order success, compatibility or setup screenshots.
+- Initial work adds a /setups catalog and fail-closed manifest preparation only. Preserve the four existing home tabs and all commerce/auth/coverage gates; no activation, main merge, preview or Netlify deployment is authorized. Separate file upload, secure entitlement delivery, tax/legal review and real testing remain required before digital sales.
+
+
 ### Channel header and navigation refinement, November 2, 2026
 
 - Preserve the existing working Garage-home button and real `/assets/channel-logo.jpg` avatar; refine it as a circular 42px badge with subtle bezel/red hover and keyboard-focus treatment, not a duplicate header link or generated logo.

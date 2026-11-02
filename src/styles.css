@@ -74,3 +74,8 @@ html,body{overflow-x:hidden}main,.view,.dialog-copy{min-width:0}.brand-logo{widt
 @media(prefers-reduced-motion:reduce){
   .header .brand.nav-brand .nav-brand__logo{transition:none;transform:none!important}
 }
+
+/* Extra route entry; the original four homepage tabs remain unchanged. */
+.header .setups-nav-link{white-space:nowrap;color:#d2dce9}
+.header .setups-nav-link:hover{color:#00f0ff}
+@media(max-width:1050px){.header .setups-nav-link{display:none}}

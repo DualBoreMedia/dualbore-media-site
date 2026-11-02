@@ -10,6 +10,14 @@ const setup = overrides => {
   return { sent, logs, delays, options: { env: key => settings[key], request: async (url, options) => { sent.push({ url, ...options }); return Response.json({ id: 'email_test' }); }, log: (...args) => logs.push(args), pause: async delay => { delays.push(delay); }, ...overrides } };
 };
 
+test('production waitlist fails closed before sending for suppression or unavailable consent storage',async()=>{
+ for(const [persistConsent,database,status]of [[async()=>({subscribed:false}),'synthetic-storage','suppressed'],[async()=>{throw Error('private database diagnostic');},'synthetic-storage','unavailable'],[async()=>{throw Error('Must not run');},undefined,'unconfigured']]){
+  const context=setup({env:key=>({...settings,COMMERCE_ENVIRONMENT:'production',DROP_WAITLIST_ENABLED:'true',MARKETING_EMAILS_ENABLED:'true',DATABASE_URL:database})[key],persistConsent});
+  assert.deepEqual(await processSubmission(event,context.options),{status});assert.equal(context.sent.length,0);
+  assert.equal(JSON.stringify(context.logs).includes('private database diagnostic'),false);
+ }
+});
+
 test('accepted Drop 01 signup sends HTML and text confirmation through the official server API', async () => {
   const context = setup();
   assert.deepEqual(await processSubmission(event, context.options), { status: 'sent' });
@@ -45,13 +53,13 @@ test('production waitlist stays paused independently of transactional order emai
 });
 
 test('production waitlist confirmation has its own marketing-email switch',async()=>{
-  const context=setup({env:key=>({COMMERCE_ENVIRONMENT:'production',PAYMENTS_ENABLED:'false',TRANSACTIONAL_EMAILS_ENABLED:'false',DROP_WAITLIST_ENABLED:'true',MARKETING_EMAILS_ENABLED:'false',...settings})[key]});
+  const context=setup({env:key=>({COMMERCE_ENVIRONMENT:'production',PAYMENTS_ENABLED:'false',TRANSACTIONAL_EMAILS_ENABLED:'false',DROP_WAITLIST_ENABLED:'true',MARKETING_EMAILS_ENABLED:'false',DATABASE_URL:'synthetic-storage',...settings})[key],persistConsent:async()=>({subscribed:true})});
   assert.deepEqual(await processSubmission(event,context.options),{status:'recorded'});
   assert.equal(context.sent.length,0);
 });
 
 test('production marketing confirmation can be enabled without enabling transactional order email',async()=>{
-  const context=setup({env:key=>({COMMERCE_ENVIRONMENT:'production',PAYMENTS_ENABLED:'false',TRANSACTIONAL_EMAILS_ENABLED:'false',DROP_WAITLIST_ENABLED:'true',MARKETING_EMAILS_ENABLED:'true',...settings})[key]});
+  const context=setup({env:key=>({COMMERCE_ENVIRONMENT:'production',PAYMENTS_ENABLED:'false',TRANSACTIONAL_EMAILS_ENABLED:'false',DROP_WAITLIST_ENABLED:'true',MARKETING_EMAILS_ENABLED:'true',DATABASE_URL:'synthetic-storage',...settings})[key],persistConsent:async()=>({subscribed:true})});
   assert.deepEqual(await processSubmission(event,context.options),{status:'sent'});
   assert.equal(context.sent.length,1);
 });

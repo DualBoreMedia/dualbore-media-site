@@ -66,7 +66,7 @@ test('made-to-order catalog and operations identify policy, hide available count
   const f=await fixture();await f.repository.transaction(s=>{Object.assign(s.variants[id],{liveStripePriceId:'price_live_synthetic',productionPriceCents:3000});for(const v of Object.values(s.variants))if(v.id!==id)v.active=false;});
   const env={COMMERCE_ENVIRONMENT:'production',SITE_ORIGIN:'https://example.invalid',PAYMENTS_ENABLED:'true',LIVE_CATALOG_APPROVED:'true',SHIPPING_RATE_CENTS:'995'};
   const response=await commerceHttp(new Request(env.SITE_ORIGIN+'/api/commerce/catalog'),{env,runtime:async()=>({repository:f.repository})});
-  const catalog=await response.json();assert.equal(catalog.variants[0].inventoryPolicy,'made_to_order');assert.equal(catalog.variants[0].availableQuantity,null);assert.equal(catalog.variants[0].available,true);
+  const catalog=await response.json();assert.deepEqual(catalog.variants,[]); // Made-to-order is not a substitute for product approval.
   const operations=createOperationsService({repository:f.repository}),view=await operations.read(admin,{admin:true});
   const variant=view.variants.find(v=>v.id===id);assert.equal(variant.inventoryPolicy,'made_to_order');assert.equal(variant.availableQuantity,null);assert.equal(variant.lowStock,false);assert.equal(view.overview.soldOut,0);assert.equal(view.overview.lowInventory,14);
   const input={action:'inventory',variantId:id,availableQuantity:4,active:true,reason:'Do not invent finished stock',expectedVersion:0};

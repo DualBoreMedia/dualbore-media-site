@@ -53,7 +53,9 @@ test('split packages enforce allocation and truthful shipping/delivery, with dis
  await service.mutate(admin,{action:'shipment-status',shipmentId:b.shipmentId,status:'delivered',expectedVersion:2,confirmed:true});assert.equal(await repository.transaction(s=>s.orders.o1.fulfillmentStatus),'delivered');
  await assert.rejects(service.mutate(admin,{action:'transition',orderNumber:'DBM-TEST',status:'making',expectedVersion:await repository.transaction(s=>s.orders.o1.version)}),{code:'invalid_transition'});
  assert.equal(await repository.transaction(s=>Object.keys(s.trackingEvents).length),6);
- assert.equal(await repository.transaction(s=>Object.values(s.emails).filter(e=>e.emailType==='lifecycle-shipped').length),2);
+ assert.equal(await repository.transaction(s=>Object.values(s.emails).filter(e=>e.emailType.startsWith('lifecycle-shipped:')).length),2);
+ assert.equal(await repository.transaction(s=>new Set(Object.values(s.emails).filter(e=>e.emailType.startsWith('lifecycle-shipped:')).map(e=>e.emailType)).size),2);
+ assert.deepEqual(await repository.transaction(s=>[s.shipments[a.shipmentId].status,s.shipments[b.shipmentId].status]),['delivered','delivered']);
 });
 test('safe tracking rejects script/data/http/embedded credentials and malformed URLs',()=>{
  for(const url of ['javascript:alert(1)','data:text/plain,x','http://ups.com','https://name:pass@ups.com','https://localhost/x','https://127.0.0.1/x','https://ups.com:444/x','https://ups.com\\@evil.com','https://ups.com/a b'])assert.throws(()=>safeTrackingUrl(url),{code:'invalid_tracking'});
@@ -141,4 +143,19 @@ test('split package packing attribution comes from authenticated staff and remai
  const history=Object.values(state.audit).filter(e=>e.action==='shipment-status'&&e.metadata.next==='packed');assert.deepEqual(history.map(e=>e.actor),[admin.userId,employee.userId]);
  const adminOrder=(await service.read(admin,{admin:true,orderNumber:'DBM-TEST'})).orders[0];assert.equal(adminOrder.shipments[0].packedByUserId,admin.userId);
  const customerOrder=(await service.read(customer)).orders[0];assert.equal(customerOrder.shipments[0].packedByUserId,undefined);
+});
+
+test('admin attention identifies Stripe error codes and tracks signature failures without payloads',async()=>{
+ const {repository,service}=setup();
+ await repository.transaction(s=>{
+  s.events.evt_fixture={id:'evt_fixture',type:'checkout.session.completed',status:'failed',orderId:'o1',createdAt:'2026-11-01T08:00:00Z',lastError:'payment_mismatch'};
+  s.limits['stripe-invalid-signatures']={id:'stripe-invalid-signatures',count:3,lastAt:'2026-11-01T08:01:00Z',secretMissing:true};
+ });
+ const data=await service.read(admin,{admin:true});
+ const webhook=data.failures.find(f=>f.type==='webhook');
+ assert.equal(webhook.orderNumber,'DBM-TEST');assert.equal(webhook.code,'payment_mismatch');assert.equal(webhook.eventId,'evt_fixture');assert.ok(webhook.createdAt);
+ const signatures=data.failures.find(f=>f.type==='invalid_signature');
+ assert.equal(signatures.count,3);assert.equal(signatures.secretMissing,true);
+ assert.equal(Object.hasOwn(signatures,'payload'),false);
+ assert.equal(Object.hasOwn(signatures,'headers'),false);
 });

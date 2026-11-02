@@ -7,7 +7,8 @@ function localCommerce(mode) {
   return { name:'local-commerce-quote', configureServer(server) {
     if (mode !== 'commerce') return;
     const env={...loadEnv(mode,process.cwd(),''),...process.env};
-    server.middlewares.use('/api/auth',async(req,res)=>{
+    server.middlewares.use('/api/products',async(req,res)=>{try{const host=req.headers.host;if(!/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host||'')){res.writeHead(403);res.end();return;}const {productsHttp}=await import('./netlify/functions/products.mjs');const response=await productsHttp(new Request(`http://${host}/api/products`,{method:req.method}),{env});res.writeHead(response.status,Object.fromEntries(response.headers));res.end(await response.text());}catch{res.writeHead(503);res.end();}});
+    server.middlewares.use('/api/auth' ,async(req,res)=>{
       try{
         const host=req.headers.host;if(!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(host||'')){res.writeHead(403);res.end();return;}
         let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>8192){res.writeHead(413);res.end();return;}chunks.push(chunk);}
@@ -67,6 +68,8 @@ export default defineConfig(({mode}) => {
   define:{__APP_RELEASE__:JSON.stringify(release),__APP_ENVIRONMENT__:JSON.stringify(environment)},
   build: {
     outDir: "dist/client",
+    // Keep hashed Vite output separate from public/assets (unversioned channel media).
+    assetsDir: "_vite",
     sourcemap:'hidden',
   },
   optimizeDeps: {

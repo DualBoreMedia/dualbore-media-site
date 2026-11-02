@@ -76,9 +76,17 @@ async function sendEmail(body, key, { request, pause, log }) {
   }
 }
 
+async function persistWaitlistConsent(submission,env){
+  const {commerceRuntime}=await import('../commerce/runtime.mjs');const {recordMarketingConsent}=await import('../operations/marketing.mjs');
+  const settings=Object.fromEntries(['DATABASE_URL','SITE_ORIGIN','COMMERCE_ENVIRONMENT','PAYMENTS_ENABLED','TRANSACTIONAL_EMAILS_ENABLED'].map(key=>[key,env(key)]));
+  const {repository}=await commerceRuntime(settings);
+  return repository.transaction(s=>recordMarketingConsent(s,{email:submission.email,consent:true,source:'drop-waitlist',policyVersion:'prelaunch-v1'}));
+}
+
 export async function processSubmission(event, {
   env = key => Netlify.env.get(key), request = fetch, pause = sleep,
   log = (code, details = {}) => console.warn('[drop-waitlist-email]', code, details),
+  persistConsent = persistWaitlistConsent,
 } = {}) {
   if(env('AUTH_ACCESS_MODE')==='staff-only')return {status:'disabled'};
   const submission = validateSubmission(event);
@@ -88,11 +96,11 @@ export async function processSubmission(event, {
     if (submission.status === 'invalid') log('invalid_submission');
     return { status: submission.status };
   }
-  if(env('DATABASE_URL')&&production)try{
-    const {commerceRuntime}=await import('../commerce/runtime.mjs');const {recordMarketingConsent}=await import('../operations/marketing.mjs');
-    const settings=Object.fromEntries(['DATABASE_URL','SITE_ORIGIN','COMMERCE_ENVIRONMENT','PAYMENTS_ENABLED','TRANSACTIONAL_EMAILS_ENABLED'].map(key=>[key,env(key)]));
-    const {repository}=await commerceRuntime(settings);await repository.transaction(s=>recordMarketingConsent(s,{email:submission.email,consent:true,source:'drop-waitlist',policyVersion:'prelaunch-v1'}));
-  }catch{log('consent_persistence_unavailable');}
+  if(production){
+    if(!env('DATABASE_URL'))return {status:'unconfigured'};
+    try{const preference=await persistConsent(submission,env);if(preference?.subscribed!==true)return {status:'suppressed'};}
+    catch{log('consent_persistence_unavailable');return {status:'unavailable'};}
+  }
   if(production&&env('MARKETING_EMAILS_ENABLED')!=='true')return {status:'recorded'};
   const key = env('RESEND_API_KEY');
   const settings = { from: env('RESEND_FROM'), replyTo: env('RESEND_REPLY_TO'), notifyTo: env('RESEND_NOTIFY_TO') };

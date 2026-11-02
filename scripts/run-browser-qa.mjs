@@ -1,3 +1,4 @@
+import {runProductsBrowserChecks} from '../tests/products.browser.mjs';
 import {chromium, firefox, webkit, expect} from '@playwright/test';
 import {createServer, preview} from 'vite';
 import react from '@vitejs/plugin-react';
@@ -103,6 +104,11 @@ try {
       staff.method = `Rendered ${name}, real operations service with memory repository and injected principal; real hosted authentication/MFA not verified`;
       page = await context.newPage(); page.setDefaultTimeout(10000); page.setDefaultNavigationTimeout(30000);
       const storefront = await runMadeToOrderBrowserChecks({page, baseUrl, adminPreviewPath: '/__qa/admin'});
+      await mkdir(output+'/'+name,{recursive:true});
+      const productRepository=createMemoryRepository();
+      const productPage=await context.newPage();
+      page=productPage;
+      const products=await runProductsBrowserChecks({page:productPage,baseUrl,publicBaseUrl,repository:productRepository,service:createOperationsService({repository:productRepository}),principal:{...principal,role:'admin'},evidenceDirectory:output+'/'+name});
       const publicPage = await context.newPage();
       page = publicPage;
       publicPage.setDefaultTimeout(10000);
@@ -162,6 +168,32 @@ try {
           if(cards.length!==3)throw Error('Expected 3 merch cards, found '+cards.length);
           if(cards.some(card=>card.quickView!=='1'||card.qualifierFont<12))throw Error('Merch details or Quick View are not consistently readable');
           if(width>700&&(Math.max(...cards.map(c=>c.height))-Math.min(...cards.map(c=>c.height))>2||Math.max(...cards.map(c=>c.priceTop))-Math.min(...cards.map(c=>c.priceTop))>2))throw Error('Merch card heights or price rows do not align at '+width+'px: '+JSON.stringify(cards));
+          // Exercise the actual served React page, not just mounted component fixtures.
+          // This guards against visually present but unresponsive search/filter controls.
+          if ([375, 1024].includes(width)) {
+            const shopSearch=publicPage.getByRole('searchbox',{name:'Search products'});
+            const shopCategory=publicPage.getByRole('combobox',{name:'Category'});
+            const shopAudience=publicPage.getByRole('combobox',{name:'Gender / age'});
+            const shopSort=publicPage.getByRole('combobox',{name:'Sort by'});
+            await shopSearch.fill('SV1000S');
+            await expect(publicPage.locator('.merch-card')).toHaveCount(1);
+            await expect(publicPage.locator('.merch-card h3')).toHaveText(['SV1000S Silhouette Crewneck']);
+            await shopSearch.fill('');
+            await shopSort.selectOption('price-high');
+            await expect(publicPage.locator('.merch-card h3')).toHaveText(['E90 Sedan Front-Clip Crewneck','SV1000S Silhouette Crewneck','E92 Coupe Line-Art Tee']);
+            await shopCategory.selectOption('tees');
+            await expect(publicPage.locator('.merch-card h3')).toHaveText(['E92 Coupe Line-Art Tee']);
+            await shopAudience.selectOption('kids');
+            await expect(publicPage.locator('.merch-card')).toHaveCount(0);
+            await expect(publicPage.getByRole('heading',{name:'No matching products yet.'})).toBeVisible();
+            await publicPage.getByRole('button',{name:'Show all merchandise'}).click();
+            await expect(publicPage.locator('.merch-card')).toHaveCount(3);
+            await shopSearch.fill('E90');
+            await publicPage.getByRole('button',{name:'Apply filters'}).click();
+            await expect(publicPage.locator('.merch-card h3')).toHaveText(['E90 Sedan Front-Clip Crewneck']);
+            await publicPage.getByRole('button',{name:'Clear shop filters'}).click();
+            await expect(publicPage.locator('.merch-card')).toHaveCount(3);
+          }
           const footer=publicPage.getByRole('contentinfo');
           for(const label of ['Explore the garage','Customer information','Follow DualBore Media'])await footer.getByRole('navigation',{name:label,exact:true}).waitFor();
 
@@ -259,7 +291,7 @@ try {
       if (!await page.getByRole('button', {name: 'Reload the garage', exact: true}).evaluate(element => element === document.activeElement)) throw Error('Error fallback control not keyboard accessible');
       await page.screenshot({path: `${output}/${name}-error-boundary.png`, fullPage: true});
       if (consoleIssues.length) throw Error('Unexplained browser console warnings/errors: ' + consoleIssues.map(issue => issue.text).join('\n'));
-      results.push({browser: name, status: 'passed', staff, storefront, publicWebsite: {baseUrl: publicBaseUrl, viewports: viewportResults, dropAlertClosedWithoutCollectingData: true, policyAndAccountRoutesChecked: true}, errorBoundary: {safeFallback: true, referenceCorrelatedWithReporterFixture: true, actualMonitoringDelivery: false}, consoleIssues, expectedConsole});
+      results.push({browser: name, status: 'passed', staff, storefront, products, publicWebsite: {baseUrl: publicBaseUrl, viewports: viewportResults, dropAlertClosedWithoutCollectingData: true, policyAndAccountRoutesChecked: true}, errorBoundary: {safeFallback: true, referenceCorrelatedWithReporterFixture: true, actualMonitoringDelivery: false}, consoleIssues, expectedConsole});
       await context.tracing.stop();
     } catch (error) {
       if (page) await page.screenshot({path: `${output}/${name}-failure.png`, fullPage: true}).catch(() => {});

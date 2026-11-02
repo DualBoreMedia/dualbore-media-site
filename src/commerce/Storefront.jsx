@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import './storefront.css';
 import {FaBagShopping,FaXmark,FaPlus,FaMinus,FaCheck,FaArrowRight,FaPlay} from 'react-icons/fa6';
 import {merch,previewSizes} from '../content.js';
+import {ShopEmpty,ShopFilters,useShopDiscovery} from './ShopFilters.jsx';
 import {money,variantById,variants} from './catalog.js';
 import {addItem,updateQuantity} from './cart.js';
 import {fixtures,fixtureById,variantState,checkAvailability} from './fixtures.js';
@@ -62,11 +63,14 @@ export function ProductOptions({item,cart,onAdded,onReview,compact=false}) {
 }
 
 export function RetailMerch({cart,onAdded,onReview,onDetails,onAlert}) {
+  const merchShop=useShopDiscovery(merch);
   return <><div className="retail-heading"><span className="eyebrow">Drop 01 / Local store preview</span><h1>Made for the<br/><span>garage days.</span></h1><p>Three designs. The machines behind the channel.<br/>Wear the build, wherever the next day takes you.</p><div className="retail-promises"><span>Applied by us</span><span>Shipped by us</span><span>USA only</span></div></div>
     <FixtureTools cart={cart}/>
-    <div className="retail-grid">{merch.map((item,index)=><article className="retail-product" key={item.id}><button className="retail-image" aria-label={`View ${item.name} design details`} onClick={()=>onDetails(item)}><img src={item.image.replace('.jpg','-768.jpg')} srcSet={`${item.image.replace('.jpg','-480.jpg')} 480w, ${item.image.replace('.jpg','-768.jpg')} 768w`} sizes="(max-width:700px) 92vw, 44vw" alt={`${item.name} official supplied design mockup`} width="1290" height="2796" loading={index===0?'eager':'lazy'}/><span>DBM / 0{index+1}</span></button><div className="retail-copy"><span className="eyebrow">{item.type} / Drop 01</span><h2>{item.name}</h2><p>{item.detail}</p><ProductOptions compact item={item} cart={cart} onAdded={onAdded} onReview={onReview}/><button className="text-link product-details" onClick={()=>onDetails(item)}>Design details & size guide <FaArrowRight aria-hidden="true"/></button></div></article>)}</div>
+    <ShopFilters shop={merchShop}/>
+    {!merchShop.results.length&&<ShopEmpty shop={merchShop}/>}
+    <div className="retail-grid">{merchShop.results.map(item=>{const index=merch.findIndex(product=>product.id===item.id);return <article className="retail-product" key={item.id}><button className="retail-image" aria-label={`View ${item.name} design details`} onClick={()=>onDetails(item)}><img src={item.image.replace('.jpg','-768.jpg')} srcSet={`${item.image.replace('.jpg','-480.jpg')} 480w, ${item.image.replace('.jpg','-768.jpg')} 768w`} sizes="(max-width:700px) 92vw, 44vw" alt={`${item.name} official supplied design mockup`} width="1290" height="2796" loading="lazy" decoding="async"/><span>DBM / 0{index+1}</span></button><div className="retail-copy"><span className="eyebrow">{item.type} / Drop 01</span><h2>{item.name}</h2><p>{item.detail}</p>{item.testVariantsEnabled&&variants.some(v=>v.productId===item.id)?<ProductOptions compact item={item} cart={cart} onAdded={onAdded} onReview={onReview}/>:<p className="fine-print">Preview only. This item has no approved local test-cart variants yet.</p>}<button className="text-link product-details" onClick={()=>onDetails(item)}>{['tees','crewnecks'].includes(item.category)?'Design details & size guide':'Design details'} <FaArrowRight aria-hidden="true"/></button></div></article>;})}</div>
     <section className="drop-acquisition"><div><span className="eyebrow">From the garage to your inbox</span><h2>Catch the first drop.</h2><p>Get the release details before the gear goes live. Joining the list is optional and separate from future orders.</p></div><button className="button" onClick={()=>onAlert()}>Join Drop 01 alerts <FaArrowRight aria-hidden="true"/></button></section>
-    <a className="build-to-merch" href="/#garage"><img src="/assets/n54.jpg" alt="BMW N54 channel build thumbnail" width="480" height="360" loading="lazy"/><span><small>Every design starts with a machine</small><strong>Meet the builds.</strong><span><FaPlay aria-hidden="true"/> Back to the garage</span></span></a>
+    <a className="build-to-merch" href="/#garage"><img src="/assets/n54.jpg" alt="BMW N54 channel build thumbnail" width="480" height="360" loading="lazy" decoding="async"/><span><small>Every design starts with a machine</small><strong>Meet the builds.</strong><span><FaPlay aria-hidden="true"/> Back to the garage</span></span></a>
     <p className="shop-note">Local test mode. Prices, demo availability and order screens are examples. Final garments, measurements, inventory and release details still need owner approval.</p></>;
 }
 

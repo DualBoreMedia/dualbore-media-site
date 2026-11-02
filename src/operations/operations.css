@@ -12,3 +12,15 @@
 
 /* Manual queue refresh keeps operator views current without automatic writes. */
 .ops-account{flex-wrap:wrap;justify-content:flex-end}.ops-refresh{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.ops-refresh small{color:var(--ops-muted);font-size:12px}.ops-staff-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+
+/* Admin bench and phone inspector; desktop detail remains in the split view. */
+.ops-bench{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:24px}
+.ops-worklist{padding:20px}.ops-worklist h2{font-size:24px}.ops-worklist ul{list-style:none;padding:0;margin:12px 0 0}.ops-worklist li{border-top:1px solid var(--ops-line)}
+.ops-worklist li button{width:100%;min-height:48px;display:flex;justify-content:space-between;gap:12px;text-align:left;align-items:center;border:0;background:transparent}
+.ops-worklist li span{color:var(--ops-muted);font-size:12px}.ops-worklist p{margin-top:16px}
+@media(max-width:1100px){.ops-bench{grid-template-columns:1fr}}
+@media(max-width:700px){
+ .ops-inspector-open{position:fixed;inset:0;z-index:2000;overflow-y:auto;overscroll-behavior:contain;height:100dvh;max-height:100dvh;width:100vw;border-radius:0;background:#0b0d10}
+ .ops-inspector-open .ops-detail-title{position:sticky;top:0;z-index:2;background:#0b0d10;padding:12px 0;border-bottom:1px solid #354052}
+ .ops-inspector:not(.ops-inspector-open){display:none}
+}
