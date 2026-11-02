@@ -167,3 +167,17 @@ test('provider failure retains curated hero and makes no live-sync claim',async(
  expect(host.querySelector('.hero-feature-caption strong')?.textContent).toBe('Into the hills.');
  expect(host.querySelector('.hero-feature-caption small')?.textContent).toContain('Featured session');
 });
+
+test('admin overview places attention first and opens existing orders from bench lists',async()=>{
+ const order={orderNumber:'DBM-BENCH',status:'paid',paymentStatus:'paid',fulfillmentStatus:'making',createdAt:'2026-11-01T00:00:00Z',totalCents:3000,subtotalCents:3000,shippingCents:0,taxCents:0,items:[],shipments:[],timeline:[],shippingReview:{status:'due_today',dueDate:'2026-11-02'}};
+ vi.stubGlobal('fetch',vi.fn(async url=>url==='/api/auth/session'?json({signedIn:true}):json({role:'admin',orders:[order],variants:[],failures:[],audit:[],overview:{making:1}})));
+ history.replaceState(null,'','/admin');root.render(<WorkosOperations admin/>);
+ await expect.element(page.getByRole('heading',{name:'Needs attention'})).toBeVisible();
+ const attention=host.querySelector('.ops-attention'),daily=host.querySelector('.ops-daily');
+ expect(Boolean(attention.compareDocumentPosition(daily)&Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+ const list=host.querySelector('.ops-bench');expect(list.textContent).toContain('Carrier handoff due or overdue');
+ const opener=list.querySelector('button');opener.click();
+ await expect.element(page.getByRole('heading',{name:'DBM-BENCH'})).toBeVisible();
+ await page.getByRole('button',{name:'Close',exact:true}).click();
+ await vi.waitFor(()=>expect(document.activeElement).toBe(opener));
+});
