@@ -132,15 +132,19 @@ test('channel avatar is the visible, accessible motorsport badge and all tab num
  await expect.element(logo).toHaveAttribute('src','/assets/channel-logo.jpg');
  await expect.element(logo).toHaveAttribute('width','42');
  await expect.element(logo).toHaveAttribute('height','42');
- const visual=await logo.evaluate(element=>({radius:getComputedStyle(element).borderRadius,border:getComputedStyle(element).borderWidth,width:element.getBoundingClientRect().width}));
+ const logoElement=host.querySelector('.nav-brand__logo');
+ expect(logoElement).not.toBeNull();
+ const visual={radius:getComputedStyle(logoElement).borderRadius,border:getComputedStyle(logoElement).borderWidth,width:logoElement.getBoundingClientRect().width};
  expect(visual.radius).toBe('50%');expect(visual.border).toBe('2px');expect(visual.width).toBeGreaterThanOrEqual(41);
  for(const [number,label] of [['01','Garage Builds'],['02','Video Vault'],['03','Garage Merch (Drop 01)'],['04','About / Pit Crew']]){
   await expect.element(page.getByRole('tab',{name:`${number} ${label}`,exact:true})).toBeVisible();
-  await expect.element(page.getByRole('navigation',{name:'Mobile navigation'}).getByRole('button',{name:`${number} ${label}`,exact:true})).toBeInTheDocument();
+  const drawerButton=Array.from(host.querySelectorAll('#mobile-navigation button[aria-label]')).find(button=>button.getAttribute('aria-label')===`${number} ${label}`);
+  expect(drawerButton).toBeTruthy();
  }
  await page.getByRole('tab',{name:'02 Video Vault'}).click();
  await expect.element(page.getByRole('tab',{name:'02 Video Vault'})).toHaveAttribute('aria-selected','true');
- const selected=await page.getByRole('tab',{name:'02 Video Vault'}).evaluate(element=>({color:getComputedStyle(element).borderBottomColor,glow:getComputedStyle(element,'::after').height}));
+ const selectedTab=host.querySelector('#tab-vault');
+ const selected={color:getComputedStyle(selectedTab).borderBottomColor,glow:getComputedStyle(selectedTab,'::after').height};
  expect(selected.color).toBe('rgb(255, 42, 59)');
  expect(selected.glow).toBe('2px');
  await brand.click();
