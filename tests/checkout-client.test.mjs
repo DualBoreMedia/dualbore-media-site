@@ -35,3 +35,17 @@ test('checkout access and cart snapshot stay in session storage',()=>{
 test('a definitive checkout failure retains its code for a safe new-request retry',async()=>{
   await assert.rejects(checkoutRequest({items,key:'same-key',fetcher:async()=>({ok:false,status:409,json:async()=>({code:'checkout_failed',error:'Start a new checkout request.'})})}),error=>error.code==='checkout_failed'&&error.message==='Start a new checkout request.');
 });
+
+test('unreadable checkout JSON and malformed error bodies never navigate or surface provider internals',async()=>{
+ await assert.rejects(checkoutRequest({items,key:'same-key',fetcher:async()=>({ok:true,status:200,json:async()=>{throw new SyntaxError('not JSON');}})}),/unreadable response.*cart is saved/);
+ await assert.rejects(checkoutRequest({items,key:'same-key',fetcher:async()=>({ok:false,status:503,json:async()=>({error:{secret:'never-display'}})})}),error=>error.message==='Checkout is unavailable. Your cart is saved.');
+});
+test('checkout network and timeout failures use bounded same-origin requests and preserve retry intent',async()=>{
+ let settings;
+ await assert.rejects(checkoutRequest({items,key:'saved-key',fetcher:async(_url,init)=>{settings=init;throw Object.assign(new Error('provider details'),{name:'TimeoutError'});}}),error=>error.code==='checkout_timeout'&&/cart is saved/.test(error.message));
+ assert.equal(settings.headers['Idempotency-Key'],'saved-key');
+ assert.equal(settings.credentials,'same-origin');
+ assert.equal(settings.cache,'no-store');
+ assert.ok(settings.signal instanceof AbortSignal);
+ await assert.rejects(checkoutRequest({items,key:'saved-key',fetcher:async()=>{throw new TypeError('sensitive network reason');}}),error=>error.code==='checkout_network'&&!error.message.includes('sensitive'));
+});

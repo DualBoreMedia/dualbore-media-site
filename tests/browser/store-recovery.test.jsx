@@ -33,3 +33,22 @@ test('test-cart checkout accepts an explicit price review and resets only defini
  const posts=request.mock.calls.filter(([url])=>url==='/api/commerce/checkout');expect(posts[1][1].headers['X-Cart-Quote']).toBe('fixture-quote');expect(posts[0][1].headers['Idempotency-Key']).toBe(posts[1][1].headers['Idempotency-Key']);expect(sessionStorage.getItem('dbm-checkout-attempt')).toBeNull();
  await expect.element(page.getByRole('dialog').getByText('Subtotal (1 items)')).toBeVisible();
 });
+
+test('production checkout locks cart edits during a pending request and restores controls after failure',async()=>{
+ const variants=[{id:'e92-tee-m',productId:'e92-tee',name:'E92 Tee',size:'M',unitAmount:3000,available:true,inventoryPolicy:'stocked'}];
+ let finish;const pending=new Promise(resolve=>{finish=resolve;});
+ vi.stubGlobal('fetch',vi.fn(url=>url==='/api/commerce/catalog'?Promise.resolve(json({enabled:true,shippingCents:995,variants})):pending));
+ root.render(<ProductionStore/>);
+ const product=page.getByRole('article').first();
+ await product.getByRole('button',{name:'M',exact:true}).click();
+ await product.getByRole('button',{name:'Add to cart'}).click();
+ await page.getByRole('button',{name:'Cart (1)'}).click();
+ await page.getByRole('button',{name:'Continue to secure checkout'}).click();
+ await expect.element(page.getByText('Contacting secure checkout. Cart changes are temporarily paused.')).toBeVisible();
+ await expect.element(page.getByLabelText('Quantity',{exact:true})).toBeDisabled();
+ await expect.element(page.getByRole('button',{name:'Remove item'})).toBeDisabled();
+ await expect.element(product.getByRole('button',{name:'M',exact:true})).toBeDisabled();
+ finish(json({code:'stripe_unavailable',error:'Secure checkout is temporarily unavailable.'},503));
+ await expect.element(page.getByRole('dialog').getByRole('alert').filter({hasText:'Secure checkout is temporarily unavailable.'})).toBeVisible();
+ await expect.element(page.getByLabelText('Quantity',{exact:true})).toBeEnabled();
+});

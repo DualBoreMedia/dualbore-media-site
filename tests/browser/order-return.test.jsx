@@ -55,3 +55,15 @@ test('pending polling stops after ten checks and explicit retry can verify the p
  vi.useRealTimers();await expect.element(page.getByRole('button',{name:'Check payment status again'})).toBeVisible();expect(calls).toBe(10);expect(replace).not.toHaveBeenCalled();
  payload=paid;await page.getByRole('button',{name:'Check payment status again'}).click();await expect.element(page.getByRole('heading',{name:'Test payment verified.'})).toBeVisible();expect(calls).toBe(11);
 });
+
+test('permanent order lookup rejection stops polling and preserves the cart',async()=>{
+ let calls=0;
+ vi.stubGlobal('fetch',vi.fn(async()=>{calls++;return Response.json({error:'Order not found.'},{status:404});}));
+ vi.useFakeTimers({toFake:['setTimeout','clearTimeout']});
+ const replace=vi.fn();root.render(<OrderStatus cart={{items,replace}}/>);
+ await vi.waitFor(()=>expect(calls).toBe(1));
+ await expect.element(page.getByRole('alert')).toHaveTextContent('Order not found.');
+ await vi.advanceTimersByTimeAsync(11000);
+ expect(calls).toBe(1);
+ expect(replace).not.toHaveBeenCalled();
+});
