@@ -4,6 +4,7 @@ import {PLANNED_PREVIEWS, PLANNED_TRACKS, RECEIVED_SETUP_PREVIEWS, SETUP_CATALOG
 import './setups.css';
 
 export default function SetupShop() {
+  const staffOnly = import.meta.env.VITE_AUTH_ACCESS_MODE === 'staff-only';
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('all');
   const [track, setTrack] = useState('all');
@@ -22,7 +23,7 @@ export default function SetupShop() {
     <a href="#mxb-main" className="skip-link">Skip to setup finder</a>
     <header className="mxb-header">
       <a className="mxb-brand" href="/#garage"><img src="/assets/channel-logo.jpg" alt="" width="42" height="42"/> <span>DUALBORE <em>MEDIA</em></span></a>
-      <nav aria-label="Website navigation"><a href="/#vault">Videos</a><a href="/shop">Merch</a><a href="/account">My Garage</a></nav>
+      <nav aria-label="Website navigation"><a href="/#vault">Videos</a><a href="/shop">Merch</a>{!staffOnly&&<a href="/account">My Garage</a>}</nav>
     </header>
 
     <div className="mxb-shell" id="mxb-main">
@@ -49,7 +50,7 @@ export default function SetupShop() {
           <label className="mxb-field"><span>Search</span><span className="mxb-search"><FaMagnifyingGlass aria-hidden="true"/><input type="search" value={query} maxLength={100} onChange={e=>setQuery(e.target.value)} placeholder="Search tracks or OEM bikes"/></span></label>
           <label className="mxb-field"><span>Setup type</span><select value={kind} onChange={e=>setKind(e.target.value)}><option value="all">All setup types</option>{Object.entries(SETUP_TYPES).map(([id,type])=><option key={id} value={id}>{type.name}</option>)}</select></label>
           <label className="mxb-field"><span>Track</span><select value={track} onChange={e=>setTrack(e.target.value)}><option value="all">All tracks / General</option>{PLANNED_TRACKS.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-          <label className="mxb-field"><span>OEM bike</span><select value={bike} onChange={e=>setBike(e.target.value)}><option value="all">{shownBikes.length ? 'All received bikes' : 'Bikes awaiting files'}</option>{shownBikes.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <label className="mxb-field"><span>OEM bike</span><select value={bike} onChange={e=>setBike(e.target.value)}><option value="all">{shownBikes.length ? 'All listed bikes' : 'Bikes awaiting files'}</option>{shownBikes.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         </div>
         <div className="mxb-results-heading"><h3>Available setups <span>({published.length})</span></h3><button type="button" onClick={reset}>Clear filters</button></div>
         {published.length ? <div className="mxb-card-grid">{published.map(item=><article className="mxb-card" key={item.id}><span className="mxb-card-eyebrow">{SETUP_TYPES[item.kind].name}</span><h4>{item.name}</h4><p>OEM {item.oemVersion} · MX Bikes {item.gameVersion}</p><div className="mxb-card-footer"><strong>{setupMoney(setupPriceCents(item.kind))}</strong><span>Checkout not enabled</span></div></article>)}</div> : <div className="mxb-empty"><FaShieldHalved aria-hidden="true"/><strong>No verified setups listed yet.</strong><p>Purchasing and downloads stay closed until each bike/track combination has an approved file and working delivery flow.</p></div>}

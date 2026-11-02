@@ -226,3 +226,25 @@ test('Staff queue refresh rereads orders without performing a fulfillment write'
  await expect.element(page.getByRole('heading',{name:'Orders',exact:true})).toBeVisible();
  expect(f.posts).toHaveLength(0);
 });
+
+test('late admin filter results cannot overwrite a more recent sort',async()=>{
+ const f=fixture();let releaseOld;
+ const initial=f.auth.fetcher;let first=true;
+ f.auth.fetcher=vi.fn((url,options)=>{
+  if(options.method==='GET'){
+   const sort=new URL(url,'http://local').searchParams.get('sort');
+   if(sort==='oldest')return new Promise(resolve=>{releaseOld=resolve;});
+   return Promise.resolve(json({...f.data,orders:[{...f.order,orderNumber:'DBM-NEWEST'}]}));
+  }
+  return initial(url,options);
+ });
+ root.render(<OperationsApp admin auth={f.auth}/>);
+ await page.getByRole('button',{name:'Orders',exact:true}).click();
+ await page.getByRole('combobox',{name:/Sort orders/}).selectOptions('oldest');
+ await expect.poll(()=>typeof releaseOld).toBe('function');
+ await page.getByRole('combobox',{name:/Sort orders/}).selectOptions('newest');
+ await expect.element(page.getByText('DBM-NEWEST',{exact:true})).toBeVisible();
+ releaseOld(json({...f.data,orders:[{...f.order,orderNumber:'DBM-OUTDATED'}]}));
+ await expect.element(page.getByText('DBM-NEWEST',{exact:true})).toBeVisible();
+ await expect.element(page.getByText('DBM-OUTDATED',{exact:true})).not.toBeInTheDocument();
+});

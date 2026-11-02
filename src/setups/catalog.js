@@ -19,9 +19,9 @@ export const SETUP_CATALOG = Object.freeze([]);
 // Owner-supplied files have been inspected, but are not hosted, tested in-game or for sale.
 // These are public listing previews ONLY, not access grants or verified inventory.
 export const RECEIVED_SETUP_PREVIEWS = Object.freeze([
-  Object.freeze({id: 'mx2oem-2023-husqvarna-tc-125-general-sx', kind: 'general-sx', name: '2023 Husqvarna TC 125 — Supercross', trackId: null, trackName: null, bikeId: 'mx2oem-2023-husqvarna-tc-125', bikeName: '2023 Husqvarna TC 125'}),
-  Object.freeze({id: 'mx2oem-2023-husqvarna-tc-125-assen', kind: 'track', name: '2023 Husqvarna TC 125 — Assen', trackId: 'assen', trackName: 'Assen', bikeId: 'mx2oem-2023-husqvarna-tc-125', bikeName: '2023 Husqvarna TC 125'}),
-  Object.freeze({id: 'mx2oem-2023-husqvarna-tc-125-maryland', kind: 'track', name: '2023 Husqvarna TC 125 — Maryland', trackId: 'maryland', trackName: 'Maryland', bikeId: 'mx2oem-2023-husqvarna-tc-125', bikeName: '2023 Husqvarna TC 125'}),
+  Object.freeze({id: 'mx2oem-2023-husqvarna-tc-125-general-sx', kind: 'general-sx', name: '2023 Husqvarna TC 125 — Supercross', trackId: null, trackName: null, bikeId: 'mx2oem-2023-husqvarna-tc-125', bikeName: '2023 Husqvarna TC 125', searchAliases: Object.freeze(['MX2OEM_2023_TC_125', 'MX2OEM_2023_Husqvarna_TC_125'])}),
+  Object.freeze({id: 'mx2oem-2023-husqvarna-tc-125-assen', kind: 'track', name: '2023 Husqvarna TC 125 — Assen', trackId: 'assen', trackName: 'Assen', bikeId: 'mx2oem-2023-husqvarna-tc-125', bikeName: '2023 Husqvarna TC 125', searchAliases: Object.freeze(['MX2OEM_2023_TC_125', 'MX2OEM_2023_Husqvarna_TC_125'])}),
+  Object.freeze({id: 'mx2oem-2023-husqvarna-tc-125-maryland', kind: 'track', name: '2023 Husqvarna TC 125 — Maryland', trackId: 'maryland', trackName: 'Maryland', bikeId: 'mx2oem-2023-husqvarna-tc-125', bikeName: '2023 Husqvarna TC 125', searchAliases: Object.freeze(['MX2OEM_2023_TC_125', 'MX2OEM_2023_Husqvarna_TC_125'])}),
 ]);
 
 export const PLANNED_PREVIEWS = Object.freeze([
@@ -34,11 +34,17 @@ export const PLANNED_PREVIEWS = Object.freeze([
 export const setupPriceCents = kind => SETUP_TYPES[kind]?.priceCents ?? null;
 export const setupMoney = cents => new Intl.NumberFormat('en-US', {style:'currency', currency:'USD'}).format(cents / 100);
 
+// Match common compact game IDs and bike shorthand without relaxing exact bike/track filters.
+const searchText=value=>String(value||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 export function filterSetupListings(listings, {query = '', kind = 'all', track = 'all', bike = 'all'} = {}) {
-  const search = String(query).trim().toLocaleLowerCase();
-  return listings.filter(item => (kind === 'all' || item.kind === kind)
-    && (track === 'all' || item.trackId === track)
-    && (bike === 'all' || item.bikeId === bike)
-    && [item.name, item.trackName, item.bikeName, SETUP_TYPES[item.kind]?.name]
-      .some(value => String(value || '').toLocaleLowerCase().includes(search)));
+  const normalized=searchText(String(query).slice(0,100));
+  const terms=normalized.split(/\s+/).filter(Boolean);
+  const compactQuery=normalized.replace(/\s+/g,'');
+  return listings.filter(item=>{
+    if((kind!=='all'&&item.kind!==kind)||(track!=='all'&&item.trackId!==track)||(bike!=='all'&&item.bikeId!==bike))return false;
+    const index=searchText([item.name,item.trackName,item.bikeName,item.bikeId,SETUP_TYPES[item.kind]?.name,...(item.searchAliases||[])].join(' '));
+    const compactIndex=index.replace(/\s+/g,'');
+    return terms.length===0||terms.every(term=>index.includes(term)||compactIndex.includes(term))
+      ||compactIndex.includes(compactQuery);
+  });
 }

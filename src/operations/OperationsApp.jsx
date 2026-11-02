@@ -16,7 +16,14 @@ export default function OperationsApp({admin=false,auth={}}){
  const {isLoaded=false,isSignedIn=false,getToken,fetcher,user,signOut,signInElement,accountElement}=auth;
  const [data,setData]=useState(null),[lastChecked,setLastChecked]=useState(null),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[section,setSection]=useState(()=>{const view=new URLSearchParams(window.location.search).get('view');return(admin?['Overview','Orders','Inventory','Activity','Support']:['My orders','Profile','Help']).find(item=>item.toLowerCase()===view)||(admin?'Overview':'My orders');}),[selected,setSelected]=useState(null);
  const [query,setQuery]=useState({page:1,sort:'newest'}),[selectedOrder,setSelectedOrder]=useState(null);
- const load=useCallback(async signal=>{setLoading(true);try{const result=await operationsRequest(getToken,undefined,{signal,admin,query,fetcher});setData(result);setLastChecked(new Date());setError('');}catch(e){if(e.name!=='AbortError')setError(e.message);}finally{if(!signal?.aborted)setLoading(false);}},[getToken,admin,query,fetcher]);
+ // Keep the newest search/filter result even when an older request ignores abort.
+ const loadGeneration=useRef(0);
+ const load=useCallback(async signal=>{const generation=++loadGeneration.current;setLoading(true);try{
+  const result=await operationsRequest(getToken,undefined,{signal,admin,query,fetcher});
+  if(signal?.aborted||generation!==loadGeneration.current)return;
+  setData(result);setLastChecked(new Date());setError('');
+ }catch(e){if(e.name!=='AbortError'&&!signal?.aborted&&generation===loadGeneration.current)setError(e.message);}
+ finally{if(!signal?.aborted&&generation===loadGeneration.current)setLoading(false);}},[getToken,admin,query,fetcher]);
  useEffect(()=>{document.title=admin?'Garage Operations | DualBore Media':'My Garage | DualBore Media';if(!isLoaded||!isSignedIn)return;const control=new AbortController();load(control.signal);return()=>control.abort();},[admin,isLoaded,isSignedIn,load]);
  const act=async(payload,message)=>{if(busy)return false;setBusy(true);setError('');setNotice('');try{await operationsRequest(getToken,payload,{fetcher});await load();setNotice(message);return true;}catch(e){setError(e.message);return false;}finally{setBusy(false);}};
  const ordersNavigation=useRef(null);const inspectorRef=useRef(null);const opener=useRef(null);const selectOrder=(number,element)=>{opener.current=element;setSelected(number);};const closeOrder=()=>{setSelected(null);requestAnimationFrame(()=>(opener.current?.isConnected?opener.current:ordersNavigation.current)?.focus());};const orders=data?.orders||[];const order=orders.find(o=>o.orderNumber===selected)||(selectedOrder?.orderNumber===selected?selectedOrder:null);

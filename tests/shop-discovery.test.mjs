@@ -25,3 +25,10 @@ test('sorting is deterministic, does not mutate catalog and can use trusted prod
  assert.equal(filterShopProducts(merch,{sort:'price-high'},p=>p.id==='e92-tee'?100:20)[0].id,'e92-tee');
  assert.deepEqual(merch.map(x=>x.id),original);
 });
+
+test('search recognizes ordinary apparel synonyms without inventing products',()=>{
+ assert.deepEqual(filterShopProducts(merch,{query:'t-shirt'}).map(p=>p.id),['e92-tee']);
+ assert.deepEqual(filterShopProducts(merch,{query:'tshirt'}).map(p=>p.id),['e92-tee']);
+ assert.deepEqual(filterShopProducts(merch,{query:'sweatshirt'}).map(p=>p.id),['e90-crewneck','sv1000s-silhouette']);
+ assert.equal(filterShopProducts(merch,{query:'sticker'}).length,0);
+});

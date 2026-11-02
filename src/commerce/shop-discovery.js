@@ -28,7 +28,9 @@ export function filterShopProducts(products,{query='',category='all',audience='a
     if(category!=='all' && (category==='apparel'? !['tees','crewnecks'].includes(product.category):product.category!==category))return false;
     // No fit/gender/age category can be inferred from a photo or a generic size label.
     if(audience!=='all' && product.audience!==audience)return false;
-    const index=normalized([product.name,product.detail,product.type,product.notes,product.id].join(' '));
+    const keywords=product.category==='tees'?'t-shirt tshirt t shirt shirts tee tees'
+      :product.category==='crewnecks'?'crewneck sweatshirt sweatshirts sweater pullover':'';
+    const index=normalized([product.name,product.detail,product.type,product.notes,product.id,keywords].join(' '));
     return terms.every(term=>index.includes(term));
   });
   if(sort==='price-low'||sort==='price-high'){

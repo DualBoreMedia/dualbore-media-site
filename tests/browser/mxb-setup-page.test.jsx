@@ -57,3 +57,13 @@ test('received TC125 previews can be filtered to the bike without exposing a dow
   await expect.element(page.getByText('No verified setups listed yet.')).toBeVisible();
   expect(host.querySelectorAll('a[download],a[href*="checkout"]')).toHaveLength(0);
 });
+
+test('compact OEM bike search filters the received file previews',async()=>{
+ root.render(<SetupShop/>);
+ await page.getByRole('searchbox',{name:'Search'}).fill('MX2OEM_2023_TC_125');
+ await expect.element(page.getByText('Files received (3)')).toBeVisible();
+ await page.getByRole('searchbox',{name:'Search'}).fill('TC125');
+ await expect.element(page.getByRole('heading',{name:'2023 Husqvarna TC 125 — Assen'})).toBeVisible();
+ await page.getByRole('searchbox',{name:'Search'}).fill('YZ250');
+ await expect.element(page.getByText('No received setup files match these filters.')).toBeVisible();
+});

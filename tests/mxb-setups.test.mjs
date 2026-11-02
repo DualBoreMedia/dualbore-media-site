@@ -67,3 +67,12 @@ test('three file-received TC125 drafts are distinct products and never purchasab
   assert.equal(PLANNED_PREVIEWS.some(item => item.trackId === 'assen'), false);
   assert.equal(PLANNED_PREVIEWS.some(item => item.trackId === 'maryland'), false);
 });
+
+test('TC125 search recognizes compact IDs, punctuation and track combinations',()=>{
+ assert.equal(filterSetupListings(RECEIVED_SETUP_PREVIEWS,{query:'TC125'}).length,3);
+ assert.equal(filterSetupListings(RECEIVED_SETUP_PREVIEWS,{query:'MX2OEM_2023_TC_125'}).length,3);
+ assert.equal(filterSetupListings(RECEIVED_SETUP_PREVIEWS,{query:'mx2oem-2023-husqvarna-tc-125'}).length,3);
+ assert.deepEqual(filterSetupListings(RECEIVED_SETUP_PREVIEWS,{query:'ASSEN TC125'}).map(p=>p.trackId),['assen']);
+ assert.deepEqual(filterSetupListings(RECEIVED_SETUP_PREVIEWS,{query:'TC125',kind:'track',track:'maryland'}).map(p=>p.trackId),['maryland']);
+ assert.deepEqual(filterSetupListings(RECEIVED_SETUP_PREVIEWS,{query:'YZ250'}),[]);
+});

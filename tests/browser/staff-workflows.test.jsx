@@ -132,3 +132,24 @@ test('staff mutation network ambiguity retains the idempotency key while enrollm
  fail='enrollment';await page.getByRole('button',{name:'Set admin'}).click();await expect.element(page.getByRole('alert')).toHaveTextContent('enroll two-step');
  fail='network';await page.getByRole('button',{name:'Set admin'}).click();await expect.poll(()=>f.posts.length).toBe(4);expect(posted(f,'staff-role').requestKey).not.toBe(first);
 });
+
+test('late staff search results cannot overwrite a newer fulfillment queue',async()=>{
+ const f=fixture();let releaseOld;
+ const initial=f.auth.fetcher;
+ f.auth.fetcher=vi.fn((url,options)=>{
+  if(options.method==='GET'&&!new URL(url,'http://local').searchParams.has('staffManagement')){
+   const status=new URL(url,'http://local').searchParams.get('fulfillmentStatus');
+   if(status==='packing')return new Promise(resolve=>{releaseOld=resolve;});
+   return Promise.resolve(json({...f.data,orders:[{...f.order,orderNumber:status==='received'?'DBM-NEW-QUEUE':'DBM-STAFF-QA'}]}));
+  }
+  return initial(url,options);
+ });
+ root.render(<StaffApp auth={f.auth}/>);
+ await page.getByRole('combobox').selectOptions('packing');
+ await expect.poll(()=>typeof releaseOld).toBe('function');
+ await page.getByRole('combobox').selectOptions('received');
+ await expect.element(page.getByText('DBM-NEW-QUEUE',{exact:true})).toBeVisible();
+ releaseOld(json({...f.data,orders:[{...f.order,orderNumber:'DBM-OLD-QUEUE'}]}));
+ await expect.element(page.getByText('DBM-NEW-QUEUE',{exact:true})).toBeVisible();
+ await expect.element(page.getByText('DBM-OLD-QUEUE',{exact:true})).not.toBeInTheDocument();
+});

@@ -20,6 +20,14 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### November 2, 2026 website regression audit
+
+- Prevent older operations/fulfillment responses from replacing newer search/filter results. Keep staff permissions, security, payment and deployment gates unchanged.
+- MX Bikes setup search recognizes TC125 and owner-supplied bike-ID shorthand, but files remain private and not for sale.
+- Apparel search recognizes t-shirt and sweatshirt synonyms without inventing products or confirmed apparel fit.
+- No main merge, Netlify preview/deployment, live payments or outbound email. Development commits require [skip netlify].
+
+
 ### TC125 setup file intake, November 2, 2026
 
 - User supplied three 244-byte STP files with embedded bike ID MX2OEM_2023_Husqvarna_TC_125: Supercross.stp (general SX, proposed $2); ASSEN.stp (Assen, $1); Maryland.stp (Maryland, $1). Separate exact hashes are recorded in netlify/setups/received.mjs. None is verified in-game or placed in private production storage. Never commit the raw STP file bytes to this public repo or deploy download links.
