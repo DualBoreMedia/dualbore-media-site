@@ -9,7 +9,7 @@ const request=(route,init={})=>new Request(`${origin}/api/commerce/${route}`,ini
 const post=(data,headers={})=>({method:'POST',headers:{Origin:origin,'Content-Type':'application/json',...headers},body:JSON.stringify(data)});
 const call=(route,init={},options={})=>commerceHttp(request(route,init),{env,...options});
 
-test('config and production catalog expose only approved sellable fields from a fixture repository',async()=>{
+test('configuration and production catalog reject active database variants lacking product-listing approvals',async()=>{
  const repository=createMemoryRepository({variants:{finite:{id:'finite',productId:'tee',name:'Fixture',size:'M',sku:'FIX-M',active:true,liveStripePriceId:'price_fixture',productionPriceCents:3000,availableQuantity:0,reservedQuantity:1,soldQuantity:2},mto:{id:'mto',productId:'tee',active:true,liveStripePriceId:'price_mto',productionPriceCents:5000,inventoryPolicy:'made_to_order',availableQuantity:0},inactive:{active:false,liveStripePriceId:'price_hidden',productionPriceCents:3000},unmapped:{active:true,productionPriceCents:3000}}});
  const runtime=async()=>({repository,mock:false});
  assert.equal((await call('config',{method:'POST'},{runtime})).status,405);
@@ -18,8 +18,9 @@ test('config and production catalog expose only approved sellable fields from a 
  const settings={COMMERCE_ENVIRONMENT:'production',SITE_ORIGIN:'https://fixture.invalid',PAYMENTS_ENABLED:'true',LIVE_CATALOG_APPROVED:'true',SHIPPING_RATE_CENTS:'995'};
  const prod=(route,init={},patch={})=>commerceHttp(new Request('https://fixture.invalid/api/commerce/'+route,init),{env:{...settings,...patch},runtime});
  assert.equal((await prod('catalog',{method:'POST'})).status,405);
- const catalog=await (await prod('catalog')).json();assert.equal(catalog.variants.length,2);assert.equal(catalog.variants[0].available,false);assert.equal(catalog.variants[1].available,true);assert.equal(catalog.shippingCents,995);
- assert.equal(catalog.variants[0].liveStripePriceId,undefined);assert.equal(catalog.variants[0].reservedQuantity,undefined);
+ const catalog=await (await prod('catalog')).json();assert.equal(catalog.enabled,true);assert.deepEqual(catalog.variants,[]);assert.equal(catalog.shippingCents,995);
+ // Even active live-price-mapped records stay private until product-level approvals are recorded.
+ assert.ok(!JSON.stringify(catalog).includes('price_fixture'));assert.ok(!JSON.stringify(catalog).includes('reservedQuantity'));
  assert.deepEqual(await (await prod('catalog',{}, {LIVE_CATALOG_APPROVED:'false'})).json(),{enabled:false,variants:[]});
  assert.equal((await (await prod('config',{}, {PAYMENTS_ENABLED:'false'})).json()).enabled,false);
  assert.equal((await prod('checkout',post({items:[]}),{PAYMENTS_ENABLED:'false'})).status,503);
