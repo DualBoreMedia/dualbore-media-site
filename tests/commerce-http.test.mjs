@@ -21,6 +21,9 @@ test('webhook uses official SDK raw signature verification and rejects forged/mi
  assert.equal(response.headers.get('Cache-Control'),'no-store');
  const recorded=await repository.transaction(s=>s.limits['stripe-invalid-signatures']);assert.equal(recorded.count,2);assert.equal(recorded.secretMissing,false);assert.ok(Number.isFinite(Date.parse(recorded.lastAt)));
  assert.equal(Object.keys(recorded).sort().join(','),'count,id,lastAt,secretMissing');
+ assert.equal((await commerceHttp(request(),{env:{...env,STRIPE_WEBHOOK_SECRET:''},runtime})).status,503);
+ const missingSecret=await repository.transaction(s=>s.limits['stripe-invalid-signatures']);
+ assert.equal(missingSecret.count,3);assert.equal(missingSecret.secretMissing,true);
 });
 test('guest loopback checkout does not parse a missing WorkOS origin, while an authenticated cookie fails closed',async()=>{
  for(const SITE_ORIGIN of [undefined,'not-a-url']){
