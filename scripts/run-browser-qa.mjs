@@ -162,6 +162,32 @@ try {
           if(cards.length!==3)throw Error('Expected 3 merch cards, found '+cards.length);
           if(cards.some(card=>card.quickView!=='1'||card.qualifierFont<12))throw Error('Merch details or Quick View are not consistently readable');
           if(width>700&&(Math.max(...cards.map(c=>c.height))-Math.min(...cards.map(c=>c.height))>2||Math.max(...cards.map(c=>c.priceTop))-Math.min(...cards.map(c=>c.priceTop))>2))throw Error('Merch card heights or price rows do not align at '+width+'px: '+JSON.stringify(cards));
+          // Exercise the actual served React page, not just mounted component fixtures.
+          // This guards against visually present but unresponsive search/filter controls.
+          if ([375, 1024].includes(width)) {
+            const shopSearch=publicPage.getByRole('searchbox',{name:'Search products'});
+            const shopCategory=publicPage.getByRole('combobox',{name:'Category'});
+            const shopAudience=publicPage.getByRole('combobox',{name:'Gender / age'});
+            const shopSort=publicPage.getByRole('combobox',{name:'Sort by'});
+            await shopSearch.fill('SV1000S');
+            await expect(publicPage.locator('.merch-card')).toHaveCount(1);
+            await expect(publicPage.locator('.merch-card h3')).toHaveText(['SV1000S Silhouette Crewneck']);
+            await shopSearch.fill('');
+            await shopSort.selectOption('price-high');
+            await expect(publicPage.locator('.merch-card h3')).toHaveText(['E90 Sedan Front-Clip Crewneck','SV1000S Silhouette Crewneck','E92 Coupe Line-Art Tee']);
+            await shopCategory.selectOption('tees');
+            await expect(publicPage.locator('.merch-card h3')).toHaveText(['E92 Coupe Line-Art Tee']);
+            await shopAudience.selectOption('kids');
+            await expect(publicPage.locator('.merch-card')).toHaveCount(0);
+            await expect(publicPage.getByRole('heading',{name:'No matching products yet.'})).toBeVisible();
+            await publicPage.getByRole('button',{name:'Show all merchandise'}).click();
+            await expect(publicPage.locator('.merch-card')).toHaveCount(3);
+            await shopSearch.fill('E90');
+            await publicPage.getByRole('button',{name:'Apply filters'}).click();
+            await expect(publicPage.locator('.merch-card h3')).toHaveText(['E90 Sedan Front-Clip Crewneck']);
+            await publicPage.getByRole('button',{name:'Clear shop filters'}).click();
+            await expect(publicPage.locator('.merch-card')).toHaveCount(3);
+          }
           const footer=publicPage.getByRole('contentinfo');
           for(const label of ['Explore the garage','Customer information','Follow DualBore Media'])await footer.getByRole('navigation',{name:label,exact:true}).waitFor();
 

@@ -30,3 +30,7 @@ dialog.cart-drawer{position:fixed;inset:0 0 0 auto;margin:0;width:min(560px,100%
 .shop-discovery__empty p{color:#bbc9d8;font-size:13px;max-width:550px;margin:12px auto 20px;line-height:1.6}
 @media(max-width:950px){.shop-discovery__fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:550px){.shop-discovery{padding:17px;margin:18px 0 26px}.shop-discovery__fields{grid-template-columns:minmax(0,1fr);gap:12px}.shop-discovery__heading h2{font-size:34px}.shop-discovery__foot p{font-size:11px}}
+
+.shop-discovery__apply{grid-column:1/-1;justify-self:start;min-height:48px;min-width:160px;margin-top:4px}
+.shop-discovery__heading [role=status]{font-weight:600;white-space:nowrap}
+@media(max-width:550px){.shop-discovery__apply{justify-self:stretch;width:100%}}
