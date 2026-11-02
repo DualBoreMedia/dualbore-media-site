@@ -144,3 +144,18 @@ test('split package packing attribution comes from authenticated staff and remai
  const adminOrder=(await service.read(admin,{admin:true,orderNumber:'DBM-TEST'})).orders[0];assert.equal(adminOrder.shipments[0].packedByUserId,admin.userId);
  const customerOrder=(await service.read(customer)).orders[0];assert.equal(customerOrder.shipments[0].packedByUserId,undefined);
 });
+
+test('admin attention identifies Stripe error codes and tracks signature failures without payloads',async()=>{
+ const {repository,service}=setup();
+ await repository.transaction(s=>{
+  s.events.evt_fixture={id:'evt_fixture',type:'checkout.session.completed',status:'failed',orderId:'o1',createdAt:'2026-11-01T08:00:00Z',lastError:'payment_mismatch'};
+  s.limits['stripe-invalid-signatures']={id:'stripe-invalid-signatures',count:3,lastAt:'2026-11-01T08:01:00Z',secretMissing:true};
+ });
+ const data=await service.read(admin,{admin:true});
+ const webhook=data.failures.find(f=>f.type==='webhook');
+ assert.equal(webhook.orderNumber,'DBM-TEST');assert.equal(webhook.code,'payment_mismatch');assert.equal(webhook.eventId,'evt_fixture');assert.ok(webhook.createdAt);
+ const signatures=data.failures.find(f=>f.type==='invalid_signature');
+ assert.equal(signatures.count,3);assert.equal(signatures.secretMissing,true);
+ assert.equal(Object.hasOwn(signatures,'payload'),false);
+ assert.equal(Object.hasOwn(signatures,'headers'),false);
+});
