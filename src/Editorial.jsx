@@ -1,17 +1,17 @@
 import {FaArrowRight,FaPlay,FaYoutube,FaWrench,FaShirt,FaUsers} from 'react-icons/fa6';
 import {channel,films,merch,previewSizes,projects} from './content.js';
 
-export function GarageStories({onView,onDetails,onPlay}){
+export function GarageStories({onView,onDetails,onPlay,episodes=films}){
  return <>
   <section className="garage-intro" aria-labelledby="garage-intro-title"><div><span className="eyebrow">Two brothers / One channel</span><h2 id="garage-intro-title">The work. The ride.<br/><span>Everything in between.</span></h2></div><div><p>We are DualBore Media. Two brothers working on our own machines, chasing the next ride and bringing you into the garage along the way.</p><button className="text-link" onClick={()=>onView('crew',true)}>Meet the pit crew <FaArrowRight aria-hidden="true"/></button></div></section>
-  <section className="garage-journal" aria-labelledby="journal-title"><div className="section-bar"><h2 id="journal-title">Find your next session</h2><span className="rule"/><button className="text-link" onClick={()=>onView('vault',true)}>All episodes <FaArrowRight aria-hidden="true"/></button></div><div className="journal-grid">{films.slice(0,3).map(film=><button className="journal-card" key={film.id} onClick={event=>onPlay(film,event.currentTarget)} aria-label={`Watch featured episode: ${film.title}`}><div><img src={film.image} alt={`${film.title} channel episode artwork`} width="480" height="360" loading="lazy"/><span><FaPlay aria-hidden="true"/></span></div><small>{film.category}</small><h3>{film.title}</h3><span className="text-link">Watch episode <FaArrowRight aria-hidden="true"/></span></button>)}</div></section>
+  <section className="garage-journal" aria-labelledby="journal-title"><div className="section-bar"><h2 id="journal-title">Find your next session</h2><span className="rule"/><button className="text-link" onClick={()=>onView('vault',true)}>All episodes <FaArrowRight aria-hidden="true"/></button></div><div className="journal-grid">{episodes.slice(0,3).map(film=><button className="journal-card" key={film.id} onClick={event=>onPlay(film,event.currentTarget)} aria-label={`Watch featured episode: ${film.title}`}><div><img src={film.image} alt={`${film.title} channel episode artwork`} width="480" height="360" loading="lazy"/><span><FaPlay aria-hidden="true"/></span></div><small>{film.category}</small><h3>{film.title}</h3><span className="text-link">Watch episode <FaArrowRight aria-hidden="true"/></span></button>)}</div></section>
   <section className="garage-drop" aria-labelledby="garage-drop-title"><div className="garage-drop-art"><img src="/assets/IMG_5076-768.jpg" alt="E92 coupe tee original Drop 01 design mockup" width="768" height="1664" loading="lazy"/></div><div><span className="eyebrow">The next chapter / Drop 01</span><h2 id="garage-drop-title">Wear the<br/><span>garage.</span></h2><p>The cars and bikes behind the channel, translated into three original apparel designs. Applied by us. Packed by us.</p><span className="release-label">Coming soon / Orders are not open</span><div className="editorial-actions"><button className="button" onClick={()=>onView('merch',true)}>Explore Drop 01 <FaArrowRight aria-hidden="true"/></button><button className="text-link" onClick={event=>onDetails(merch[0],event.currentTarget)}>See the E92 design</button></div></div></section>
  </>;
 }
 
-export function RelatedEpisodes({film,onPlay,onProject}){
+export function RelatedEpisodes({film,onPlay,onProject,episodes=films}){
  const project=projects.find(p=>p.video===film.id||p.relatedVideo===film.id);
- const related=films.filter(f=>f.id!==film.id&&f.category===film.category);
+ const related=episodes.filter(f=>f.id!==film.id&&f.category===film.category);
  return <section className="episode-next" aria-label="Explore this series">{project&&<button className="episode-project" onClick={()=>onProject(project)}><FaWrench aria-hidden="true"/><span><small>Inside the garage</small><strong>Explore the {project.name}</strong></span><FaArrowRight aria-hidden="true"/></button>}{related.length>0&&<div className="related-episodes"><h3>More from this platform</h3>{related.map(item=><button key={item.id} onClick={()=>onPlay(item)}><img src={item.image} alt="" width="120" height="90" loading="lazy"/><span>{item.title}</span><FaPlay aria-hidden="true"/></button>)}</div>}</section>;
 }
 
