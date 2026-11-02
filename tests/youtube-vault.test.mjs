@@ -72,6 +72,34 @@ function fakeCache(){
   put:async(key,response)=>{data.set(key.url,response.clone());}
  })};
 }
+
+test('concurrent public cache misses and cache failures never spend provider quota',async()=>{
+ let calls=0;const fetcher=async()=>{calls++;throw Error('public provider call');};
+ for(const cacheApi of [fakeCache(),{}, {open:async()=>{throw Error('storage unavailable');}}]){
+  const results=await Promise.all(Array.from({length:20},()=>resolvePublicVideoVault({enabled:'true',apiKey:'synthetic-key',fetcher,cacheApi})));
+  assert.ok(results.every(result=>result.source==='curated'));
+ }
+ assert.equal(calls,0);
+});
+
+test('enabled public GET and HEAD never use the configured provider key or write snapshots',async t=>{
+ const oldKey=process.env.YOUTUBE_API_KEY,oldEnabled=process.env.YOUTUBE_SYNC_ENABLED,descriptor=Object.getOwnPropertyDescriptor(globalThis,'caches');
+ let calls=0,writes=0;t.mock.method(globalThis,'fetch',async()=>{calls++;throw Error('provider must not be called');});
+ Object.defineProperty(globalThis,'caches',{configurable:true,value:{open:async()=>({match:async()=>undefined,put:async()=>{writes++;}})}});
+ process.env.YOUTUBE_API_KEY='synthetic-key';process.env.YOUTUBE_SYNC_ENABLED='true';
+ try{
+  for(const method of ['GET','HEAD']){
+   const response=await videoVault(new Request('https://dualboremedia.com/api/video-vault',{method}));
+   assert.equal(response.status,200);
+   if(method==='HEAD')assert.equal(await response.text(),'');else assert.equal((await response.json()).source,'curated');
+  }
+  assert.equal(calls,0);assert.equal(writes,0);
+ }finally{
+  if(oldKey===undefined)delete process.env.YOUTUBE_API_KEY;else process.env.YOUTUBE_API_KEY=oldKey;
+  if(oldEnabled===undefined)delete process.env.YOUTUBE_SYNC_ENABLED;else process.env.YOUTUBE_SYNC_ENABLED=oldEnabled;
+  if(descriptor)Object.defineProperty(globalThis,'caches',descriptor);else delete globalThis.caches;
+ }
+});
 test('a successful scheduled upload snapshot survives later provider outages',async()=>{
  assert.equal(scheduleConfig.schedule,'0 10 * * *');
  const storage=fakeCache(),ok=fixtureFetcher();
