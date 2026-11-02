@@ -7,6 +7,14 @@ import {serverErrorReporter} from '../observability/server.mjs';
 import {workosCookie,readCookie} from '../operations/workos-auth.mjs';
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"};
 const json=(body,status=200)=>Response.json(body,{status,headers});
+// Only aggregate metadata is retained for unsigned/rejected requests.
+async function recordInvalidWebhook(repository,secretMissing){
+ if(!repository?.transaction)return;
+ try{await repository.transaction(state=>{
+  const id='stripe-invalid-signatures',previous=state.limits[id];
+  state.limits[id]={id,count:(Number.isSafeInteger(previous?.count)?previous.count:0)+1,lastAt:new Date().toISOString(),secretMissing};
+ });}catch{operationLog('webhook','invalid-signature-count-unavailable');}
+}
 export async function readBounded(request,max=8192){let length=0;const chunks=[];const reader=request.body?.getReader();if(!reader)return Buffer.alloc(0);while(true){const {done,value}=await reader.read();if(done)break;length+=value.length;if(length>max){await reader.cancel();throw new CommerceError('too_large','Request too large.',413);}chunks.push(value);}return Buffer.concat(chunks);}
 export async function commerceHttp(request,{env=process.env,runtime=commerceRuntime,clientIp='unavailable'}={}){
  const reporter=await serverErrorReporter(env);
@@ -33,11 +41,11 @@ async function commerceHandler(request,{env,runtime,clientIp,reporter}){
   }
   if(route==='webhook'){
    if(request.method!=='POST')return json({error:'Use POST.'},405);
-   if(!env.STRIPE_WEBHOOK_SECRET?.startsWith('whsec_')||r.mock||!r.stripe)return json({error:'Webhook is not configured.'},503);
-   let event;try{event=r.stripe.webhooks.constructEvent(await readBounded(request,262144),request.headers.get('Stripe-Signature'),env.STRIPE_WEBHOOK_SECRET);}catch{return json({error:'Invalid webhook signature.'},400);}
+   if(!env.STRIPE_WEBHOOK_SECRET?.startsWith('whsec_')||r.mock||!r.stripe){if(!env.STRIPE_WEBHOOK_SECRET?.startsWith('whsec_'))await recordInvalidWebhook(r.repository,true);return json({error:'Webhook is not configured.'},503);}
+   let event;try{event=r.stripe.webhooks.constructEvent(await readBounded(request,262144),request.headers.get('Stripe-Signature'),env.STRIPE_WEBHOOK_SECRET);}catch{await recordInvalidWebhook(r.repository,false);return json({error:'Invalid webhook signature.'},400);}
    try{return json(await r.service.webhook(event));}catch(error){
     operationLog('webhook',error instanceof CommerceError?error.code:'unavailable',{eventId:event?.id,status:error.status||503});
-    if(event?.livemode===live&&/^evt_[A-Za-z0-9_]+$/.test(event.id||''))try{await r.repository.transaction(s=>{if(s.events[event.id]?.status!=='processed')s.events[event.id]={id:event.id,type:String(event.type).slice(0,100),status:'failed',createdAt:new Date().toISOString(),lastError:error instanceof CommerceError?error.code:'processing-unavailable'};});}catch{}
+    if(event?.livemode===live&&/^evt_[A-Za-z0-9_]+$/.test(event.id||''))try{await r.repository.transaction(s=>{if(s.events[event.id]?.status!=='processed'){const object=event.data?.object;const related=Object.values(s.orders).find(o=>o.sessionId&&o.sessionId===object?.id||o.paymentIntentId&&(o.paymentIntentId===object?.payment_intent||o.paymentIntentId===object?.id));s.events[event.id]={id:event.id,type:String(event.type).slice(0,100),orderId:related?.id,status:'failed',createdAt:new Date().toISOString(),lastError:error instanceof CommerceError?error.code:'processing-unavailable'};}});}catch{}
     throw error;
    }
   }

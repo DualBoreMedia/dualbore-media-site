@@ -13,12 +13,14 @@ test('checkout HTTP boundary is loopback-only, opt-in, bounded, POST and same-or
  assert.equal((await call('checkout',{method:'POST',headers:{Origin:'http://127.0.0.1:4176','Content-Type':'application/json'},body:'x'.repeat(9000)})).status,413);
 });
 test('webhook uses official SDK raw signature verification and rejects forged/missing signatures',async()=>{
- const stripe=new Stripe('sk_test_synthetic_not_a_credential');let calls=0;const runtime=async()=>({stripe,service:{webhook:async e=>{calls++;assert.equal(e.livemode,false);return{received:true};}}});
+ const stripe=new Stripe('sk_test_synthetic_not_a_credential');let calls=0;const repository=createMemoryRepository();const runtime=async()=>({repository,stripe,service:{webhook:async e=>{calls++;assert.equal(e.livemode,false);return{received:true};}}});
  const body=JSON.stringify({id:'evt_mockverified',livemode:false,type:'checkout.session.completed',data:{object:{}}});
  const request=signature=>new Request(url+'webhook',{method:'POST',headers:signature?{'Stripe-Signature':signature}:{},body});
  assert.equal((await commerceHttp(request(),{env,runtime})).status,400);assert.equal((await commerceHttp(request('bad'),{env,runtime})).status,400);
  const signature=stripe.webhooks.generateTestHeaderString({payload:body,secret:env.STRIPE_WEBHOOK_SECRET});const response=await commerceHttp(request(signature),{env,runtime});assert.equal(response.status,200);assert.equal(calls,1);
  assert.equal(response.headers.get('Cache-Control'),'no-store');
+ const recorded=await repository.transaction(s=>s.limits['stripe-invalid-signatures']);assert.equal(recorded.count,2);assert.equal(recorded.secretMissing,false);assert.ok(Number.isFinite(Date.parse(recorded.lastAt)));
+ assert.equal(Object.keys(recorded).sort().join(','),'count,id,lastAt,secretMissing');
 });
 test('guest loopback checkout does not parse a missing WorkOS origin, while an authenticated cookie fails closed',async()=>{
  for(const SITE_ORIGIN of [undefined,'not-a-url']){
