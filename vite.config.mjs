@@ -67,6 +67,8 @@ export default defineConfig(({mode}) => {
   define:{__APP_RELEASE__:JSON.stringify(release),__APP_ENVIRONMENT__:JSON.stringify(environment)},
   build: {
     outDir: "dist/client",
+    // Keep hashed Vite output separate from public/assets (unversioned channel media).
+    assetsDir: "_vite",
     sourcemap:'hidden',
   },
   optimizeDeps: {
