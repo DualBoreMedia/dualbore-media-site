@@ -1,5 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
 import {channel,films,projects} from './content.js';
+import {resolvePublicVideo} from './public-video-route.js';
 
 const patterns={
  n54:/\b(n54|335i|bmw)\b/i,
@@ -49,7 +50,7 @@ export function PublicDetail(){
  const kind=parts[0],id=parts[1];
  const project=kind==='builds'?projects.find(p=>p.id===id):null;
  const [episodes,setEpisodes]=useState(films);
- const [loading,setLoading]=useState(kind==='videos'&&!films.some(f=>f.id===id));
+ const [loading,setLoading]=useState(kind==='videos'&&!resolvePublicVideo(films,id));
  useEffect(()=>{
   const controller=new AbortController();
   fetch('/api/video-vault',{signal:controller.signal})
@@ -59,9 +60,9 @@ export function PublicDetail(){
    .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
   return()=>controller.abort();
  },[]);
- const video=kind==='videos'&&videoId.test(id||'')?episodes.find(f=>f.id===id):null;
+ const video=kind==='videos'?resolvePublicVideo(episodes,id):null;
  const buildEpisodes=useMemo(()=>project?episodesForBuild(project,episodes):[],[project,episodes]);
- const canonical='https://dualboremedia.com/'+(kind==='builds'?'builds/':'videos/')+encodeURIComponent(id||'')+'/';
+ const canonical='https://dualboremedia.com/'+(kind==='builds'?'builds/':'videos/')+encodeURIComponent(video?.id||id||'')+'/';
  const missing=kind==='builds'?!project:kind==='videos'?!video&&!loading:true;
  const title=project?project.name+' | DualBore Media Builds':video?video.title+' | DualBore Media':missing?'Page unavailable | DualBore Media':'Loading video | DualBore Media';
  const description=project?project.description:video?'Watch '+video.title+' on DualBore Media.':'Explore authentic DualBore Media build and video episodes.';

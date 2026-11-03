@@ -36,6 +36,15 @@ test('live archive can resolve a newly synced video URL without code changes',as
  await expect.element(page.getByTitle('New RD400 Session')).toHaveAttribute('src','https://www.youtube-nocookie.com/embed/'+id);
 });
 
+test('Netlify lowercase episode paths preserve the real case-sensitive YouTube ID',async()=>{
+ history.replaceState(null,'','/videos/loosfhjgupm/');
+ root.render(<PublicDetail/>);
+ await expect.element(page.getByRole('heading',{name:'The N54 single-turbo build starts here'})).toBeVisible();
+ await expect.element(page.getByTitle('The N54 single-turbo build starts here')).toHaveAttribute('src','https://www.youtube-nocookie.com/embed/LOOSFHJGUPM');
+ await expect.element(page.getByRole('link',{name:'Watch on YouTube'})).toHaveAttribute('href','https://www.youtube.com/watch?v=LOOSFHJGUPM');
+ expect(document.querySelector('link[rel="canonical"]').href).toBe('https://dualboremedia.com/videos/LOOSFHJGUPM/');
+});
+
 test('garage and vault expose crawlable links to actual individual pages',async()=>{
  root.render(<App/>);
  await expect.element(page.getByRole('link',{name:'Yamaha RD400 build log'})).toHaveAttribute('href','/builds/rd400/');
