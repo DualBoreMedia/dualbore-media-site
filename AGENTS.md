@@ -20,6 +20,13 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Live Admin request and bike library, November 2, 2026
+
+- Owner requests usable private live Admin for merchandise metadata and a visible MX Bikes placeholder library. Keep all purchasing, refunds, sending, signups and downloads disabled. Do not substitute a public or staging-authenticated editor for secure production Admin.
+- Production provider, staff MFA/membership, database/migrations/recovery and monitoring still require actual verification. Fresh WorkOS inspection shows production blocked by its billing-information step; no billing, paid feature, secret, membership or production data change was made. Specific production setup approvals remain required where applicable.
+- Owner confirmed https://mxb-mods.com/oem-bike-pack/ as the target pack and requests real stock photos. Use its official MX OEM v0.19.1 roster as an explicitly labeled reference. All 53 bike slots are placeholders, not tested compatibility, stock, delivered files or a publication promise. Preserve received TC125 previews and private file boundaries. Exact-image sourcing remains pending; do not represent another year/model as an exact match or fabricate photographs.
+- Explore a desktop sidebar within the setup library with mobile stacking. Preserve existing garage navigation and existing Admin sidebar rather than redesigning the entire website. Prepare a concrete tested release before the exact-deployment approval step.
+
 ### Conditional non-selling release, November 2, 2026
 
 - Owner authorizes one finished-branch production release by a main merge marked [deploy netlify], without [skip netlify], only after the requested worklist/audit defects and tests are resolved.

@@ -67,3 +67,20 @@ test('compact OEM bike search filters the received file previews',async()=>{
  await page.getByRole('searchbox',{name:'Search'}).fill('YZ250');
  await expect.element(page.getByText('No received setup files match these filters.')).toBeVisible();
 });
+
+test('bike library exposes all reference placeholders with working filters but no delivery or selling controls',async()=>{
+ root.render(<SetupShop/>);
+ await page.getByRole('button',{name:/Bike library 53 placeholders/}).click();
+ await expect.element(page.getByText('53 of 53 bike placeholders')).toBeVisible();
+ await expect.element(page.getByRole('heading',{name:'2025 Triumph TF 450-RC',exact:true})).toBeVisible();
+ await page.getByRole('searchbox',{name:'Search bikes',exact:true}).fill('TC125');
+ await expect.element(page.getByText('1 of 53 bike placeholders')).toBeVisible();
+ await expect.element(page.getByRole('heading',{name:'2023 Husqvarna TC 125',exact:true})).toBeVisible();
+ await page.getByRole('combobox',{name:'Manufacturer',exact:true}).selectOptions('Honda');
+ await expect.element(page.getByText('No bikes match these filters.')).toBeVisible();
+ await page.getByRole('button',{name:'Reset bike filters',exact:true}).click();
+ await expect.element(page.getByText('53 of 53 bike placeholders')).toBeVisible();
+ expect(host.querySelectorAll('a[download],a[href*="checkout"],input[type="email"]')).toHaveLength(0);
+ await page.getByRole('link',{name:'Explore the setup finder',exact:true}).click();
+ await expect.element(page.getByRole('heading',{name:'Setup finder',exact:true})).toBeVisible();
+});

@@ -2,6 +2,8 @@ import {useEffect, useMemo, useState} from 'react';
 import {FaArrowRight, FaBolt, FaDownload, FaFlagCheckered, FaMagnifyingGlass, FaShieldHalved} from 'react-icons/fa6';
 import {PLANNED_PREVIEWS, PLANNED_TRACKS, RECEIVED_SETUP_PREVIEWS, SETUP_CATALOG, SETUP_TYPES, filterSetupListings, setupMoney, setupPriceCents} from './catalog.js';
 import './setups.css';
+import {BikeLibrary} from './BikeLibrary.jsx';
+import {BIKE_PLACEHOLDERS} from './bike-roster.js';
 
 export default function SetupShop() {
   const staffOnly = import.meta.env.VITE_AUTH_ACCESS_MODE === 'staff-only';
@@ -9,6 +11,7 @@ export default function SetupShop() {
   const [kind, setKind] = useState('all');
   const [track, setTrack] = useState('all');
   const [bike, setBike] = useState('all');
+  const [section,setSection] = useState('previews');
   const shownBikes = useMemo(() => [...new Map([...RECEIVED_SETUP_PREVIEWS, ...SETUP_CATALOG].map(item => [item.bikeId, {id:item.bikeId, name:item.bikeName}])).values()], []);
   const received = useMemo(() => filterSetupListings(RECEIVED_SETUP_PREVIEWS, {query, kind, track, bike}), [query, kind, track, bike]);
   const published = useMemo(() => filterSetupListings(SETUP_CATALOG, {query, kind, track, bike}), [query, kind, track, bike]);
@@ -32,7 +35,7 @@ export default function SetupShop() {
           <span className="mxb-kicker"><FaFlagCheckered aria-hidden="true"/> MX BIKES / OEM TUNING</span>
           <h1 id="mxb-title">Your bike. <span>Your track.</span> Your setup.</h1>
           <p>Affordable MX Bikes setups organized by OEM bike and track. Built for players who want a better starting point without paying premium prices for every track.</p>
-          <div className="mxb-hero-actions"><a className="button" href="#setup-finder">Explore the setup finder <FaArrowRight aria-hidden="true"/></a><a className="mxb-text-link" href="#how-it-works">How it works</a></div>
+          <div className="mxb-hero-actions"><a className="button" href="#setup-finder" onClick={event=>{event.preventDefault();setSection('previews');requestAnimationFrame(()=>document.getElementById('setup-finder')?.scrollIntoView({block:'start'}));}}>Explore the setup finder <FaArrowRight aria-hidden="true"/></a><a className="mxb-text-link" href="#how-it-works">How it works</a></div>
         </div>
         <aside className="mxb-hero-info" aria-label="Planned setup prices">
           <span>THE PLAN / PRICING</span>
@@ -44,6 +47,12 @@ export default function SetupShop() {
 
       <div className="mxb-status" role="status"><FaBolt aria-hidden="true"/><span><strong>BUILD IN PROGRESS</strong> — No setups are for sale yet. Three TC 125 files were received for inspection; private storage, compatibility testing and delivery are still pending.</span></div>
 
+      <nav className="mxb-section-nav" aria-label="Setup catalog views">
+        <button type="button" aria-pressed={section==='previews'} aria-controls="setup-preview-view" onClick={()=>setSection('previews')}>Setup previews</button>
+        <button type="button" aria-pressed={section==='bikes'} aria-controls="bike-library-view" onClick={()=>setSection('bikes')}>Bike library <span>{BIKE_PLACEHOLDERS.length} placeholders</span></button>
+      </nav>
+      <div id="bike-library-view" hidden={section!=='bikes'}>{section==='bikes'&&<BikeLibrary/>}</div>
+      <div id="setup-preview-view" hidden={section!=='previews'}>
       <section className="mxb-finder" id="setup-finder" aria-labelledby="finder-heading">
         <div className="mxb-section-title"><div><span className="mxb-kicker">FIND YOUR LINE</span><h2 id="finder-heading">Setup finder</h2></div><p>Search planned categories and tracks. Verified bike listings will appear here after their files are tested.</p></div>
         <div className="mxb-controls">
@@ -60,6 +69,7 @@ export default function SetupShop() {
         {planned.length ? <div className="mxb-card-grid">{planned.map(item=><article className="mxb-card mxb-preview" key={item.id}><span className="mxb-card-eyebrow">{SETUP_TYPES[item.kind].name}</span><h4>{item.kind === 'track' ? item.trackName : item.name}</h4><p>{item.kind === 'track' ? 'One setup per supported bike for this track' : 'Individual setup for each supported OEM bike'}</p><div className="mxb-card-footer"><strong>{setupMoney(setupPriceCents(item.kind))}</strong><span>Planned · Not available</span></div></article>)}</div> : <div className="mxb-empty"><p>No planned items match these filters.</p><button type="button" onClick={reset}>Show all plans</button></div>}
       </section>
 
+      </div>
       <section id="how-it-works" className="mxb-about" aria-labelledby="mxb-how-heading">
         <div className="mxb-section-title"><div><span className="mxb-kicker">NO GUESSWORK</span><h2 id="mxb-how-heading">How it'll work</h2></div></div>
         <div className="mxb-steps">
