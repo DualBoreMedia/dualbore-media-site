@@ -20,6 +20,14 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Conditional non-selling release, November 2, 2026
+
+- Owner authorizes one finished-branch production release by a main merge marked [deploy netlify], without [skip netlify], only after the requested worklist/audit defects and tests are resolved.
+- Before any merge/deploy, confirm Netlify AUTH_ACCESS_MODE=staff-only and YouTube sync is not true. Stop before deployment if staff-only cannot be confirmed. Only the five payment/refund/transactional-email/marketing-email/waitlist flags may be changed, and only to the exact string false. No other variables, secrets, migrations, provider activation, signup forms or setup downloads.
+- Ordinary dashboard/queue views must not append audit rows. Preserve immutable operational and denied-access history. Admin work lists use all matching eligible paid orders, separately from the paginated order table.
+- Current read-only production check found AUTH_ACCESS_MODE absent, so the release is blocked. Only the explicitly allowed missing REFUNDS_ENABLED flag was set to false. No deployment or main merge has occurred.
+
+
 ### Product Manager, November 2, 2026
 
 - Extend the existing search/filter and MX Bikes foundation; do not duplicate it. Managed product drafts and published snapshots are separate. Only current MFA-verified Admins with fresh sensitive-action verification can change products.

@@ -20,20 +20,23 @@ test('customer and unenrolled/stale MFA staff cannot read queue or packing slips
  assert.equal(await repository.transaction(s=>Object.values(s.audit).filter(a=>a.action==='authorization-denied').length),6);
  assert.throws(()=>requireStaff({...employee,mfa:false}),{code:'mfa_required'});assert.equal(permissionsFor(customer).length,0);
 });
-test('employee queue reveals only fulfillment data and records stable actor/session identity',async()=>{
+test('employee queue reveals only fulfillment data without recording ordinary views',async()=>{
  const {repository,service}=setup();await repository.transaction(s=>{s.audit.note={id:'note',actor:'user_admin',action:'note',target:'DBM-ONE',metadata:{note:'PRIVATE ADMIN NOTE'},createdAt:'2026-10-14T12:00:00Z'};});
  const result=await service.read(employee,{staff:true,orderNumber:'DBM-ONE'}),text=JSON.stringify(result);
  for(const value of ['PRIVATE ADMIN NOTE','cs_secret','pi_private','totalCents','unitPriceCents','customerUserId','customer@example.invalid','must omit','session-employee'])assert.equal(text.includes(value),false,value);
  assert.equal(result.orders[0].shippingName,'<script>Not markup</script>');assert.deepEqual(result.orders[0].allowedTransitions,['making']);
- const events=await repository.transaction(s=>Object.values(s.audit));assert.ok(events.some(a=>a.action==='staff-order-opened'&&a.actor==='user_employee'&&/^[a-f0-9]{64}$/.test(a.metadata.sessionHash)));
+ const events=await repository.transaction(s=>Object.values(s.audit));assert.deepEqual(events.map(e=>e.action),['note']);
 });
-test('administrator session audit handles missing IDs safely and deduplicates the actual actor session',async()=>{
- const {repository,service}=setup();await service.read({...admin,sessionId:undefined},{admin:true});
- assert.equal(await repository.transaction(s=>Object.values(s.audit).filter(a=>a.action==='admin-session').length),0);
- await service.read(admin,{admin:true});await service.read(admin,{admin:true});
- const events=await repository.transaction(s=>Object.values(s.audit));assert.equal(events.filter(a=>a.action==='admin-session').length,1);
- assert.equal(events.find(a=>a.action==='admin-session').metadata.sessionHash,events.find(a=>a.action==='staff-session').metadata.sessionHash);
+test('ordinary dashboard and queue reads do not append view or session audit rows',async()=>{
+ const {repository,service}=setup();
+ for(let i=0;i<4;i++){await service.read({...admin,sessionId:i?'session-'+i:undefined},{admin:true});await service.read(employee,{staff:true});await service.read(employee,{staff:true,orderNumber:'DBM-ONE'});}
+ assert.deepEqual(await repository.transaction(s=>Object.values(s.audit)),[]);
+ await assert.rejects(service.read(customer,{admin:true}),{code:'admin_required'});
+ assert.equal(await repository.transaction(s=>Object.values(s.audit).filter(e=>e.action==='authorization-denied').length),1);
+ await service.mutate(employee,{action:'transition',orderNumber:'DBM-ONE',status:'making',expectedVersion:0});
+ const events=await repository.transaction(s=>Object.values(s.audit));assert.ok(events.some(e=>e.action==='fulfillment'&&e.actor===employee.userId));
 });
+
 test('employee cannot refund, reconcile, change stock or role, access admin notes, or apply fulfillment exceptions',async()=>{
  const {service}=setup();for(const action of ['refund','reconcile','inventory','staff-role','note','retry-email','support-status'])await assert.rejects(service.mutate(employee,{action}),{code:'admin_required'});
  await assert.rejects(service.read(employee,{admin:true}),{code:'admin_required'});

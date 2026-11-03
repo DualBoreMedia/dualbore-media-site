@@ -255,6 +255,16 @@ try {
           const merchCopy = await publicPage.getByRole('dialog').innerText();
           if (/Ships within 3 (?:business )?days|No change-of-mind returns|30 calendar days of delivery|Made-to-order policies/i.test(merchCopy)) throw Error('Public Coming Soon dialog presents purchase policies as active offers');
           await publicPage.keyboard.press('Escape');
+          await publicPage.goto(`${publicBaseUrl}/setups`);
+          await expect(publicPage.getByRole('heading',{name:'Setup finder',exact:true})).toBeVisible();
+          await expect(publicPage.getByText('No verified setups listed yet.',{exact:true})).toBeVisible();
+          if(await publicPage.locator('a[download],a[href$=".stp"],a[href*="checkout"],form input[type="email"]').count())throw Error('Setup preview exposed checkout, download or email collection');
+          if(await publicPage.getByRole('button',{name:/buy|checkout|download|join/i}).count())throw Error('Setup preview exposed a selling or signup control');
+          await publicPage.getByRole('searchbox',{name:'Search',exact:true}).fill('Assen');
+          await expect(publicPage.getByRole('heading',{name:'2023 Husqvarna TC 125 \u2014 Assen',exact:true})).toBeVisible();
+          await expect(publicPage.getByRole('heading',{name:'Forest',exact:true})).toHaveCount(0);
+          await publicPage.getByRole('button',{name:'Clear filters',exact:true}).click();
+          await capturePublic(publicPage,`${output}/${name}-setups-preview.png`);
           for (const route of ['shipping', 'returns', 'privacy', 'terms', 'contact']) {
             await publicPage.goto(`${publicBaseUrl}/${route}`);
             await publicPage.locator('main').getByRole('heading').first().waitFor();

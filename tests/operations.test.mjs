@@ -159,3 +159,29 @@ test('admin attention identifies Stripe error codes and tracks signature failure
  assert.equal(Object.hasOwn(signatures,'payload'),false);
  assert.equal(Object.hasOwn(signatures,'headers'),false);
 });
+
+
+test('Admin work lists include all eligible paid orders independently of table pagination and filters',async()=>{
+ const {repository}=setup();const service=createOperationsService({repository,send:async()=>{},now:()=>new Date('2026-11-02T12:00:00Z')});
+ await repository.transaction(s=>{
+  s.orders={};
+  const row=(id,fulfillmentStatus,date)=>({id,orderNumber:id,customerUserId:'other',customerEmail:'synthetic@example.invalid',status:'paid',fulfillmentStatus,createdAt:date,currency:'usd',totalCents:100,items:[]});
+  for(let i=0;i<30;i++){
+   s.orders['FILLER-'+i]=row('FILLER-'+i,'received','2026-11-02T00:00:00Z');
+   s.orders['MAKING-'+i]=row('MAKING-'+i,'making','2026-10-01T00:00:00Z');
+   s.orders['PACKING-'+i]=row('PACKING-'+i,'packing','2026-10-02T00:00:00Z');
+   const due=row('DUE-'+i,'ready_to_ship','2026-10-03T00:00:00Z');due.shippingPromise={verified:true,dueDate:i%2?'2026-11-01':'2026-11-02',calendar:{timeZone:'UTC'}};s.orders[due.id]=due;
+  }
+  for(const [id,status,refundStatus]of [['UNPAID','payment_pending','none'],['REFUNDED','refunded','full'],['FULL-REFUND','paid','full']])s.orders[id]={...row(id,'making','2026-10-01T00:00:00Z'),status,refundStatus};
+ });
+ const first=await service.read(admin,{admin:true});assert.equal(first.orders.length,25);assert.ok(first.orders.every(o=>o.orderNumber.startsWith('FILLER-')));
+ assert.equal(first.workLists.making.length,30);assert.equal(first.workLists.packing.length,30);assert.equal(first.workLists.carrierHandoff.length,30);
+ assert.equal(first.overview.making,first.workLists.making.length);assert.equal(first.overview.packing,first.workLists.packing.length);
+ assert.ok(first.workLists.making.some(o=>o.orderNumber==='MAKING-29'));assert.ok(first.workLists.packing.some(o=>o.orderNumber==='PACKING-29'));assert.ok(first.workLists.carrierHandoff.some(o=>o.orderNumber==='DUE-29'));
+ assert.deepEqual(Object.keys(first.workLists.making[0]).sort(),['createdAt','fulfillmentStatus','orderNumber','shippingReview']);
+ const second=await service.read(admin,{admin:true,page:2,search:'FILLER-'});assert.equal(second.orders.length,5);assert.equal(second.pagination.total,30);assert.deepEqual(second.workLists,first.workLists);
+ assert.equal((await service.read(admin,{admin:true,orderNumber:'MAKING-29'})).orders.length,1);
+ assert.equal((await service.read(customer)).workLists,undefined);
+ assert.equal((await service.read({...admin,role:'employee'},{staff:true})).workLists,undefined);
+ assert.equal(await repository.transaction(s=>Object.values(s.audit).length),0);
+});

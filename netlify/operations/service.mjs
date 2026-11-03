@@ -23,6 +23,19 @@ function schema(input,required,optional=[]){if(!input||typeof input!=='object'||
 function checkVersion(record,expected){if(!Number.isSafeInteger(expected)||expected!==version(record))fail('stale_record','This record changed. Reload before saving.',409);}
 function initialFulfillment(order){return order.fulfillmentStatus&&Object.hasOwn(fulfillmentTransitions,order.fulfillmentStatus)?order.fulfillmentStatus:order.fulfilledAt&&order.shippedAt?'shipped':'received';}
 function audit(state,principal,action,target,metadata,now){const id=randomUUID();state.audit[id]={id,actor:principal.userId,action,target,createdAt:now,metadata};return id;}
+// Separate from the paginated/search-filtered order table. Keep these projections
+// small: opening a row fetches its authorized detail through the existing route.
+function adminWorkLists(orders,now){
+ const lists={making:[],packing:[],carrierHandoff:[]};
+ for(const order of orders.filter(fulfillable).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.orderNumber.localeCompare(b.orderNumber))){
+  const fulfillmentStatus=initialFulfillment(order),review=shippingReview(order,now);
+  const row={orderNumber:order.orderNumber,createdAt:order.createdAt,fulfillmentStatus,shippingReview:review};
+  if(fulfillmentStatus==='making')lists.making.push(row);
+  if(fulfillmentStatus==='packing')lists.packing.push(row);
+  if(['due_today','cancel_refund_due'].includes(review.status))lists.carrierHandoff.push(row);
+ }
+ return lists;
+}
 function orderByNumber(state,number){if(!text(number,60))fail('not_found','Order not found.',404);const order=Object.values(state.orders).find(o=>o.orderNumber===number);if(!order)fail('not_found','Order not found.',404);return order;}
 const cleanItems=items=>items.map(({variantId,name,size,quantity,unitPriceCents,lineTotalCents})=>({variantId,name,size,quantity,unitPriceCents,lineTotalCents}));
 const shippingAddress=address=>Object.fromEntries(['line1','line2','city','state','postal_code','country'].filter(k=>typeof address?.[k]==='string').map(k=>[k,address[k].slice(0,200)]));
@@ -60,11 +73,6 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
   else if(staff)await authorize(principal,'staff-read');
   if(!principal?.userId||!principal.email)fail('unauthorized','Sign in with a verified email.',401);
   return repository.transaction(s=>{
-   const sessionHash=principal.sessionId?createHash('sha256').update(String(principal.sessionId)).digest('hex'):null;
-   if(admin||staff){
-    if(sessionHash&&!Object.values(s.audit).some(a=>a.action==='staff-session'&&a.actor===principal.userId&&a.metadata.sessionHash===sessionHash))audit(s,principal,'staff-session','staff',{sessionHash,role:roleOf(principal)},timestamp());
-    audit(s,principal,orderNumber?'staff-order-opened':'staff-queue-viewed',orderNumber||'fulfillment-queue',{sessionHash,role:roleOf(principal)},timestamp());
-   }
    if(staff&&!admin){
     let orders=Object.values(s.orders).filter(paid);const term=String(search).toLowerCase().slice(0,100);
     orders=orders.filter(o=>(!orderNumber||o.orderNumber===orderNumber)&&(!term||`${o.orderNumber} ${o.shippingName||''}`.toLowerCase().includes(term))&&(!status||o.status===status)&&(!fulfillmentStatus||initialFulfillment(o)===fulfillmentStatus)&&(!dateFrom||o.createdAt.slice(0,10)>=dateFrom)&&(!dateTo||o.createdAt.slice(0,10)<=dateTo)&&(!shipmentStatus||Object.values(s.shipments).some(p=>p.orderId===o.id&&p.status===shipmentStatus)));
@@ -80,14 +88,13 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
    for(const o of Object.values(s.orders))if(!o.customerUserId&&o.customerEmail?.toLowerCase()===principal.email.toLowerCase()&&paid(o)){
     o.customerUserId=principal.userId;audit(s,principal,'order-claimed',o.orderNumber,{method:'verified-primary-email'},timestamp());
    }
-   if(admin&&sessionHash&&!Object.values(s.audit).some(a=>a.action==='admin-session'&&a.actor===principal.userId&&a.metadata.sessionHash===sessionHash))
-    audit(s,principal,'admin-session','operations',{sessionHash},timestamp());
    let orders=Object.values(s.orders).filter(o=>admin||o.customerUserId===principal.userId);
    if(orderNumber){orders=orders.filter(o=>o.orderNumber===orderNumber);if(!orders.length)fail('not_found','Order not found.',404);}
    if(admin){const term=String(search).toLowerCase().slice(0,100);orders=orders.filter(o=>(!term||`${o.orderNumber} ${o.customerEmail||''} ${o.shippingName||''}`.toLowerCase().includes(term))&&(!status||o.status===status)&&(!fulfillmentStatus||initialFulfillment(o)===fulfillmentStatus)&&(!customer||(o.customerEmail||'').toLowerCase().includes(customer.toLowerCase()))&&(!dateFrom||o.createdAt.slice(0,10)>=dateFrom)&&(!dateTo||o.createdAt.slice(0,10)<=dateTo)&&(!shipmentStatus||Object.values(s.shipments).some(p=>p.orderId===o.id&&p.status===shipmentStatus)));}
    orders.sort((a,b)=>sort==='oldest'?a.createdAt.localeCompare(b.createdAt):b.createdAt.localeCompare(a.createdAt));
    const total=orders.length;const pageNumber=Math.max(1,Math.min(100000,Number.isSafeInteger(Number(page))?Number(page):1));orders=orders.slice((pageNumber-1)*25,pageNumber*25);
    const all=Object.values(s.orders),variants=Object.values(s.variants);
+   const workLists=admin?adminWorkLists(all,now()):null;
    const lowThreshold=Number.isSafeInteger(Number(env.LOW_STOCK_THRESHOLD))?Number(env.LOW_STOCK_THRESHOLD):5;
    const failures=[...Object.values(s.emails).filter(e=>['failed','queued','manual-review'].includes(e.status)).map(e=>({eventId:e.id,type:'email',status:e.status,orderNumber:s.orders[e.orderId]?.orderNumber,reason:e.lastError})),...Object.values(s.events).filter(e=>e.status==='failed').map(e=>({eventId:e.id,type:'webhook',status:'failed',orderNumber:s.orders[e.orderId]?.orderNumber,createdAt:e.createdAt,code:/^[a-z0-9_-]{1,80}$/.test(e.lastError||'')?e.lastError:'processing-unavailable',safeMessage:'Review the recorded Stripe webhook failure.'})),...variants.filter(v=>!['availableQuantity','reservedQuantity','soldQuantity'].every(k=>Number.isSafeInteger(v[k])&&v[k]>=0)).map(v=>({type:'inventory',reason:`Review ${v.sku}`}))];
    if(s.limits['stripe-invalid-signatures']?.count>0){const record=s.limits['stripe-invalid-signatures'];failures.push({type:'invalid_signature',status:'review',count:record.count,createdAt:record.lastAt,secretMissing:record.secretMissing===true,safeMessage:'Rejected Stripe webhook signatures require configuration or security review.'});}
@@ -101,7 +108,7 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
    const supportTickets=Object.values(s.supportTickets).filter(t=>admin||t.userId===principal.userId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,100).map(({id,userId,customerEmail,note,...ticket})=>({...ticket,...admin?{customerEmail,note}:{}}));
    profile.marketingConsent=getMarketingPreference(s,principal.email).subscribed;
    for(const failure of failures)failure.safeMessage??=failure.type==='email'?'A recorded email needs safe retry or delivery review.':failure.type==='inventory'?failure.reason:'A verified webhook needs Stripe reconciliation.';
-   return {role:roleOf(principal),permissions:permissionsFor(principal),supportTickets,profile:{displayName:principal.displayName,email:principal.email,verified:true,marketingConsent:profile.marketingConsent,marketingSuppressed:getMarketingPreference(s,principal.email).suppressed,deletionRequestedAt:profile.deletionRequestedAt},orders:orders.map(o=>projection(s,o,admin,now())),pagination:{page:pageNumber,total,pageSize:25},...(admin?{products:Object.values(s.products||{}),overview:{paid:all.filter(o=>['paid','fulfilled'].includes(o.status)).length,received:all.filter(o=>paid(o)&&initialFulfillment(o)==='received').length,...Object.fromEntries(['making','packing','ready_to_ship','shipped','delivered','on_hold'].map(k=>[k,all.filter(o=>paid(o)&&initialFulfillment(o)===k).length])),lowInventory:variants.filter(v=>!madeToOrder(v)&&v.availableQuantity<=lowThreshold).length,soldOut:variants.filter(v=>!madeToOrder(v)&&v.active&&v.availableQuantity===0).length,needsAttention:failures.length,failedEmails:failures.filter(e=>e.type==='email').length,webhookFailures:failures.filter(e=>e.type==='webhook').length},variants:variants.map(v=>({id:v.id,variantId:v.id,productId:v.productId,sku:v.sku,name:v.name,size:v.size,inventoryPolicy:inventoryPolicy(v),availableQuantity:publicAvailableQuantity(v),reservedQuantity:v.reservedQuantity,soldQuantity:v.soldQuantity,active:v.active,version:version(v),lowStock:!madeToOrder(v)&&v.active&&v.availableQuantity>0&&v.availableQuantity<=lowThreshold})),audit:Object.values(s.audit).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,250),failures}:{} )};
+   return {role:roleOf(principal),permissions:permissionsFor(principal),supportTickets,profile:{displayName:principal.displayName,email:principal.email,verified:true,marketingConsent:profile.marketingConsent,marketingSuppressed:getMarketingPreference(s,principal.email).suppressed,deletionRequestedAt:profile.deletionRequestedAt},orders:orders.map(o=>projection(s,o,admin,now())),pagination:{page:pageNumber,total,pageSize:25},...(admin?{workLists,products:Object.values(s.products||{}),overview:{paid:all.filter(o=>['paid','fulfilled'].includes(o.status)).length,received:all.filter(o=>paid(o)&&initialFulfillment(o)==='received').length,...Object.fromEntries(['making','packing','ready_to_ship','shipped','delivered','on_hold'].map(k=>[k,['making','packing'].includes(k)?workLists[k].length:all.filter(o=>paid(o)&&initialFulfillment(o)===k).length])),lowInventory:variants.filter(v=>!madeToOrder(v)&&v.availableQuantity<=lowThreshold).length,soldOut:variants.filter(v=>!madeToOrder(v)&&v.active&&v.availableQuantity===0).length,needsAttention:failures.length,failedEmails:failures.filter(e=>e.type==='email').length,webhookFailures:failures.filter(e=>e.type==='webhook').length},variants:variants.map(v=>({id:v.id,variantId:v.id,productId:v.productId,sku:v.sku,name:v.name,size:v.size,inventoryPolicy:inventoryPolicy(v),availableQuantity:publicAvailableQuantity(v),reservedQuantity:v.reservedQuantity,soldQuantity:v.soldQuantity,active:v.active,version:version(v),lowStock:!madeToOrder(v)&&v.active&&v.availableQuantity>0&&v.availableQuantity<=lowThreshold})),audit:Object.values(s.audit).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,250),failures}:{} )};
   });
  }
  async function mutate(principal,input){

@@ -248,3 +248,18 @@ test('late admin filter results cannot overwrite a more recent sort',async()=>{
  await expect.element(page.getByText('DBM-NEWEST',{exact:true})).toBeVisible();
  await expect.element(page.getByText('DBM-OUTDATED',{exact:true})).not.toBeInTheDocument();
 });
+
+
+test('overview opens a full-worklist order outside the loaded table page without changing pagination',async()=>{
+ const f=fixture();const remote={orderNumber:'DBM-OFFPAGE',createdAt:'2026-10-01T00:00:00Z',fulfillmentStatus:'making',shippingReview:{status:'calendar_unconfirmed'}};
+ f.data.workLists={making:[remote],packing:[],carrierHandoff:[]};
+ const original=f.auth.fetcher;f.auth.fetcher=async(url,options)=>new URL(url,'http://local').searchParams.get('orderNumber')===remote.orderNumber?json({orders:[{...f.order,...remote}]}):original(url,options);
+ root.render(<OperationsApp admin auth={f.auth}/>);
+ const lists=page.getByRole('region',{name:'Current order work lists'});
+ await expect.element(lists.getByRole('button',{name:remote.orderNumber})).toBeVisible();
+ await expect.element(page.getByText('Page 1 of 3 | 51 orders')).toBeVisible();
+ await lists.getByRole('button',{name:remote.orderNumber}).click();
+ await expect.element(page.getByRole('heading',{name:remote.orderNumber,exact:true})).toBeVisible();
+ await expect.element(page.getByText('Page 1 of 3 | 51 orders')).toBeVisible();
+ await page.getByRole('button',{name:'Close',exact:true}).click();await expect.element(lists.getByRole('button',{name:remote.orderNumber})).toHaveFocus();
+});

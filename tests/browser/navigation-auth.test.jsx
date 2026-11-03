@@ -170,7 +170,7 @@ test('provider failure retains curated hero and makes no live-sync claim',async(
 
 test('admin overview places attention first and opens existing orders from bench lists',async()=>{
  const order={orderNumber:'DBM-BENCH',status:'paid',paymentStatus:'paid',fulfillmentStatus:'making',createdAt:'2026-11-01T00:00:00Z',totalCents:3000,subtotalCents:3000,shippingCents:0,taxCents:0,items:[],shipments:[],timeline:[],shippingReview:{status:'due_today',dueDate:'2026-11-02'}};
- vi.stubGlobal('fetch',vi.fn(async url=>url==='/api/auth/session'?json({signedIn:true}):json({role:'admin',orders:[order],variants:[],failures:[],audit:[],overview:{making:1}})));
+ vi.stubGlobal('fetch',vi.fn(async url=>url==='/api/auth/session'?json({signedIn:true}):json({role:'admin',orders:[order],workLists:{making:[order],packing:[],carrierHandoff:[order]},variants:[],failures:[],audit:[],overview:{making:1}})));
  history.replaceState(null,'','/admin');root.render(<WorkosOperations admin/>);
  await expect.element(page.getByRole('heading',{name:'Needs attention'})).toBeVisible();
  const attention=host.querySelector('.ops-attention'),daily=host.querySelector('.ops-daily');
