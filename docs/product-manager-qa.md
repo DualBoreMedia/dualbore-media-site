@@ -29,7 +29,7 @@ synchronization work was retained. No alternate search/filter system was added.
   records, then open the actual editor. Console warnings/errors were absent.
 - Secret/client checks, Netlify gates and Sites tests passed. Public website
   non-selling configuration check passed. Dependency audit reported zero known
-  advisories. Six business-rule mutations were killed without changing source.
+  advisories. Seven business-rule mutations were killed without changing source.
 
 ## Review resolutions
 
@@ -37,8 +37,9 @@ CodeRabbit initially raised two minor issues: archived products could be reopene
 via an API status change, and controlled array fields discarded typed separators.
 Both were corrected with regressions. Follow-up raised one minor test-evidence
 issue: a failure screenshot could capture the preceding page. That was corrected.
-The last run reported zero issues but explicitly reused its checkpoint; it was not
-a fresh detailed file review. No paid credits or quota upgrade were selected.
+The pre-commit final run reported zero issues but reused its checkpoint. The
+subsequent committed-source review completed with zero issues and did not report
+checkpoint reuse. No paid credits or quota upgrade were selected.
 
 The preserved security work limits rejected authentication routes before storage,
 updates rate counters without rewriting commerce tables, keeps waitlist consent

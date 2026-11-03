@@ -1,8 +1,9 @@
+import {expect} from '@playwright/test';
 // Rendered fixtures only: this never contacts payment, email or auth providers.
 export async function runMadeToOrderBrowserChecks({page,baseUrl,evidenceDirectory,adminPreviewPath}) {
   if(!/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(baseUrl))throw Error('Made-to-order QA requires a local preview.');
   const assert=(condition,message)=>{if(!condition)throw Error(message);};
-  const variants=['S','M','L','XL','2XL'].map(size=>({id:'e92-tee-'+size.toLowerCase(),productId:'e92-tee',name:'E92 Coupe Line-Art Tee',size,unitAmount:3000,inventoryPolicy:'made_to_order',availableQuantity:null,available:size!=='XL'}));
+  const variants=['M','L','XL'].map(size=>({id:'e92-tee-'+size.toLowerCase(),productId:'e92-tee',name:'E92 Coupe Line-Art Tee',size,unitAmount:3000,inventoryPolicy:'made_to_order',availableQuantity:null,available:size!=='XL'}));
   const stocked={id:'e90-crewneck-m',productId:'e90-crewneck',name:'E90 Sedan Front-Clip Crewneck',size:'M',unitAmount:5000,availableQuantity:0,available:false};
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.route('**/api/commerce/catalog',route=>route.fulfill({json:{enabled:true,mode:'production',shippingCents:995,variants:[...variants,stocked]}}));
@@ -13,6 +14,8 @@ export async function runMadeToOrderBrowserChecks({page,baseUrl,evidenceDirector
     assert(page.url()===baseUrl+'/shop','Wrong shop URL');
     assert((await page.title()).includes('DualBore Media'),'Wrong title');
     const first=page.getByRole('article').first();
+    await first.getByRole('button',{name:'M',exact:true}).waitFor();
+    assert(JSON.stringify(await first.locator('.size-options button').allTextContents())===JSON.stringify(['M','L','XL']),'Unapproved product size appeared');
     await first.getByRole('button',{name:'XL',exact:true}).press('Enter');
     assert(await first.getByRole('button',{name:'Orders paused',exact:true}).isDisabled(),'Paused MTO must not imply sold out.');
     await first.getByRole('button',{name:'M',exact:true}).press('Enter');
@@ -25,6 +28,12 @@ export async function runMadeToOrderBrowserChecks({page,baseUrl,evidenceDirector
     const cart=page.getByRole('button',{name:/^Cart \(/});await cart.press('Enter');
     const dialog=page.getByRole('dialog');
     assert((await dialog.innerText()).includes('Made to order'),'Cart MTO label missing');
+    const sizeControl=dialog.getByRole('combobox',{name:'Size for E92 Coupe Line-Art Tee'});
+    assert(JSON.stringify(await sizeControl.locator('option').allTextContents())===JSON.stringify(['M','L','XL']),'Unapproved cart size appeared');
+    // Inspect the option itself: isDisabled() can retarget a nested option to
+    // its enclosing label's enabled select, rather than the native option.
+    assert(await sizeControl.locator('option[value=XL]').evaluate(option=>option.disabled),'Unavailable cart option lacked native disabled protection');
+    await sizeControl.press('End');await expect(sizeControl).toHaveValue('L');
     assert((await dialog.innerText()).includes('No change-of-mind returns or refunds.'),'Cart return notice missing');
     assert((await dialog.innerText()).includes('You pay both return and replacement shipping.'),'Cart exchange notice missing');
     assert((await dialog.innerText()).includes('$9.95'),'Approved shipping fallback missing');
@@ -39,7 +48,7 @@ export async function runMadeToOrderBrowserChecks({page,baseUrl,evidenceDirector
     results.push({width,flow:'keyboard size/add/cart/Escape, made-to-order policies, finite-stock fallback',pass:true});
   }
   if(adminPreviewPath){
-    const calls=[],data={profile:{},orders:[],overview:{},audit:[],failures:[],variants:[{...variants[1],sku:'DBM-E92-TEE-M',active:true,reservedQuantity:2,soldQuantity:7,version:1}]};
+    const calls=[],data={profile:{},orders:[],overview:{},audit:[],failures:[],variants:[{...variants.find(v=>v.size==='M'),sku:'DBM-E92-TEE-M',active:true,reservedQuantity:2,soldQuantity:7,version:1}]};
     await page.route('**/api/operations*',async route=>{if(route.request().method()==='POST')calls.push(route.request().postDataJSON());await route.fulfill({json:data});});
     await page.goto(baseUrl+adminPreviewPath);await page.getByRole('button',{name:'Inventory',exact:true}).click();
     await page.getByRole('heading',{name:'E92 Coupe Line-Art Tee',exact:true}).waitFor();

@@ -62,3 +62,28 @@ test('gated /shop previews remain searchable while checkout and sales stay close
  expect(host.querySelectorAll('.closed-designs article')).toHaveLength(0);
  await expect.element(page.getByRole('button',{name:/Checkout|Buy|Cart \(/i})).not.toBeInTheDocument();
 });
+
+
+test('server catalog controls each product and cart size without invented options',async()=>{
+ history.replaceState(null,'','/shop');
+ const variants=[
+  {id:'e92-tee-m',productId:'e92-tee',name:'E92 Tee',size:'XS',available:true,inventoryPolicy:'made_to_order',unitAmount:3000},
+  {id:'e92-tee-l',productId:'e92-tee',name:'E92 Tee',size:'3XL',available:true,inventoryPolicy:'made_to_order',unitAmount:3500},
+  {id:'e92-tee-xl',productId:'e92-tee',name:'E92 Tee',size:'2XS',available:false,inventoryPolicy:'stocked',unitAmount:3000},
+ ];
+ vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({enabled:true,variants,shippingCents:995}),{status:200,headers:{'Content-Type':'application/json'}})));
+ root.render(<ProductionStore/>);
+ const product=page.getByRole('article').filter({has:page.getByRole('heading',{name:'E92 Coupe Line-Art Tee',exact:true})});
+ await expect.element(product.getByRole('button',{name:'XS',exact:true})).toBeVisible();
+ await product.getByRole('button',{name:'2XS',exact:true}).click();await expect.element(product.getByRole('button',{name:'Sold out',exact:true})).toBeDisabled();
+ expect(Array.from(host.querySelectorAll('.size-options button'),e=>e.textContent)).toEqual(['XS','3XL','2XS']);
+ await product.getByRole('button',{name:'XS',exact:true}).click();await product.getByRole('button',{name:'Add to cart',exact:true}).click();
+ await page.getByRole('button',{name:'Cart (1)',exact:true}).click();
+ const dialog=page.getByRole('dialog',{name:'Your cart'});
+ const size=dialog.getByRole('combobox',{name:'Size for E92 Tee'});
+ await expect.element(size).toHaveValue('XS');
+ expect(Array.from(host.querySelectorAll('.production-cart-line select option'),e=>e.value)).toEqual(['XS','3XL','2XS']);
+ expect(host.querySelector('.production-cart-line option[value="2XS"]').disabled).toBe(true);
+ await size.selectOptions('3XL');await expect.element(size).toHaveValue('3XL');
+ await expect.element(dialog.getByText('Subtotal: $35.00',{exact:true})).toBeVisible();
+});
