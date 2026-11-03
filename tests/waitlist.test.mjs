@@ -15,8 +15,9 @@ test('encodes form fields safely and sends exactly the static detection fields',
   const encoded = encodeWaitlist(valid);
   assert.equal(encoded.get('name'),'QA & Test');
   assert.equal(encoded.get('email'),'qa+drop@example.invalid');
-  const skeleton = fs.readFileSync(new URL('../public/__forms.html',import.meta.url),'utf8');
+  const skeleton = fs.readFileSync(new URL('./fixtures/drop-waitlist.html',import.meta.url),'utf8');
   for (const field of encoded.keys()) assert.ok(skeleton.includes(`name="${field}"`), field);
+  assert.equal(fs.existsSync(new URL('../public/__forms.html',import.meta.url)),false,'paused form detector must not be published');
   await submitWaitlist(valid,{hostname:'example.com',request:async(path,options)=>{
     assert.equal(path,'/__forms.html'); assert.equal(options.method,'POST');
     assert.equal(options.headers['Content-Type'],'application/x-www-form-urlencoded');

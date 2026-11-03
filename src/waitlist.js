@@ -1,6 +1,6 @@
 import { merch, previewSizes } from './content.js';
 
-export const waitlistMessage = "You're on the Drop 01 list. We'll ping you before public release.";
+export const waitlistMessage = "You are locked in for Drop 01. We will alert you before public release.";
 
 export function encodeWaitlist(values) {
   const name = String(values.name || '').trim();

@@ -1,0 +1,39 @@
+# Authentication decision and migration boundaries
+
+Reviewed October 15, 2026. Deployment is not authorized. Payments remain false; email activation remains gated. Ohio registration is deferred. Passing any checklist is not permission to deploy.
+
+## Selected target: WorkOS AuthKit
+
+The official [pricing](https://workos.com/pricing) includes AuthKit user management, MFA and RBAC for up to one million monthly active users. The expected recurring authentication charge for this store is **$0/month** while within that allowance, without enterprise SSO/Directory Sync connections, a paid custom domain or other paid add-ons. [Production environments](https://workos.com/docs/authkit/environments) still require billing information. The owner must complete that sensitive step; no card or paid plan has been added by this implementation. Usage above the free allowance is not authorized.
+
+Use the standard hosted AuthKit domain and environment branding. Do not confuse paid enterprise Admin Portal branding with ordinary [AuthKit branding](https://workos.com/docs/authkit/branding). Verify the available dashboard controls before saving; do not buy a custom domain.
+
+## Staff MFA without burdening customers
+
+Create a private staff organization with explicit employee/admin memberships and a mandatory [organization MFA policy](https://workos.com/docs/authkit/organization-policies). Enable email/password and authenticator TOTP; do not enable SSO or domain/JIT automatic staff provisioning. Organization MFA excludes SSO users, so accepting SSO here would invalidate the intended protection. Customers remain outside the staff organization.
+
+Privileged APIs reread the current verified user, active session and active staff membership. Token role claims alone cannot grant access. Routine staff access requires the correct organization-scoped session, current TOTP enrollment, an approved primary authentication method and a valid signed auth_time under the verified mandatory organization MFA policy. It does not expire MFA assurance after ten minutes while the provider session is still valid. Password is the default primary method. The owner's preferred Google sign-in requires explicit server-only WORKOS_STAFF_GOOGLE_ENABLED=true; it still requires the separate WorkOS authenticator under that policy. Other OAuth methods and SSO remain denied. Hosted code sessions use an OAuth transport even for password sign-in, so the sealed SDK authenticationMethod determines the primary method.
+
+Fresh verification within ten minutes is separately required for staff-account mutations, administrative writes including refunds/inventory/reconciliation, carrier handoff/delivery recording and cancellation. Explicit step-up uses maxAge=0; routine sign-in does not. The application restores an allowlisted local destination/view and never automatically replays a sensitive mutation after returning. Each sign-in tab has a separate encrypted PKCE state cookie with a ten-minute authorization lifetime and thirty-minute encrypted recovery retention, a five-attempt browser bound and a persistent single-use replay check. Retryable SDK refresh outcomes preserve the cookie and show a recoverable error; terminal outcomes clear it. Concurrent frontend requests share one refresh and retry their original request at most once.
+
+WORKOS_STAFF_MFA_POLICY_VERIFIED remains false in each environment until actual hosted sign-in, enrollment, policy enforcement and bypass attempts have been tested there. Local staging evidence never activates production. WorkOS does not document a policy-read endpoint used by this integration, so policy configuration is an explicit operational prerequisite, not an automatically inferred guarantee. Review provider policy changes as security changes.
+
+## Session and identity migration
+
+The Node SDK seals server-held access/refresh tokens into an HttpOnly, Secure, SameSite=Lax __Host cookie on HTTPS. Authorization-code exchange uses PKCE and browser-bound, encrypted, short-lived, single-use state. Mutations require the exact same Origin. No refresh token is stored in localStorage. This avoids the React SDK's documented development-mode storage tradeoff when using a free hosted domain.
+
+Revoked or expired sessions fail on the next authenticated server request. Current role changes are fetched from WorkOS rather than waiting for JWT expiry. Reauthentication uses the hosted staff sign-in route. AuthKit handles verification and password recovery; the application never receives or hashes passwords.
+
+WorkOS actors use stable workos:user_ID identities. Legacy Clerk identities and audit records are preserved. Do not silently remap users or ownership by browser email, import sandbox identities into production or rewrite audit history. Existing guest-order claiming requires a freshly verified email and independently checked order ownership. Legacy Clerk code remains an explicit compatibility path during migration, not a second authority for a configured WorkOS request.
+
+## Better Auth comparison
+
+[Better Auth](https://better-auth.com/docs/installation) is the fallback: no authentication SaaS license fee, existing PostgreSQL compatibility, official [TOTP and backup-code plugin](https://better-auth.com/docs/plugins/2fa), admin/access control and [rate limiting](https://better-auth.com/docs/concepts/rate-limit). Infrastructure and email costs are separate from a free software license. Migration would add owned auth tables/migrations, email verification/recovery delivery, persistent rate-limit storage, cookie/session lifecycle, MFA recovery and upgrade/security operations. WorkOS has lower ongoing operational responsibility and a hosted recovery flow; both require real session, MFA, escalation and IDOR tests.
+
+## Production still unverified
+
+October 31 update: real staging Google/TOTP, beyond-ten-minute navigation, sensitive inventory step-up and exact-session logout were verified; see workos-session-qa.md. Production is still billing-locked. The historical pending list below must not be read as negating completed staging evidence. Current Admin-only production requirements and observed settings are in admin-only-release.md.
+
+### Historical October 15 pending list
+
+WorkOS account setup, production billing unlock, actual free branding, hosted signup/recovery, mandatory staff MFA and backup/recovery procedures, production origins/session settings, staff administration and real revocation remain launch blockers until demonstrated. SDK contract tests prove local signature/sealed-cookie behavior, not a real account's policies. No deployment, paid upgrade or live activation is authorized by this document.

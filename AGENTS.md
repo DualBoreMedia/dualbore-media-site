@@ -20,12 +20,172 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Conditional non-selling release, November 2, 2026
+
+- Owner authorizes one finished-branch production release by a main merge marked [deploy netlify], without [skip netlify], only after the requested worklist/audit defects and tests are resolved.
+- Before any merge/deploy, confirm Netlify AUTH_ACCESS_MODE=staff-only and YouTube sync is not true. Stop before deployment if staff-only cannot be confirmed. Only the five payment/refund/transactional-email/marketing-email/waitlist flags may be changed, and only to the exact string false. No other variables, secrets, migrations, provider activation, signup forms or setup downloads.
+- Ordinary dashboard/queue views must not append audit rows. Preserve immutable operational and denied-access history. Admin work lists use all matching eligible paid orders, separately from the paginated order table.
+- Current read-only production check found AUTH_ACCESS_MODE absent, so the release is blocked. Only the explicitly allowed missing REFUNDS_ENABLED flag was set to false. No deployment or main merge has occurred.
+
+
+### Product Manager, November 2, 2026
+
+- Extend the existing search/filter and MX Bikes foundation; do not duplicate it. Managed product drafts and published snapshots are separate. Only current MFA-verified Admins with fresh sensitive-action verification can change products.
+- Physical listing publication is not sales approval. Preserve strict existing product, Stripe, tax, shipping and payment checks. Digital setup publication remains blocked pending actual-file/private-storage/compatibility/delivery verification; never expose setup files.
+- No deployment, main merge, provider activation, production migration, payment/refund/email/signup activation. Commit tested development work with [skip netlify].
+
+
+### November 2, 2026 website regression audit
+
+- Prevent older operations/fulfillment responses from replacing newer search/filter results. Keep staff permissions, security, payment and deployment gates unchanged.
+- MX Bikes setup search recognizes TC125 and owner-supplied bike-ID shorthand, but files remain private and not for sale.
+- Apparel search recognizes t-shirt and sweatshirt synonyms without inventing products or confirmed apparel fit.
+- No main merge, Netlify preview/deployment, live payments or outbound email. Development commits require [skip netlify].
+
+
+### TC125 setup file intake, November 2, 2026
+
+- User supplied three 244-byte STP files with embedded bike ID MX2OEM_2023_Husqvarna_TC_125: Supercross.stp (general SX, proposed $2); ASSEN.stp (Assen, $1); Maryland.stp (Maryland, $1). Separate exact hashes are recorded in netlify/setups/received.mjs. None is verified in-game or placed in private production storage. Never commit the raw STP file bytes to this public repo or deploy download links.
+- Public catalog previews may disclose that three files were received, but must remain not for sale. Preserve existing sales/email/launch gates. The owner has not supplied exact game or OEM pack version nor authorized provider activation.
+
+### MX Bikes setup shop foundation, November 2, 2026
+
+- The owner requested an MX Bikes OEM setup storefront: $1 track-specific per bike+track, $2 general motocross or supercross per bike. Actual setup files and supported bike inventory are pending. Never fabricate downloadable inventory, paid order success, compatibility or setup screenshots.
+- Initial work adds a /setups catalog and fail-closed manifest preparation only. Preserve the four existing home tabs and all commerce/auth/coverage gates; no activation, main merge, preview or Netlify deployment is authorized. Separate file upload, secure entitlement delivery, tax/legal review and real testing remain required before digital sales.
+
+
+### Channel header and navigation refinement, November 2, 2026
+
+- Preserve the existing working Garage-home button and real `/assets/channel-logo.jpg` avatar; refine it as a circular 42px badge with subtle bezel/red hover and keyboard-focus treatment, not a duplicate header link or generated logo.
+- Keep the four existing tab routes, numbered labels, arrow-key behavior, two-column mobile tab layout and 48px-or-larger pointer targets. Avoid horizontal overflow at 320px and respect reduced-motion preferences.
+- Future interactive build specifications require verified vehicle parts and progress; do not invent turbo setup, dyno figures, garment fabric, size measurements or product photography. Generating a packing slip alone must never mark an order physically packed or handed to a carrier.
+
+
+### Public-first channel content, November 1–2, 2026
+
+- The YouTube channel is the primary product. Focus on a current Video Vault, individual public build and video URLs, factual project episode logs, and genuine owner-shot garment photos. Do not fabricate build milestones or create AI garment mockups.
+- Prefer safe content synchronization and low-maintenance workflows over new customer accounts, blogs, chat, points, duplicated checkout or a second store. The existing checkout/accounts/email integrations remain gated and closed; do not delete their tested code.
+- Public content is independently useful, but it does not override the controlling no-production-deployment instruction. A live YouTube API key, scheduled function or persistent store needs explicit provider configuration/billing review and real testing.
+- Preserve the original curated five videos whenever the YouTube API is unavailable. Newly synced video pages may lack server-generated social metadata until separately implemented and verified; do not claim otherwise.
+
+
+### Phase 3 Admin blockers, November 1, 2026
+
+- Continue from 8dc19f3 on the existing development branch. Prioritize redacted provider/database/monitoring remediation and targeted reproduced public/Admin UI fixes, not new features or redesigns.
+- No deploy, main merge, provider activation, production secret/data changes, paid plans, payment/refund/email/signup activation or government login is authorized. Provider revocation, replacement, membership grants and database restores need specific approval. Do not expose credential-shaped Netlify labels. Distinguish the potentially exposed Resend secret from the non-secret Stripe test publishable key.
+- Two independent production Admin owners require approved private membership, Google primary authentication and mandatory TOTP. Staging credentials and verification flags are never production evidence. Preserve the fixed routine-session MFA behavior and fresh verification for sensitive actions.
+
+### Production Admin readiness, October 31, 2026
+
+- Prepare an Admin/Staff-only release on codex/commerce-test-foundation with [skip netlify]. No deployment, main merge, billing details, paid usage activation, payments, refunds, emails or signup collection are authorized. Passing any gate is not deployment approval.
+- WorkOS production must be isolated from the working staging environment. Never copy its MFA evidence flag, users or keys into production. Require Google plus mandatory organization authenticator, explicit individual owner memberships, current server authorization and fresh sensitive-action verification. No SSO/JIT/domain admission bypass or public signup.
+- The Admin-only candidate uses AUTH_ACCESS_MODE=staff-only and VITE_AUTH_ACCESS_MODE=staff-only. Keep all payment/refund/sending/signup switches explicitly false and omit sending/payment keys. Existing managed database provisioning is not evidence of verified production migrations or recovery; no resource/access activation is allowed without cost/owner approval.
+- Current future-sales decisions supersede older historical entries below: tee $30, sweatshirts $50, verified USA calculated shipping or $9.95 fallback, made-to-order carrier handoff within five business days after payment, excluding weekends/holidays, thirty-calendar-day size-exchange request window. Exact calendar/timezone/capacity and approved-return mailing deadline remain unverified. Do not publish the personal street address.
+- Preserve historical test prices, shipping fixtures and Clerk evidence as labeled history, not current production guidance. Government registration remains deferred.
+
+### Admin practice sprint, October 21, 2026
+
+- First deliverable is a running, resettable localhost-only Admin/Staff practice dashboard using synthetic data and real operation services. Pause for owner usability feedback before large interface changes. Preserve unfinished legal commits; no reset, deployment, main merge, provider production changes, payments, email sending or signup collection.
+- Updated future promise is FIVE BUSINESS DAYS after payment confirmation, excluding weekends and holidays. Final holiday dates/calendar and real capacity remain unverified. The confirmed operating/return location is also a personal residence; do not add its street address to public pages during this sprint.
+- Owner feedback: bound Needs Attention to five prioritized grouped tasks per page, retain all underlying records, and provide fast daily-workflow queue shortcuts. Automate sorting, grouping and navigation; never automate real refunds, handoffs or sending without their existing confirmations and gates.
+- WorkOS AuthKit work is staging only. Google sign-in with the owner-approved account is authorized. No paid features, production auth activation or provider credential publication.
+
+
+### Legal candidate, October 20, 2026: no deployment
+
+- Keep published release 0b5f474 unchanged. This legal/compliance candidate may be committed and pushed only to codex/commerce-test-foundation with [skip netlify]. No main merge, Netlify deploy, provider activation, email sending or signup collection.
+- Shipment promise is 3 BUSINESS DAYS after payment confirmation. Shipment means physical carrier possession, never label creation. Carrier transit is additional. No cutoff, business calendar, holiday policy or capacity assumption is approved by this statement.
+- Temporary public support/privacy contact is midohiomx@gmail.com with mailto links. Gmail is manual support, separate from disabled automated transactional/marketing email. A branded support mailbox is a future migration only.
+- Public policy rendering (draft=false) describes current non-selling practices. Keep future purchase drafts separate, and retain genuine unresolved facts as sales blockers. Reconfirm the business/return address before final publication; do not invent retention periods, entity status, carrier commitments, rights clearances or refund-processing guarantees.
+
+### Owner screenshot refinements, October 20, 2026
+
+- Use consistent dark framing around the three authentic merchandise mockups; preserve their artwork and natural photographic backgrounds. Keep planned prices $30/$50/$50 and sizes S/M/L/XL/2XL, with no ordering or email collection.
+- Improve supporting text readability and group footer navigation into clear sections. Frame channel thumbnails without losing the motorcycle or important thumbnail text; reduce intrinsic black letterboxing where the real image permits.
+- Grok Build is no longer participating. Incorporate Gemini findings when supplied, checking them against current code rather than waiting or assuming a review exists.
+- Prepare the non-selling release independently of sales-provider activation. No main, Netlify, production-provider, live payment, transactional email or marketing changes are authorized.
+
+### Finished product development, October 20, 2026
+
+- Refine the established public website, not only its test infrastructure: cohesive homepage, complete build/video journeys, original merchandise previews, Pit Crew and public information. Preserve the charcoal/red/cyan visual identity and real channel assets.
+- Public planned release prices are now approved for previews: E92 tee $30 USD, E90 crewneck $50 USD, SV1000S crewneck $50 USD. Label them as planned release prices. No checkout, orders, inventory promises or Drop Alert collection is enabled by showing them.
+- Public product previews must not show internal placeholder tables, invented material weights or measurements. Explain planned S/M/L/XL/2XL sizes and forthcoming fit guidance in customer language. Preserve detailed local test fixtures separately.
+- The owner requests visual review at 320/375/390/414/768/1024/1440px and meaningful journey tests. Preserve the 90/90/90/85 coverage gates. Safe development checkpoints may be pushed only to codex/commerce-test-foundation with [skip netlify]. No deployment, previews, main merges, paid services or production-provider changes.
+
+### Controlling correction: authentication, testing and no deployment, October 15, 2026
+
+- Deployment is NOT authorized, even if all readiness checks pass. Do not merge main, trigger any Netlify deployment or enable production payments. PAYMENTS_ENABLED remains false. Transactional email activation stays gated pending final verification and explicit authorization. This supersedes every conditional deployment permission below.
+- Do not upgrade Clerk or purchase recurring authentication charges. Evaluate WorkOS AuthKit first using official current pricing, organization MFA policies and production terms; use its ordinary hosted domain and free branding. Compare Better Auth as fallback, using official password/TOTP/session implementations and existing PostgreSQL. Do not weaken staff MFA or persist refresh tokens in browser localStorage to avoid a paid custom domain.
+- Ohio/government registration is deferred by the owner. Do not attempt government sign-in or wait on that task during current engineering work; tax readiness remains a launch blocker.
+- Measure lines/statements/functions/branches and enforce meaningful coverage thresholds in CI. Test counts alone are insufficient. Real Postgres, rendered E2E, permission/revocation/IDOR checks, structured redacted correlation logs, frontend error boundaries, monitored backend exceptions, release/source-map verification and actionable Needs Attention remain required. Do not report monitoring delivery or managed provider behavior as verified using mocks.
+
+### Historical conditional production completion authorization, October 15, 2026: superseded
+
+- Preserve the current local worktree. The earlier conditional authorization is superseded by the controlling correction above. Deployment is NOT authorized even if every gate passes. Do not merge main, trigger Netlify deployments or enable payments; wait for the owner's later explicit final deployment instruction.
+- Initial deployment keeps payments and transactional email false. Verify production and signed live webhook delivery, then activate transactional email with controlled delivery verification. Live payments activate last. Never purchase a recurring service or upgrade without showing exact plan/cost and obtaining approval.
+- The operating and return address was confirmed privately and is also a personal residence. Keep its street address out of public source and customer policies during this sprint; retrieve it only through owner-approved private configuration when needed. The domain dualboremedia.com is owned at Porkbun. Canonical https://dualboremedia.com; www redirects to apex.
+- All current 15 variants are made to order. Preserve future finite stock mode. Tee $30, each crewneck $50, USD, USA only; reliable calculated shipping or $9.95 flat fallback. No false stock scarcity.
+- Owner answered 3 days to ship and revised voluntary size-exchange REQUEST window to 30 calendar days after delivery. Items unused/unworn/unwashed/undamaged/original condition; customer pays both shipping legs, disclosed before acceptance. Define a reasonable approved-return mailing deadline (current draft: 14 calendar days after approval). Seller errors/defects/nonconformity retain applicable remedies and seller-paid correction shipping.
+- Individual Clerk customer/employee/admin accounts, private server role metadata, staff MFA and least privilege are mandatory. No staff/admin links in customer navigation. Packing slips are staff-authorized, order/package specific, contain no prices/provider IDs/notes, and require print QA.
+- Ohio vendor registration and tax configuration are required. Human completes government authentication/identity/attestations/signature/payment. Never request SSN/FEIN/password/MFA in chat.
+- Run required CodeRabbit uncommitted review before any commit, fix valid Critical/Major issues and rerun; committed/base review follows. Development commits contain [skip netlify]. No force push/history rewrite without specific approval.
+
+### Latest production setup authorization, October 14, 2026
+
+- Complete real provider setup and pre-deployment validation, then STOP. Do not deploy, merge main, trigger a production build, enable payments or enable transactional email. The controlling October 15 correction above confirms no deployment is authorized; any intervening conditional permission is superseded.
+- The owner approved $30 USD for the E92 tee, $50 USD for each crewneck, sizes S/M/L/XL/2XL, and reliable calculated USA shipping or a $9.95 flat fallback. Sandbox prices and $7 shipping remain test-only. Do not guess stock, tax registrations, legal identity/address, processing time, return terms, support email or domain ownership.
+- Keep PAYMENTS_ENABLED=false and TRANSACTIONAL_EMAILS_ENABLED=false. The dedicated check:predeploy gate may defer deployed webhook verification; all other requirements remain mandatory. The default check:launch activation gate remains strict. Never mark evidence true without verification.
+- Feature freeze: provider setup, launch blockers, security, QA and targeted fixes only. Source-only development commits retain [skip netlify]. Independent CI must not deploy. Do not rewrite history or force-push without separate approval.
+- Ask the owner to complete passwords, MFA, OAuth consent, business verification and purchases at their exact blocking step. Domain/paid-service purchases need prior approval. Continue unrelated setup while waiting.
+
+### Latest pre-deployment production-build authorization
+
+- Preserve current local work on codex/commerce-test-foundation. The user now authorizes managed Clerk accounts, MFA administration, production-shaped commerce/fulfillment/support, production resource structure and tested source-only pushes with [skip netlify]. This supersedes older sandbox-only implementation restrictions below, never deployment/main merge/public live payments/marketing broadcasts.
+- PAYMENTS_ENABLED and TRANSACTIONAL_EMAILS_ENABLED are server-only, fail closed, and remain false before explicit cutover. Production database/catalog must be clean and separate, with approved prices/stock. Do not infer final prices from sandbox values or ownership of a planned domain.
+- Use migrations 002+ without editing 001. Keep Sites artifacts and Netlify gates. Real managed auth and production-provider checks remain blockers until actually exercised.
+
+### Current sandbox implementation decisions
+
+- Continue from the approved local storefront. The user authorized a source-only GitHub development branch backup. Exclude QA artifacts, screenshots and secrets. Do not deploy, trigger previews/build hooks, merge main, add a deploy marker or mutate remote account settings.
+- Local sandbox Checkout Sessions, verified raw Stripe webhooks, PostgreSQL order/inventory persistence, transactional Resend confirmations and mocked end-to-end tests are now authorized. This supersedes the earlier local no-Stripe integration restriction only for this sandbox stage. Normal builds remain Coming soon; all commerce HTTP handlers refuse hosted/Netlify requests.
+- Credentials are server-only; hosted Checkout needs no publishable key. Test/restricted-test keys only. No real credentials or real Stripe CLI/server PostgreSQL were available during this implementation. Report mock tests separately from real sandbox E2E.
+- Prices/stock/shipping/tax/order status come from trusted server state. Existing stable SKUs remain. Test seeding is explicit and never resets existing stock. Reservations are transactional; ambiguous Stripe creation and recovery failures retain stock pending verified recovery. Never release solely on local expiration.
+- PostgreSQL repository uses one global transaction advisory lock for correctness at low volume. PGlite tests omit this unsupported call; real multi-process PostgreSQL locking remains an external check. All database writes must use the repository.
+- Stripe paid events drive orders, sold inventory and email. Success URLs are not payment proof. Order status requires a session-only access token and returns minimal data. Local simulator clearly discloses that no Stripe payment is verified or email sent.
+- Preserve waitlist marketing consent separately from orders. Draft legal policies and test catalog must block check:launch. Preserve existing Sites outputs and deployment gates.
+- Run all tests, normal build, client-secret scan, local browser suites and the intentionally failing launch check before handoff. Keep real credentials, databases, .tools, dist and node_modules out of Git.
+
+### Latest authorization: local sandbox commerce integration
+
+- The user explicitly authorized building the commerce foundation locally in test mode, without pushing or deploying. This supersedes the earlier no-cart/no-price instruction only for the local commerce preview. Normal builds remain Coming soon and waitlist-only.
+- Use the existing three designs and provisional S-2XL range: 15 stable variant IDs/SKUs. Test prices are $30 each and one $7 USA shipping charge per order, per the user's confirmed values. No invented stock or garment measurements.
+- Run `npm run dev:commerce` to expose the cart and server estimate on loopback only. The quote API accepts variant IDs, integer quantities and US destination only, and rejects client-supplied prices. It never creates a payment session, order or inventory reservation.
+- Keep the waitlist and Resend event flow intact. No external Stripe account mutations, keys, real purchases, database provisioning, push, PR, or deployment are authorized for this stage.
+- Checkout Sessions, verified Stripe webhooks, durable/idempotent order storage, inventory policy, tax registrations and customer policies are required future stages before accepting payments. The cart is not evidence of paid orders or stock availability.
+- The latest attachment guides a local storefront completeness pass before Stripe: editorial garage/merch presentation, responsive editable cart drawer, clearly labeled stock/error fixtures, draft customer policy routes and simulated order-state screens. Preserve carts on unverified order screens. Footer acquisition opens the existing explicit-consent waitlist. These features are loopback commerce-mode only; no Stripe integration or external mutations.
+- Verify `npm run test:commerce`, the existing email/Sites/client-secret suites, a normal build, and the local commerce preview. Preserve the deployment approval gate.
+
+### Previous stage: Resend waitlist, retained for normal builds
+
+- The user's latest brief supersedes earlier commerce and automatic-publishing requests. Keep merch Coming soon, with no prices, Stripe checkout, cart, inventory, orders, accounts, or invented garment specifications. Previously created Stripe sandbox objects are not connected to this version.
+- Preserve the existing `drop-waitlist` Netlify Form and its fields: name, email, style, size, consent, and bot-field. Netlify Forms is the source of truth. A confirmation email failure must never change the browser's accepted-signup state.
+- Email runs only in the modern Netlify `formSubmitted` platform-event handler. Netlify verifies its event signature. No public email-sending HTTP endpoint. Validate the intended form, email, consent, allowed style/size, and honeypot on the server too.
+- Secrets belong in Netlify environment variables, never `src/`, `public/`, HTML, committed environment files, or any `VITE_` variable. Use `RESEND_API_KEY`, `RESEND_FROM`, optional `RESEND_REPLY_TO`, and optional `RESEND_NOTIFY_TO`. Do not invent a sender domain. Missing configuration skips email safely.
+- Never deploy, publish, trigger a build hook, merge/push changes to production `main`, or create a Deploy Preview without approval for that exact version. Prior approvals are superseded. Approval is single-use. Before deployment report changes, local test/build results, and the exact branch/commit; ask: "Do you want me to deploy this version to production?"
+- Normal development commit subjects include `[skip netlify]`. Never add `[deploy netlify]` without explicit approval for that specific production version. `scripts/netlify-ignore.mjs` cancels Git builds unless the current production/main commit subject has the approved marker. `prebuild` rechecks hosted builds because Netlify build hooks bypass ignore commands. Do not create another deployment path.
+- A local build is authorized and does not authorize publication. Run `npm ci`, `npm run test:email`, `npm run build`, `npm run test:sites`, and `npm run test:client-secrets`. Preserve all existing Sites packaging files.
+- Retain the four existing views and accessibility behavior. The pending mobile/copy improvements from earlier instructions may remain; do not introduce a new visual redesign as part of email integration.
+
 - The current selected visual direction is the high-octane carbon-fiber identity from the brother-provided HTML: #0B0D10 background, #13161C cards, #232834 borders, #FF2A3B red and #00F0FF cyan, Teko 600/700 display titles and Inter body text. Use real channel thumbnails for vehicle cards and keep verified YouTube links. This supersedes the earlier orange/Anton/Barlow concept.
 - The brother-provided merch HTML is a source reference for the future shop. Current merch is a preview only; do not enable live checkout until products, prices, shipping, tax, fulfillment, and policies are confirmed.
 - Stripe must remain test mode during development. Keep the browser publishable key in a local environment file only; never commit a secret `sk_` key.
 - Merch is an editorial Drop 01 preview, labeled Coming soon: E92 Coupe Line-Art Tee (`/assets/IMG_5076.jpg`), E90 Sedan Front-Clip Crewneck (`/assets/IMG_5077.jpg`), and SV1000S Silhouette Crewneck (`/assets/IMG_5078.jpg`). Use the supplied mockups without invented material specifications, prices, stock, or checkout controls. The user has now authorized a real Netlify Forms Drop 01 waitlist. Collect only name, email, style, size, and explicit email consent. Never simulate signup success.
 - Netlify builds the application root (`site/` locally) with `npm run build` and publishes `dist/client`. Keep `public/_redirects` as the SPA fallback.
+
+
 - Navigation uses four hash-addressable, keyboard-accessible tabs: Garage Builds, Video Vault, Garage Merch (Drop 01), and About / Pit Crew. Preserve legacy films/shop/about hash aliases. Arrow keys and Home/End move and activate tabs.
 - Merch Quick Views show supplied artwork, design notes, and a clearly provisional S–2XL size guide. Do not invent garment measurements or material weights. Get Drop Alert uses Netlify Forms, with validation, a honeypot, and success only after an accepted submission. No payment collection.
 - Public production is approved; keep non-production previews private. Keep static response security headers in public/_headers.
+
+
 - Resend email must run server-side only. Never expose `RESEND_API_KEY` through a `VITE_` variable or client bundle. Netlify Forms remains the source of truth for accepted Drop 01 signups; Resend may send confirmations/notifications after Netlify verifies a form submission.

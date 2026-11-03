@@ -1,0 +1,211 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {authenticateWorkos,workosConfig,workosClient,workosIssuer} from '../netlify/operations/workos-auth.mjs';
+import {requireStaff,requirePermission} from '../netlify/operations/permissions.mjs';
+import {createWorkosStaffProvider} from '../netlify/operations/workos-staff-provider.mjs';
+import {workosHttp} from '../netlify/operations/workos-http.mjs';
+import {createMemoryRepository} from '../netlify/commerce/memory-repository.mjs';
+import {WorkOS} from '@workos-inc/node';
+import {SignJWT,generateKeyPair,exportJWK,createLocalJWKSet,EncryptJWT} from 'jose';
+import {createHash} from 'node:crypto';
+const now=Date.now();
+const env={AUTH_PROVIDER:'workos',SITE_ORIGIN:'https://garage.example',WORKOS_API_KEY:'unit-fixture',WORKOS_CLIENT_ID:'client_fixture',WORKOS_COOKIE_PASSWORD:'a-local-unit-test-password-with-at-least-32-characters',WORKOS_STAFF_ORGANIZATION_ID:'org_staff'};
+const jwt=claims=>`${Buffer.from('{}').toString('base64url')}.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.fixture`;
+function fixture(){
+ const claims={iss:'https://api.workos.com/user_management/'+env.WORKOS_CLIENT_ID,sub:'user_member',sid:'session_member',org_id:'org_staff',auth_time:Math.floor(now/1000),exp:Math.floor(now/1000)+3600};
+ const user={id:'user_member',email:'member@example.com',emailVerified:true,firstName:'Member'};
+ const session={id:'session_member',userId:user.id,status:'active',expiresAt:new Date(now+3600000).toISOString(),organizationId:'org_staff',authMethod:'password'};
+ const membership={id:'om_member',userId:user.id,organizationId:'org_staff',status:'active',role:{slug:'employee'}};
+ const result={authenticated:true,user,sessionId:session.id,authenticationMethod:'Password'};
+ const client={userManagement:{loadSealedSession:()=>({authenticate:async()=>({...result,accessToken:jwt(claims)})}),getUser:async()=>user,listSessions:async()=>({data:[session],listMetadata:{}}),listOrganizationMemberships:async()=>({data:[membership]})},multiFactorAuth:{listUserAuthFactors:async()=>({data:[{userId:user.id,type:'totp'}]})}};
+ return {client,user,session,membership,claims,result};
+}
+const request=(path='/api/operations',options={})=>new Request(env.SITE_ORIGIN+path,{headers:{Cookie:'__Host-dbm-session=sealed-fixture',...options.headers},...options});
+
+test('sensitive authorization requires affirmative freshness, not an absent field',()=>{
+ for(const mfaFresh of [undefined,false])assert.throws(()=>requirePermission({role:'admin',mfa:true,mfaFresh},'administration',{fresh:true}),{code:'step_up_required'});
+ assert.doesNotThrow(()=>requirePermission({role:'admin',mfa:true,mfaFresh:true},'administration',{fresh:true}));
+});
+
+test('signed staff authentication tolerates small provider clock skew but rejects far-future or missing times',async()=>{
+ const f=fixture(),options={env:{...env,WORKOS_STAFF_MFA_POLICY_VERIFIED:'true'},client:f.client,now};
+ f.claims.auth_time=Math.floor(now/1000)+2;const principal=await authenticateWorkos(request(),options);assert.equal(principal.mfa,true);assert.equal(principal.mfaFresh,true);
+ f.claims.auth_time=Math.floor(now/1000)+31;assert.equal((await authenticateWorkos(request(),options)).mfa,false);
+ delete f.claims.auth_time;assert.equal((await authenticateWorkos(request(),options)).mfa,false);
+});
+
+test('production authentication cannot reuse a staging or unclassified WorkOS key',()=>{
+ for(const settings of [{WORKOS_ENVIRONMENT:'staging',WORKOS_API_KEY:'sk_live_fixture'},{WORKOS_ENVIRONMENT:'production',WORKOS_API_KEY:'sk_test_fixture'},{WORKOS_ENVIRONMENT:'production',WORKOS_API_KEY:'unclassified'}])assert.throws(()=>workosConfig({...env,COMMERCE_ENVIRONMENT:'production',...settings}),{code:'auth_unavailable'});
+ assert.equal(workosConfig({...env,COMMERCE_ENVIRONMENT:'production',WORKOS_ENVIRONMENT:'production',WORKOS_API_KEY:'sk_live_fixture'}).origin,env.SITE_ORIGIN);
+});
+
+test('verified Google MFA session permits routine staff access after ten minutes but sensitive writes require step-up',async()=>{
+ const f=fixture();f.membership.role.slug='admin';f.session.authMethod='oauth';f.result.authenticationMethod='GoogleOAuth';f.claims.auth_time-=1200;
+ const principal=await authenticateWorkos(request(),{env:{...env,WORKOS_STAFF_MFA_POLICY_VERIFIED:'true',WORKOS_STAFF_GOOGLE_ENABLED:'true'},client:f.client,now});
+ assert.doesNotThrow(()=>requireStaff(principal));assert.equal(principal.mfa,true);assert.equal(principal.mfaFresh,false);
+ assert.throws(()=>requirePermission(principal,'administration',{fresh:true}),{code:'step_up_required'});
+ f.claims.auth_time=Math.floor(now/1000);const fresh=await authenticateWorkos(request(),{env:{...env,WORKOS_STAFF_MFA_POLICY_VERIFIED:'true',WORKOS_STAFF_GOOGLE_ENABLED:'true'},client:f.client,now});assert.doesNotThrow(()=>requirePermission(fresh,'administration',{fresh:true}));
+});
+
+test('routine and explicit step-up sign-ins preserve safe destinations and simultaneous tabs do not overwrite state',async()=>{
+ const repository=createMemoryRepository(),calls=[];let counter=0;
+ const client={userManagement:{getAuthorizationUrlWithPKCE:async options=>{calls.push(options);const state='tab_'+(++counter);return{url:'https://api.workos.com/login?state='+state,state,codeVerifier:'private-'+counter};},authenticateWithCode:async()=>({sealedSession:'new-session'})}};
+ const options={env,client,repository,now,log:()=>{}};
+ const a=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/sign-in?staff=1&returnTo=%2Fadmin'),options);
+ const b=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/sign-in?staff=1&step_up=1&returnTo=%2Fstaff%3Fview%3Demployees'),options);
+ assert.equal(calls[0].maxAge,undefined);assert.equal(calls[1].maxAge,0);
+ const ca=a.headers.get('Set-Cookie').split(';')[0],cb=b.headers.get('Set-Cookie').split(';')[0];assert.notEqual(ca.split('=')[0],cb.split('=')[0]);
+ const complete=state=>workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/callback?state='+state+'&code=fixture',{headers:{Cookie:ca+'; '+cb}}),options);
+ const first=await complete('tab_1');assert.equal(first.headers.get('Location'),'/admin');assert.ok(!first.headers.get('Set-Cookie').includes(cb.split('=')[0]+'=;'));
+ assert.equal((await complete('tab_2')).headers.get('Location'),'/staff?view=employees');assert.match((await complete('tab_1')).headers.get('Location'),/auth=state_expired/);
+ for(const destination of ['https://evil.example/admin','//evil.example','/api/auth/logout','/admin?token=private','/staff?view=employees&next=https://evil.example']){
+  const start=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/sign-in?staff=1&returnTo='+encodeURIComponent(destination)),options);const state='tab_'+counter;
+  const response=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/callback?state='+state+'&code=fixture',{headers:{Cookie:start.headers.get('Set-Cookie').split(';')[0]}}),options);assert.equal(response.headers.get('Location'),'/staff');
+ }
+});
+
+test('refresh preserves cookies on retryable failures and clears only terminal failures',async()=>{
+ const client={userManagement:{loadSealedSession:()=>({refresh:async()=>({authenticated:false,retryable:true,reason:'refresh_failed'})})}},options={env,client,repository:createMemoryRepository(),now,log:()=>{}};
+ const refresh=()=>workosHttp(request('/api/auth/refresh',{method:'POST',headers:{Origin:env.SITE_ORIGIN,Cookie:'__Host-dbm-session=original'}}),options);
+ const transient=await refresh();assert.equal(transient.status,503);assert.equal(transient.headers.get('Set-Cookie'),null);assert.equal((await transient.json()).code,'auth_refresh_unavailable');
+ client.userManagement.loadSealedSession=()=>({refresh:async()=>({authenticated:false,retryable:false,reason:'invalid_grant'})});const terminal=await refresh();assert.equal(terminal.status,401);assert.match(terminal.headers.get('Set-Cookie'),/Max-Age=0/);
+});
+
+test('staff-only sign-in keeps organization scope and rejects a previously started customer callback',async()=>{
+ let exchange=0,counter=0,called;
+ const client={userManagement:{getAuthorizationUrlWithPKCE:async options=>{called=options;return{url:'https://auth.example',state:'mode-'+(++counter),codeVerifier:'fixture'};},authenticateWithCode:async()=>{exchange++;return{sealedSession:'fixture'};}}};
+ const options={env,client,repository:createMemoryRepository(),now,log:()=>{}};
+ const old=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/sign-in'),options);
+ const refused=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/callback?code=fixture&state=mode-1',{headers:{Cookie:old.headers.get('Set-Cookie').split(';')[0]}}),{...options,env:{...env,AUTH_ACCESS_MODE:'staff-only'}});
+ assert.equal(refused.headers.get('Location'),'/account?auth=state_expired');assert.equal(exchange,0);
+ const start=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/sign-in?staff=1&returnTo=%2Faccount'),{...options,env:{...env,AUTH_ACCESS_MODE:'staff-only'}});
+ assert.equal(called.organizationId,env.WORKOS_STAFF_ORGANIZATION_ID);assert.equal(called.screenHint,'sign-in');assert.equal(called.maxAge,undefined);
+ const callback=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/callback?code=fixture&state=mode-2',{headers:{Cookie:start.headers.get('Set-Cookie').split(';')[0]}}),{...options,env:{...env,AUTH_ACCESS_MODE:'staff-only'}});
+ assert.equal(callback.headers.get('Location'),'/admin');assert.equal(exchange,1);
+ const f=fixture();const signed=await workosHttp(request('/api/auth/session'),{...options,client:f.client,env:{...env,AUTH_ACCESS_MODE:'staff-only',WORKOS_STAFF_MFA_POLICY_VERIFIED:'true'}});assert.equal(signed.status,200);
+ f.membership.role.slug='member';assert.equal((await workosHttp(request('/api/auth/session'),{...options,client:f.client,env:{...env,AUTH_ACCESS_MODE:'staff-only'}})).status,503);
+});
+
+test('Account sign-in retains Profile and Help without allowing customer staff destinations',async()=>{
+ let state='',counter=0;const client={userManagement:{getAuthorizationUrlWithPKCE:async()=>({url:'https://auth.example',state:state='account-'+(++counter),codeVerifier:'fixture'}),authenticateWithCode:async()=>({sealedSession:'fixture-session'})}};
+ for(const [destination,expected] of [['/account?view=profile','/account?view=profile'],['/account?view=help','/account?view=help'],['/admin?view=inventory','/account']]){
+  const options={env,client,repository:createMemoryRepository(),now,log:()=>{}};
+  const start=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/sign-in?returnTo='+encodeURIComponent(destination)),options);
+  const response=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/callback?code=fixture&state='+state,{headers:{Cookie:start.headers.get('Set-Cookie').split(';')[0]}}),options);
+  assert.equal(response.headers.get('Location'),expected);
+ }
+});
+
+test('expired encrypted staff state preserves only its safe recovery destination and never exchanges a code',async()=>{
+ let exchanges=0;const client={userManagement:{getAuthorizationUrlWithPKCE:async()=>({url:'https://auth.example',state:'expired-staff',codeVerifier:'private-fixture'}),authenticateWithCode:async()=>{exchanges++;return{sealedSession:'must-not-issue'};}}};
+ const options={env,client,repository:createMemoryRepository(),now,log:()=>{}};
+ const start=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/sign-in?staff=1&returnTo='+encodeURIComponent('/admin?view=inventory')),options);
+ const saved=start.headers.get('Set-Cookie').split(';')[0];assert.match(start.headers.get('Set-Cookie'),/Max-Age=1800/);
+ const finish=value=>workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/callback?code=fixture&state=expired-staff',{headers:{Cookie:value}}),{...options,now:now+660000});
+ const expired=await finish(saved);assert.equal(expired.headers.get('Location'),'/admin?view=inventory&auth=state_expired');assert.ok(!expired.headers.get('Set-Cookie').includes('__Host-dbm-session='));
+ const tampered=await finish(saved.slice(0,-12)+'invalid');assert.equal(tampered.headers.get('Location'),'/account?auth=state_expired');assert.equal(exchanges,0);
+ for(const [issuer,audience,destination,state] of [[env.SITE_ORIGIN,'foreign','/admin','expired-staff'],['https://foreign.example','dbm-oauth','/admin','expired-staff'],[env.SITE_ORIGIN,'dbm-oauth','https://evil.example/admin','expired-staff'],[env.SITE_ORIGIN,'dbm-oauth','/admin','wrong-state']]){
+  const sealed=await new EncryptJWT({state,returnTo:destination,verifier:'fixture'}).setProtectedHeader({alg:'dir',enc:'A256GCM'}).setIssuer(issuer).setAudience(audience).setExpirationTime(Math.floor(now/1000)-1).encrypt(createHash('sha256').update(env.WORKOS_COOKIE_PASSWORD).digest());
+  assert.equal((await finish(saved.split('=')[0]+'='+sealed)).headers.get('Location'),'/account?auth=state_expired');
+ }
+ assert.equal(exchanges,0);
+});
+test('WorkOS binds session issuer to this client and rejects shared, foreign and lookalike issuers',async()=>{
+ const sdk=await workosClient(env);assert.equal(sdk.options.issuer,'https://api.workos.com/user_management/client_fixture');
+ for(const issuer of ['https://api.workos.com/','https://api.workos.com/user_management/client_other','https://api.workos.com.evil.example/user_management/client_fixture',workosIssuer(env)+'/']){
+  const f=fixture();f.claims.iss=issuer;await assert.rejects(authenticateWorkos(request(),{env,client:f.client,now}),{code:'sign_in_required'});
+ }
+});
+test('Installed WorkOS SDK factor endpoint supports authentication, staff lookup and promotion',async()=>{
+ const f=fixture(),sdk=new WorkOS('unit-fixture',{clientId:env.WORKOS_CLIENT_ID}),calls=[];
+ // Retain the installed SDK factor module and its wire deserializer. Only HTTP
+ // transport is replaced, so a nonexistent SDK namespace cannot pass this test.
+ Object.assign(sdk.userManagement,f.client.userManagement);
+ sdk.get=async path=>{calls.push(path);assert.equal(path,'/user_management/users/user_member/auth_factors');return{data:{object:'list',data:[{object:'authentication_factor',id:'auth_factor_fixture',user_id:f.user.id,type:'totp',created_at:new Date(now).toISOString(),updated_at:new Date(now).toISOString()}],list_metadata:{before:null,after:null}}};};
+ const configured={...env,WORKOS_STAFF_MFA_POLICY_VERIFIED:'true'};
+ assert.equal((await authenticateWorkos(request(),{env:configured,client:sdk,now})).mfa,true);
+ const adapter=await createWorkosStaffProvider({env:configured,client:sdk});
+ assert.equal((await adapter.users.getUser('workos:user_member')).twoFactorEnabled,true);
+ sdk.userManagement.updateOrganizationMembership=async(id,{roleSlug})=>{f.membership.role.slug=roleSlug;return f.membership;};
+ sdk.userManagement.revokeSession=async()=>{f.session.status='revoked';};
+ await adapter.users.updateUserMetadata('workos:user_member',{privateMetadata:{role:'admin'}});
+ assert.equal(f.membership.role.slug,'admin');assert.equal(f.session.status,'revoked');assert.equal(calls.length,3);
+});
+test('WorkOS finds the exact current session beyond ten pages and rejects ambiguous later memberships',async()=>{
+ const f=fixture();let calls=0;
+ f.client.userManagement.listSessions=async(userId,options)=>{assert.equal(userId,f.user.id);assert.equal(options.order,'desc');const page=options.after?Number(options.after):0;calls++;return{data:page===12?[f.session]:[],listMetadata:page<12?{after:String(page+1)}:{}};};
+ assert.equal((await authenticateWorkos(request(),{env,client:f.client,now})).userId,'workos:user_member');assert.equal(calls,13);
+ f.client.userManagement.listOrganizationMemberships=async options=>options.after?{data:[{...f.membership,id:'om_duplicate'}]}:{data:[f.membership],listMetadata:{after:'next'}};
+ await assert.rejects(authenticateWorkos(request(),{env,client:f.client,now}),{code:'sign_in_required'});
+ f.client.userManagement.listSessions=async()=>({data:[],listMetadata:{after:'repeat'}});
+ await assert.rejects(authenticateWorkos(request(),{env,client:f.client,now}),{code:'auth_unavailable'});
+});
+test('WorkOS identity is namespaced and fresh membership controls access rather than token roles',async()=>{const f=fixture();f.claims.role='admin';const p=await authenticateWorkos(request(),{env,client:f.client,now});assert.equal(p.userId,'workos:user_member');assert.equal(p.role,'employee');assert.equal(p.admin,false);assert.equal(p.mfa,false);assert.throws(()=>requireStaff(p),{code:'mfa_required'});f.membership.status='inactive';assert.equal((await authenticateWorkos(request(),{env,client:f.client,now})).role,'customer');});
+test('WorkOS staff MFA requires policy evidence, current TOTP enrollment and correct org; freshness is separate',async()=>{const f=fixture(),configured={...env,WORKOS_STAFF_MFA_POLICY_VERIFIED:'true'};assert.equal((await authenticateWorkos(request(),{env:configured,client:f.client,now})).mfa,true);f.claims.auth_time-=601;assert.equal((await authenticateWorkos(request(),{env:configured,client:f.client,now})).mfaFresh,false);f.claims.auth_time=Math.floor(now/1000);f.session.authMethod='sso';assert.equal((await authenticateWorkos(request(),{env:configured,client:f.client,now})).mfa,false);f.session.authMethod='password';f.claims.org_id='org_other';assert.equal((await authenticateWorkos(request(),{env:configured,client:f.client,now})).mfa,false);});
+test('hosted OAuth session transport still requires verified Password primary authentication for staff MFA',async()=>{
+ const f=fixture(),options={env:{...env,WORKOS_STAFF_MFA_POLICY_VERIFIED:'true'},client:f.client,now};f.session.authMethod='oauth';
+ assert.equal((await authenticateWorkos(request(),options)).mfa,true);
+ for(const method of ['GoogleOAuth','SSO',undefined]){f.result.authenticationMethod=method;assert.equal((await authenticateWorkos(request(),options)).mfa,false);}
+ f.result.authenticationMethod='Password';f.session.authMethod='sso';assert.equal((await authenticateWorkos(request(),options)).mfa,false);
+ f.session.authMethod='oauth';f.membership.status='inactive';assert.equal((await authenticateWorkos(request(),options)).role,'customer');
+});
+test('Google staff sessions require explicit server opt-in and the same organization, MFA and freshness gates',async()=>{
+ const f=fixture(),configured={...env,WORKOS_STAFF_MFA_POLICY_VERIFIED:'true',WORKOS_STAFF_GOOGLE_ENABLED:'true'},options={env:configured,client:f.client,now};f.session.authMethod='oauth';f.result.authenticationMethod='GoogleOAuth';
+ assert.equal((await authenticateWorkos(request(),options)).mfa,true);
+ for(const value of [undefined,'false'])assert.equal((await authenticateWorkos(request(),{...options,env:{...configured,WORKOS_STAFF_GOOGLE_ENABLED:value}})).mfa,false);
+ assert.equal((await authenticateWorkos(request(),{...options,env:{...configured,WORKOS_STAFF_MFA_POLICY_VERIFIED:'false'}})).mfa,false);
+ f.claims.auth_time-=601;assert.equal((await authenticateWorkos(request(),options)).mfaFresh,false);f.claims.auth_time=Math.floor(now/1000);
+ f.claims.org_id='org_other';assert.equal((await authenticateWorkos(request(),options)).mfa,false);f.claims.org_id='org_staff';
+ f.client.multiFactorAuth.listUserAuthFactors=async()=>({data:[]});assert.equal((await authenticateWorkos(request(),options)).mfa,false);
+ f.client.multiFactorAuth.listUserAuthFactors=async()=>({data:[{type:'totp',userId:f.user.id}]});
+ f.session.authMethod='sso';assert.equal((await authenticateWorkos(request(),options)).mfa,false);f.session.authMethod='oauth';
+ f.result.authenticationMethod='SSO';assert.equal((await authenticateWorkos(request(),options)).mfa,false);f.result.authenticationMethod='GoogleOAuth';
+ f.membership.status='inactive';assert.equal((await authenticateWorkos(request(),options)).role,'customer');
+});
+test('WorkOS rejects revoked/expired sessions and unverified email despite valid sealed authentication',async()=>{const f=fixture();f.session.status='revoked';await assert.rejects(authenticateWorkos(request(),{env,client:f.client,now}),{code:'sign_in_required'});f.session.status='active';f.claims.exp=Math.floor(now/1000)-1;await assert.rejects(authenticateWorkos(request(),{env,client:f.client,now}),{code:'sign_in_required'});f.claims.exp=Math.floor(now/1000)+300;f.user.emailVerified=false;await assert.rejects(authenticateWorkos(request(),{env,client:f.client,now}),{code:'email_verification_required'});});
+test('WorkOS rejects forged/deleted/mismatched identity and provider outages without leaking diagnostics',async()=>{const f=fixture();f.claims.sub='user_other';await assert.rejects(authenticateWorkos(request(),{env,client:f.client,now}),{code:'sign_in_required'});f.claims.sub=f.user.id;f.client.userManagement.getUser=async()=>{throw Object.assign(new Error('secret customer address'),{status:404});};await assert.rejects(authenticateWorkos(request(),{env,client:f.client,now}),{code:'sign_in_required'});f.client.userManagement.getUser=async()=>{throw Error('secret customer address');};await assert.rejects(authenticateWorkos(request(),{env,client:f.client,now}),e=>e.code==='auth_unavailable'&&!e.message.includes('secret'));});
+test('WorkOS cookie API rejects cross-origin writes and duplicate cookies; bearer never overrides cookie',async()=>{const f=fixture();await assert.rejects(authenticateWorkos(request('/api/operations',{method:'POST',headers:{Origin:'https://evil.example',Cookie:'__Host-dbm-session=x'}}),{env,client:f.client,now}),{code:'origin_rejected'});await assert.rejects(authenticateWorkos(request('/api/operations',{headers:{Cookie:'__Host-dbm-session=x; __Host-dbm-session=y'}}),{env,client:f.client,now}),{code:'sign_in_required'});await assert.rejects(authenticateWorkos(new Request(env.SITE_ORIGIN+'/api/operations',{headers:{Authorization:'Bearer forged'}}),{env,client:f.client,now}),{code:'sign_in_required'});});
+test('WorkOS invalid config and insecure production origin fail closed',()=>{assert.throws(()=>workosConfig({...env,WORKOS_COOKIE_PASSWORD:'short'}),{code:'auth_unavailable'});assert.throws(()=>workosConfig({...env,COMMERCE_ENVIRONMENT:'production',SITE_ORIGIN:'http://localhost'}),{code:'auth_unavailable'});});
+test('WorkOS role demotion is effective on the next request despite stale signed admin claims',async()=>{const f=fixture();f.claims.role='admin';f.membership.role.slug='admin';const options={env:{...env,WORKOS_STAFF_MFA_POLICY_VERIFIED:'true'},client:f.client,now};assert.equal((await authenticateWorkos(request(),options)).admin,true);f.membership.role.slug='customer';const principal=await authenticateWorkos(request(),options);assert.equal(principal.admin,false);assert.equal(principal.role,'customer');assert.throws(()=>requireStaff(principal),{code:'staff_required'});});
+test('Hosted AuthKit refresh rotates the sealed cookie and logout revokes the current session server-side',async()=>{const f=fixture(),repository=createMemoryRepository();let revoked;
+ f.client.userManagement.loadSealedSession=()=>({authenticate:async()=>({...f.result,accessToken:jwt(f.claims)}),refresh:async()=>({authenticated:true,sealedSession:'rotated-session'})});
+ f.client.userManagement.revokeSession=async input=>{revoked=input.sessionId;f.session.status='revoked';};
+ const post=action=>workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/'+action,{method:'POST',headers:{Origin:env.SITE_ORIGIN,Cookie:'__Host-dbm-session=original-session'}}),{env,client:f.client,repository,now,log:()=>{}});
+ const refreshed=await post('refresh');assert.equal(refreshed.status,200);assert.match(refreshed.headers.get('Set-Cookie'),/__Host-dbm-session=rotated-session/);assert.ok(!(await refreshed.text()).includes('rotated-session'));
+ const logout=await post('logout');assert.equal(logout.status,200);assert.equal(revoked,'session_member');assert.match(logout.headers.get('Set-Cookie'),/Max-Age=0/);await assert.rejects(authenticateWorkos(request(),{env,client:f.client,now}),{code:'sign_in_required'});
+});
+test('Hosted AuthKit callback uses PKCE, encrypted browser-bound state, replacement HttpOnly cookie and one-time state',async()=>{
+ const repository=createMemoryRepository();let exchanges=0;
+ const client={userManagement:{getAuthorizationUrlWithPKCE:async()=>({url:'https://api.workos.com/user_management/authorize?state=fixture',state:'fixture',codeVerifier:'private-verifier'}),authenticateWithCode:async options=>{assert.equal(options.codeVerifier,'private-verifier');assert.equal(options.session.sealSession,true);exchanges++;return {sealedSession:'new-session'};}}};
+ const options={env,client,repository,now};const start=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/sign-in?staff=1'),options);assert.equal(start.status,303);const header=start.headers.get('Set-Cookie');assert.match(header,/HttpOnly; SameSite=Lax/);assert.match(header,/Secure/);assert.ok(!header.includes('private-verifier'));const state=header.split(';')[0];
+ const callback=()=>workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/callback?state=fixture&code=code-fixture',{headers:{Cookie:state}}),options);
+ const completed=await callback();assert.equal(completed.status,303);assert.equal(completed.headers.get('Location'),'/staff');assert.match(completed.headers.get('Set-Cookie'),/__Host-dbm-session=new-session/);assert.equal((await callback()).status,303);assert.equal(exchanges,1);
+ const forged=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/callback?state=evil&code=fixture',{headers:{Cookie:state}}),options);assert.equal(forged.status,303);
+});
+test('Hosted AuthKit rate limits sign-in attempts and denies cross-origin refresh without provider calls',async()=>{const repository=createMemoryRepository();const client={userManagement:{getAuthorizationUrlWithPKCE:async()=>({url:'https://api.workos.com/login',state:'test',codeVerifier:'test'})}};const options={env,client,repository,now};for(let i=0;i<20;i++)assert.equal((await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/sign-in'),options)).status,303);assert.equal((await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/sign-in'),options)).status,429);assert.equal((await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/refresh',{method:'POST',headers:{Origin:'https://evil.example'}}),options)).status,403);});
+test('Invalid, missing, expired and tampered callback state redirects safely without crash monitoring; provider outages are reported',async()=>{
+ const captures=[],rows=[];let exchanges=0;const key=createHash('sha256').update(env.WORKOS_COOKIE_PASSWORD).digest();
+ const seal=expires=>new EncryptJWT({state:'expected',verifier:'private-verifier'}).setProtectedHeader({alg:'dir',enc:'A256GCM'}).setAudience('dbm-oauth').setIssuer(env.SITE_ORIGIN).setExpirationTime(expires).encrypt(key);
+ const expired=await seal(Math.floor(now/1000)-60),valid=await seal(Math.floor(now/1000)+600);
+ const client={userManagement:{authenticateWithCode:async()=>{exchanges++;throw Error('private provider diagnostics');}}};
+ async function call(cookieValue,state='expected'){const response=await workosHttp(new Request(env.SITE_ORIGIN+'/api/auth/callback?code=fixture&state='+state,{headers:cookieValue?{Cookie:'__Host-dbm-oauth-'+createHash('sha256').update(state).digest('hex').slice(0,24)+'='+cookieValue}:{}}),{env,client,repository:createMemoryRepository(),now,reporter:{capture:async error=>captures.push(error)},log:line=>rows.push(JSON.parse(line))});assert.equal(response.status,303);assert.equal(response.headers.get('Location'),'/account?auth='+(cookieValue===valid&&state==='expected'?'provider_unavailable':'state_expired'));assert.match(response.headers.get('Set-Cookie'),/__Host-dbm-oauth-[a-f0-9]+=;.*Max-Age=0/);assert.equal(await response.text(),'');}
+ await call(null);await call(expired);await call(valid,'mismatch');await call(valid.slice(0,-12)+'invalid');assert.equal(exchanges,0);assert.equal(captures.length,0);assert.ok(rows.filter(r=>r.event==='request.rejected').every(r=>r.status===400));
+ await call(valid);assert.equal(exchanges,1);assert.equal(captures.length,1);assert.ok(!JSON.stringify(rows).includes('private'));
+});
+test('Installed WorkOS SDK seals and verifies signed sessions; forged JWT and tampered cookies are rejected',async()=>{
+ const {privateKey,publicKey}=await generateKeyPair('RS256');const jwk=await exportJWK(publicKey);jwk.kid='fixture';jwk.alg='RS256';
+ const token=await new SignJWT({sid:'session_member',auth_time:Math.floor(now/1000)}).setProtectedHeader({alg:'RS256',kid:'fixture'}).setSubject('user_member').setIssuer(workosIssuer(env)).setExpirationTime('5m').sign(privateKey);
+ const sdk=await workosClient({...env,WORKOS_API_KEY:'unit-fixture'});
+ sdk.post=async()=>({data:{user:{id:'user_member',email:'member@example.com',email_verified:true},access_token:token,refresh_token:'fixture-refresh',authentication_method:'Password'}});
+ sdk.userManagement.getJWKS=async()=>createLocalJWKSet({keys:[jwk]});
+ const response=await sdk.userManagement.authenticateWithCode({code:'fixture',session:{sealSession:true,cookiePassword:env.WORKOS_COOKIE_PASSWORD}});
+ assert.ok(response.sealedSession);assert.ok(!response.sealedSession.includes(token));
+ const verified=await sdk.userManagement.loadSealedSession({sessionData:response.sealedSession,cookiePassword:env.WORKOS_COOKIE_PASSWORD}).authenticate();assert.equal(verified.authenticated,true);assert.equal(verified.accessToken,token);assert.equal(verified.authenticationMethod,'Password');assert.equal(verified.sessionId,'session_member');
+ const foreign=await new SignJWT({sid:'session_member'}).setProtectedHeader({alg:'RS256',kid:'fixture'}).setSubject('user_member').setIssuer('https://api.workos.com/user_management/client_other').setExpirationTime('5m').sign(privateKey);
+ sdk.post=async()=>({data:{user:{id:'user_member',email:'member@example.com',email_verified:true},access_token:foreign,refresh_token:'fixture-refresh',authentication_method:'Password'}});
+ const foreignResponse=await sdk.userManagement.authenticateWithCode({code:'fixture',session:{sealSession:true,cookiePassword:env.WORKOS_COOKIE_PASSWORD}});assert.equal((await sdk.userManagement.loadSealedSession({sessionData:foreignResponse.sealedSession,cookiePassword:env.WORKOS_COOKIE_PASSWORD}).authenticate()).authenticated,false);
+ await assert.rejects(sdk.userManagement.loadSealedSession({sessionData:response.sealedSession.slice(0,-15)+'changed',cookiePassword:env.WORKOS_COOKIE_PASSWORD}).authenticate());
+ const other=await generateKeyPair('RS256');const forged=await new SignJWT({sid:'session_member'}).setProtectedHeader({alg:'RS256',kid:'fixture'}).setSubject('user_member').setExpirationTime('5m').sign(other.privateKey);
+ sdk.post=async()=>({data:{user:{id:'user_member',email:'member@example.com',email_verified:true},access_token:forged,refresh_token:'fixture-refresh',authentication_method:'Password'}});
+ const forgedResponse=await sdk.userManagement.authenticateWithCode({code:'fixture',session:{sealSession:true,cookiePassword:env.WORKOS_COOKIE_PASSWORD}});assert.equal((await sdk.userManagement.loadSealedSession({sessionData:forgedResponse.sealedSession,cookiePassword:env.WORKOS_COOKIE_PASSWORD}).authenticate()).authenticated,false);
+});

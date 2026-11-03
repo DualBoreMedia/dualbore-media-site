@@ -1,0 +1,12 @@
+import pg from 'pg';
+import {randomUUID} from 'node:crypto';
+import {createPostgresRepository} from '../../netlify/commerce/repository.mjs';
+import {createCommerceService} from '../../netlify/commerce/service.mjs';
+import {createMockStripe} from '../../netlify/commerce/test-stripe.mjs';
+const schema=process.env.DBM_QA_SCHEMA;
+if(!/^dbm_qa_[a-f0-9]+$/.test(schema||''))throw Error('Isolated QA schema required.');
+const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,options:'-c search_path='+schema,max:2});
+const repository=createPostgresRepository(pool),stripe=createMockStripe();
+stripe.testPrices.price_race={active:true,livemode:false,currency:'usd',unit_amount:3000};
+const service=createCommerceService({repository,stripe,env:{SITE_ORIGIN:'http://127.0.0.1:4190'}});
+process.send({ready:true});process.once('message',async()=>{try{await service.checkout({items:[{variantId:'e92-tee-m',quantity:1}]},{requestKey:randomUUID()});process.send({success:true});}catch(e){process.send({success:false,code:e.code||'unexpected'});}finally{await pool.end();process.disconnect();}});

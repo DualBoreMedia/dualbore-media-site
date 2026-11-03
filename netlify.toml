@@ -1,8 +1,13 @@
 [build]
   command = "npm run build"
+  ignore = "node ./scripts/netlify-ignore.mjs"
   publish = "dist/client"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
