@@ -20,7 +20,9 @@ test('actual Netlify CLI gates allow local compilation and block missing or deve
  const missing=run('netlify-ignore.mjs');assert.equal(missing.status,0);assert.match(missing.stdout,/Skipping unapproved/);
  const hosted=run('netlify-build-guard.mjs',{NETLIFY:'true',CONTEXT:'production',BRANCH:'main'});assert.equal(hosted.status,1);assert.match(hosted.stderr,/Blocked Netlify compilation/);
  const revision=spawnSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).stdout.trim();
- const metadata={NETLIFY:'true',CONTEXT:'production',BRANCH:'main',COMMIT_REF:revision};
+ // This must remain a development-branch case even when CI runs on an
+ // explicitly approved main merge with a deployment marker.
+ const metadata={NETLIFY:'true',CONTEXT:'production',BRANCH:'codex/commerce-test-foundation',COMMIT_REF:revision};
  assert.equal(run('netlify-ignore.mjs',metadata).status,0);assert.equal(run('netlify-build-guard.mjs',metadata).status,1);
 });
 

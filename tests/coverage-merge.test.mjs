@@ -173,7 +173,8 @@ test('Node coverage fixture records known counts and detects the V8 else-arm sou
       const locations=[...(entry.locations||[]),entry.start?entry:null,entry.loc,entry.decl].filter(Boolean);
       for(const location of locations)for(const point of [location.start,location.end])if(point?.column<0)negative.push(point);
     }
-    assert.deepEqual(negative,[{line:3,column:-1},{line:3,column:-1}], 'c8/V8 maps the unexecuted return arm to an invalid negative column');
+    assert.equal(negative.length,2, 'c8/V8 produces two invalid locations for the unexecuted return arm');
+    assert.ok(negative.every(point=>point.line===3&&point.column<0), 'the defect remains on the false return; the negative offset varies with LF/CRLF');
     assert.deepEqual(coverage.b,{0:[1],1:[1],2:[0]},'a true-only input must leave the false return uncovered');
   }finally{rmSync(directory,{recursive:true,force:true});}
 });
