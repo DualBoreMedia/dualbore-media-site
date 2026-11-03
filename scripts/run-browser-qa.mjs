@@ -265,6 +265,21 @@ try {
           await expect(publicPage.getByRole('heading',{name:'Forest',exact:true})).toHaveCount(0);
           await publicPage.getByRole('button',{name:'Clear filters',exact:true}).click();
           await capturePublic(publicPage,`${output}/${name}-setups-preview.png`);
+          await publicPage.getByRole('button',{name:'Bike library 53 placeholders',exact:true}).click();
+          await expect(publicPage.getByText('53 of 53 bike placeholders',{exact:true})).toBeVisible();
+          await publicPage.getByRole('searchbox',{name:'Search bikes',exact:true}).fill('TC125');
+          await expect(publicPage.getByText('1 of 53 bike placeholders',{exact:true})).toBeVisible();
+          await expect(publicPage.getByRole('heading',{name:'2023 Husqvarna TC 125',exact:true})).toBeVisible();
+          await publicPage.getByRole('combobox',{name:'Manufacturer',exact:true}).selectOption('Honda');
+          await expect(publicPage.getByText('No bikes match these filters.',{exact:true})).toBeVisible();
+          await publicPage.getByRole('button',{name:'Reset bike filters',exact:true}).click();
+          await expect(publicPage.getByText('53 of 53 bike placeholders',{exact:true})).toBeVisible();
+          if(await publicPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Bike library overflows at '+width+'px');
+          if(await publicPage.locator('a[download],a[href$=".stp"],a[href*="checkout"],input[type="email"]').count())throw Error('Bike library exposed a download, checkout or signup');
+          if([320,390,1440].includes(width)){
+            await publicPage.getByRole('searchbox',{name:'Search bikes',exact:true}).fill('Husqvarna');
+            await capturePublic(publicPage,`${output}/${name}-bike-library-${width}.png`);
+          }
           for (const route of ['shipping', 'returns', 'privacy', 'terms', 'contact']) {
             await publicPage.goto(`${publicBaseUrl}/${route}`);
             await publicPage.locator('main').getByRole('heading').first().waitFor();
