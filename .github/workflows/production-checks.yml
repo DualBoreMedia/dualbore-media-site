@@ -31,7 +31,15 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - name: Build with synthetic server-secret canaries
+        run: |
+          mkdir -p test-results
+          dbm_build_status=0
+          npm run build > test-results/build-security.log 2>&1 || dbm_build_status=$?
+          DBM_BUILD_EXIT="$dbm_build_status" node --input-type=module -e "import {readFileSync} from 'node:fs'; const log=readFileSync('test-results/build-security.log','utf8'); const canaries=['WORKOS_API_KEY','WORKOS_COOKIE_PASSWORD'].map(key=>process.env[key]); const leaked=canaries.some(value=>log.includes(value)); let safe=log; for(const value of canaries) safe=safe.replaceAll(value,'[redacted server-secret canary]'); console.log(safe); if(leaked) console.error('Build output exposed a synthetic server secret.'); process.exitCode=Number(process.env.DBM_BUILD_EXIT)||Number(leaked);"
+        env:
+          WORKOS_API_KEY: sk_SYNTHETIC_SERVER_ONLY_BUILD_CANARY
+          WORKOS_COOKIE_PASSWORD: SYNTHETIC_COOKIE_PASSWORD_SERVER_ONLY_BUILD_CANARY
       - run: npm run test:inventory
       - name: Critical business-condition mutation spot checks
         run: npm run test:mutations

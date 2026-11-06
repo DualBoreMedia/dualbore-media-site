@@ -39,6 +39,15 @@ test('production authentication cannot reuse a staging or unclassified WorkOS ke
  assert.equal(workosConfig({...env,COMMERCE_ENVIRONMENT:'production',WORKOS_ENVIRONMENT:'production',WORKOS_API_KEY:'sk_live_fixture'}).origin,env.SITE_ORIGIN);
 });
 
+test('opaque WorkOS production keys require independently verified production evidence',()=>{
+ const production={...env,COMMERCE_ENVIRONMENT:'production',WORKOS_ENVIRONMENT:'production',WORKOS_API_KEY:'sk_syntheticProductionFixture123'};
+ assert.equal(workosConfig({...production,WORKOS_PRODUCTION_VERIFIED:'true'}).origin,env.SITE_ORIGIN);
+ assert.equal(workosConfig({...production,WORKOS_API_KEY:'sk_syntheticOpaqueFixture_-',WORKOS_PRODUCTION_VERIFIED:'true'}).origin,env.SITE_ORIGIN);
+ for(const evidence of [undefined,'false','TRUE'])assert.throws(()=>workosConfig({...production,WORKOS_PRODUCTION_VERIFIED:evidence}),{code:'auth_unavailable'});
+ for(const WORKOS_API_KEY of ['sk_test_syntheticFixture','sk_staging_syntheticFixture','sk_','sk_bad value','pk_syntheticFixture',' sk_syntheticFixture','sk_syntheticFixture\n'])assert.throws(()=>workosConfig({...production,WORKOS_API_KEY,WORKOS_PRODUCTION_VERIFIED:'true'}),{code:'auth_unavailable'});
+ assert.throws(()=>workosConfig({...production,WORKOS_ENVIRONMENT:'staging',WORKOS_PRODUCTION_VERIFIED:'true'}),{code:'auth_unavailable'});
+});
+
 test('verified Google MFA session permits routine staff access after ten minutes but sensitive writes require step-up',async()=>{
  const f=fixture();f.membership.role.slug='admin';f.session.authMethod='oauth';f.result.authenticationMethod='GoogleOAuth';f.claims.auth_time-=1200;
  const principal=await authenticateWorkos(request(),{env:{...env,WORKOS_STAFF_MFA_POLICY_VERIFIED:'true',WORKOS_STAFF_GOOGLE_ENABLED:'true'},client:f.client,now});

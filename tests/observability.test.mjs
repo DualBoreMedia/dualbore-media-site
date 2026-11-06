@@ -8,6 +8,15 @@ test('structured metadata excludes secrets, bodies, email, address and untrusted
  const secret='sk_test_private';const row=safeMetadata({requestId:'safe-reference',Authorization:'Bearer '+secret,body:{address:'55 Private Street'},email:'customer@example.com',event:secret,provider:'stripe',orderReference:'DBM-123',status:503});
  assert.deepEqual(row,{requestId:'safe-reference',provider:'stripe',orderReference:'DBM-123',status:503});
 });
+
+test('opaque WorkOS credentials are excluded from allowed metadata and monitoring code paths',()=>{
+ const syntheticToken='sk_'+'SYNTHETIC'.repeat(4);
+ assert.deepEqual(safeMetadata({requestId:syntheticToken,provider:syntheticToken,release:syntheticToken}),{});
+ const event=sanitizeMonitoringEvent({release:syntheticToken,tags:{requestId:syntheticToken},debug_meta:{images:[{debug_id:'12345678-1234-1234-1234-123456789012',code_file:'https://dualboremedia.com/assets/'+syntheticToken+'.js'}]},exception:{values:[{type:syntheticToken,value:syntheticToken,stacktrace:{frames:[{filename:'https://dualboremedia.com/assets/'+syntheticToken+'.js'}]}}]}});
+ assert.equal(JSON.stringify(event).includes(syntheticToken),false);
+ assert.deepEqual(event.debug_meta.images,[]);
+ assert.deepEqual(event.exception.values[0].stacktrace.frames[0],{in_app:false});
+});
 test('background failures preserve retry rejection while reporting a safe correlation and hiding provider diagnostics',async()=>{
  const logs=[],reported=[];let reference;
  const task=observeTask(async()=>{reference=requestContext().requestId;throw Error('sk_live_secret customer@example.com');},{scope:'waitlist',reporter:{capture:async error=>reported.push(error)},log:line=>logs.push(line)});

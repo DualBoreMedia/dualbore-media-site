@@ -80,6 +80,16 @@ test('WorkOS admin route requires a verified admin role before rendering operati
  await expect.element(page.getByText('Live payments disabled')).toBeVisible();
 });
 
+test.each([{admin:true,path:'/admin',role:'admin'},{admin:false,path:'/staff',role:'employee'}])('WorkOS $role sign-out keeps the private sign-in route instead of the closed customer page',async({admin,path,role})=>{
+ vi.stubGlobal('fetch',vi.fn(async url=>url==='/api/auth/session'?json({signedIn:true}):url==='/api/auth/logout'?json({ok:true}):json({role,orders:[],variants:[],failures:[],audit:[]})));
+ history.replaceState(null,'',path);root.render(<WorkosOperations admin={admin}/>);
+ await page.getByRole('button',{name:'Sign out',exact:true}).click();
+ await expect.element(page.getByRole('link',{name:'Secure sign in',exact:true})).toBeVisible();
+ expect(location.pathname).toBe(path);
+ await expect.element(page.getByRole('link',{name:'Create account'})).not.toBeInTheDocument();
+ await expect.element(page.getByRole('navigation',{name:admin?'Operations navigation':'Staff navigation'})).not.toBeInTheDocument();
+});
+
 test('cookie requests share one refresh, retry only once and keep a transient session failure out of sign-in loops',async()=>{
  let release;const gate=new Promise(resolve=>{release=resolve;});let rotations=0;const attempts={};
  const fetcher=vi.fn(async url=>{if(url==='/api/auth/refresh'){rotations++;await gate;return json({ok:true});}attempts[url]=(attempts[url]||0)+1;return json({},attempts[url]===1?401:200);});

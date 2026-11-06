@@ -36,6 +36,7 @@ test('staff-only release hides customer account entry while keeping private staf
  await expect.element(page.getByRole('link',{name:'Secure sign in'})).toHaveAttribute('href','/api/auth/sign-in?staff=1&returnTo=%2Fadmin');
 });
 test('real lazy account and staff entries remain signed out and deny privileged content',async()=>{
+ vi.stubEnv('VITE_AUTH_ACCESS_MODE','customer-and-staff');
  await boot('/account');await expect.element(page.getByRole('heading',{name:'Welcome to your garage'})).toBeVisible();
  await expect.element(page.getByRole('link',{name:'Create account'})).toBeVisible();dispose();dispose=undefined;
  history.replaceState(null,'','/admin');dispose=await module.start(host);

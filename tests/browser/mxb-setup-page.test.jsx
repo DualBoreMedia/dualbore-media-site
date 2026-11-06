@@ -76,6 +76,16 @@ test('bike library exposes all reference placeholders with working filters but n
  await page.getByRole('searchbox',{name:'Search bikes',exact:true}).fill('TC125');
  await expect.element(page.getByText('1 of 53 bike placeholders')).toBeVisible();
  await expect.element(page.getByRole('heading',{name:'2023 Husqvarna TC 125',exact:true})).toBeVisible();
+ await page.getByRole('combobox',{name:'Model family',exact:true}).selectOptions('TC');
+ await page.getByText('Track setups',{exact:true}).click();
+ const trackToggle=host.querySelector('.mxb-bike-tracks summary');
+ expect(trackToggle.getBoundingClientRect().height).toBeGreaterThanOrEqual(48);
+ trackToggle.focus();
+ expect(document.activeElement).toBe(trackToggle);
+ expect(trackToggle.parentElement.textContent).toContain('No verified setup');
+ expect(trackToggle.parentElement.textContent).not.toContain('Coming soon');
+ await expect.element(page.getByRole('region',{name:'Bike library',exact:true}).getByText('Assen',{exact:true})).toBeVisible();
+ await expect.element(page.getByText('Sample received · testing pending').first()).toBeVisible();
  await page.getByRole('combobox',{name:'Manufacturer',exact:true}).selectOptions('Honda');
  await expect.element(page.getByText('No bikes match these filters.')).toBeVisible();
  await page.getByRole('button',{name:'Reset bike filters',exact:true}).click();

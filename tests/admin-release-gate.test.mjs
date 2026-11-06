@@ -7,6 +7,18 @@ test('admin-only readiness is separate from merchandise legal, Stripe and email 
  assert.deepEqual(checkAdminRelease({env:safe}),{ready:true,blockers:[],level:'admin-only'});
  assert.equal(safe.STRIPE_SECRET_KEY,undefined);assert.equal(safe.RESEND_API_KEY,undefined);assert.equal(safe.OHIO_TAX_REGISTRATION_VERIFIED,undefined);
 });
+
+test('admin release accepts verified opaque WorkOS keys while rejecting unverified and staging credentials',()=>{
+ const production={...safe,WORKOS_API_KEY:'sk_syntheticProductionFixture123'};
+ assert.equal(checkAdminRelease({env:production}).ready,true);
+ for(const changes of [{WORKOS_PRODUCTION_VERIFIED:undefined},{WORKOS_PRODUCTION_VERIFIED:'false'},{WORKOS_ENVIRONMENT:'staging'},{WORKOS_API_KEY:'sk_test_syntheticFixture'},{WORKOS_API_KEY:'sk_staging_syntheticFixture'},{WORKOS_API_KEY:'sk_bad value'},{WORKOS_API_KEY:'sk_syntheticFixture\n'}]){
+  const env={...production,...changes},result=checkAdminRelease({env});
+  assert.equal(result.ready,false);
+  const output=JSON.stringify(result);
+  assert.equal(output.includes(env.WORKOS_API_KEY),false);
+  assert.equal(output.includes(JSON.stringify(env.WORKOS_API_KEY).slice(1,-1)),false);
+ }
+});
 test('every admin release prerequisite fails closed independently and diagnostics never expose values',()=>{
  for(const key of [...evidence,...Object.keys(safe).filter(k=>!evidence.includes(k))]){
   const env={...safe};delete env[key];assert.equal(checkAdminRelease({env}).ready,false,key);
@@ -15,4 +27,12 @@ test('every admin release prerequisite fails closed independently and diagnostic
   const result=checkAdminRelease({env:{...safe,...changes}});assert.equal(result.ready,false,JSON.stringify(Object.keys(changes)));assert.ok(!JSON.stringify(result).includes('must-never-print-this'));assert.ok(!JSON.stringify(result).includes('re_synthetic_leaked_name'));
  }
  assert.equal(checkAdminRelease().ready,false);
+});
+
+test('opaque WorkOS tokens cannot be used as environment variable labels',()=>{
+ const label='sk_'+'SyntheticFixture'.repeat(3);
+ const result=checkAdminRelease({env:{...safe,[label]:''}});
+ assert.equal(result.ready,false);
+ assert.ok(result.blockers.some(message=>message.includes('credential-shaped variable names')));
+ assert.equal(JSON.stringify(result).includes(label),false);
 });

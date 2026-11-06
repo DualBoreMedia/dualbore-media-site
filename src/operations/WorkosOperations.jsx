@@ -30,7 +30,7 @@ export default function WorkosOperations({admin=false}){
   load();
   return()=>{active=false;};
  },[attempt]);
- const signOut=useCallback(async()=>{try{const response=await workosSessionFetch('/api/auth/logout',{method:'POST'});if(!response.ok)throw Error();setState({isLoaded:true,isSignedIn:false});window.location.assign('/account');}catch{window.alert('Sign-out could not be confirmed. Try again.');}},[]);
+ const signOut=useCallback(async()=>{try{const response=await workosSessionFetch('/api/auth/logout',{method:'POST'});if(!response.ok)throw Error();setState({isLoaded:true,isSignedIn:false});if(!staff)window.location.assign('/account');}catch{window.alert('Sign-out could not be confirmed. Try again.');}},[staff]);
  const failure=new URLSearchParams(window.location.search).get('auth');
  const failed=!!failure;
  const failureMessage=failure==='state_expired'?'This sign-in attempt expired or was already used. Start one new sign-in attempt and finish it within ten minutes.':failure==='provider_unavailable'?'The sign-in provider could not finish this attempt. Your permissions have not changed. Try again when the service is available.':'We could not complete sign-in. Please try signing in again.';
