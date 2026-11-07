@@ -1,4 +1,5 @@
 import {runProductsBrowserChecks} from '../tests/products.browser.mjs';
+import {setupFilesHttp} from '../netlify/setups/files-http.mjs';
 import {chromium, firefox, webkit, expect} from '@playwright/test';
 import {createServer, preview} from 'vite';
 import react from '@vitejs/plugin-react';
@@ -52,12 +53,26 @@ for (const [name, component, extra] of [['staff', 'StaffApp', ''], ['admin', 'Op
   await writeFile(`${fixtures}/${name}.jsx`, `import React from 'react';import {createRoot} from 'react-dom/client';import '../../src/styles.css';import App from '../../src/operations/${component}.jsx';${auth}createRoot(document.getElementById('root')).render(<App ${extra} auth={auth}/>);`);
 }
 await writeFile(`${fixtures}/error-boundary.jsx`, `import React from 'react';import {createRoot} from 'react-dom/client';import '../../src/styles.css';import {ErrorBoundary} from '../../src/observability/ErrorBoundary.jsx';import {configureBrowserMonitoring} from '../../src/observability/client.js';window.__qaMonitoring={calls:0,tags:null};const sdk={init:()=>{},withScope:callback=>callback({setTags:tags=>window.__qaMonitoring.tags=tags}),captureException:()=>window.__qaMonitoring.calls++};configureBrowserMonitoring(sdk,{dsn:'https://synthetic@example.invalid/1',enabled:true,release:'synthetic-browser',environment:'test'});function Broken(){throw new Error('DBM_SYNTHETIC_BOUNDARY_EXCEPTION customer-sensitive-fixture');}createRoot(document.getElementById('root')).render(<ErrorBoundary><Broken/></ErrorBoundary>);`);
+let setupQaContext=null;
 const server = await createServer({
   configFile: false, mode: 'test',
   define: {__APP_RELEASE__: JSON.stringify('synthetic-browser'), __APP_ENVIRONMENT__: JSON.stringify('test')},
   server: {host: '127.0.0.1', port: Number(process.env.QA_PORT || 4197), strictPort: true, watch: null},
   plugins: [react(), {name: 'synthetic-browser-fixtures', configureServer(vite) {
     vite.middlewares.use(async (request, response, next) => {
+      // Exercise binary uploads over real loopback HTTP. WebKit's intercepted
+      // Playwright request metadata omits File bodies, so replaying postDataBuffer
+      // would test an empty request rather than the browser's actual upload.
+      if(request.url.startsWith('/api/setup-files?')&&setupQaContext){
+        try{
+          if(request.headers.host!==new URL(baseUrl).host){response.writeHead(403);response.end();return;}
+          const chunks=[];let length=0;for await(const chunk of request){length+=chunk.length;if(length>2*1024*1024){response.writeHead(413);response.end();return;}chunks.push(chunk);}
+          const req=new Request(baseUrl+request.url,{method:request.method,headers:request.headers,...(['GET','HEAD'].includes(request.method)?{}:{body:Buffer.concat(chunks)})});
+          const result=await setupFilesHttp(req,{env:{SITE_ORIGIN:baseUrl},runtime:async()=>({repository:setupQaContext.repository}),auth:async()=>setupQaContext.principal,clientIp:'synthetic-browser'});
+          response.writeHead(result.status,Object.fromEntries(result.headers));response.end(await result.text());
+        }catch{response.writeHead(503,{'Content-Type':'application/json'});response.end(JSON.stringify({error:'Synthetic upload fixture unavailable.'}));}
+        return;
+      }
       const name = request.url === '/.tools/operations-qa/staff.html' ? 'staff' : request.url === '/__qa/admin' ? 'admin' : request.url === '/__qa/error-boundary' ? 'error-boundary' : null;
       if (!name) return next();
       const html = await vite.transformIndexHtml(request.url, `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/assets/favicon.svg"></head><body style="margin:0"><div id="root"></div><script type="module" src="/${fixtures}/${name}.jsx"></script></body></html>`);
@@ -108,7 +123,8 @@ try {
       const productRepository=createMemoryRepository();
       const productPage=await context.newPage();
       page=productPage;
-      const products=await runProductsBrowserChecks({page:productPage,baseUrl,publicBaseUrl,repository:productRepository,service:createOperationsService({repository:productRepository}),principal:{...principal,role:'admin'},evidenceDirectory:output+'/'+name});
+      setupQaContext={repository:productRepository,principal:{...principal,role:'admin'}};
+      let products;try{products=await runProductsBrowserChecks({page:productPage,baseUrl,publicBaseUrl,repository:productRepository,service:createOperationsService({repository:productRepository}),principal:setupQaContext.principal,evidenceDirectory:output+'/'+name});}finally{setupQaContext=null;}
       const publicPage = await context.newPage();
       page = publicPage;
       publicPage.setDefaultTimeout(10000);

@@ -20,6 +20,12 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Private setup management, November 6, 2026
+
+- Owner requests Admin management of original MX Bikes STP files and automatic post-purchase email delivery. Store immutable versions privately, never in public assets or Git. Restrict uploads to current Admins with fresh MFA; preserve compatibility and publication gates.
+- Future delivery uses the verified-payment webhook and existing durable email outbox with private STP attachments. A saved file or browser success URL is not payment or compatibility proof. Keep all payment/email/signup/download gates closed and do not deploy or migrate production without exact approval.
+- Newly listed Downloads paths were unavailable during this intake. Do not claim those files were received or invent their embedded bike IDs, model years, pack/game versions or test results. Complete digital checkout snapshot integration and actual sandbox/provider verification before digital sales.
+
 ### Live Admin request and bike library, November 2, 2026
 
 - Owner requests usable private live Admin for merchandise metadata and a visible MX Bikes placeholder library. Keep all purchasing, refunds, sending, signups and downloads disabled. Do not substitute a public or staging-authenticated editor for secure production Admin.

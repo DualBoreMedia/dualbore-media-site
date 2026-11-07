@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {reportUnexpected,structuredLog} from '../observability/index.mjs';
 import {serverErrorReporter} from '../observability/server.mjs';
+import {setupItems,paidSetupOrder,setupDeliveryRefs,setupEmailAttachments,renderSetupEmail} from '../setups/delivery.mjs';
 const deliveryFailure=async(error,env)=>reportUnexpected(error,{scope:'transactional-email',provider:'resend'},{env,reporter:await serverErrorReporter(env)});
 
 const leaseMs = 60_000;
@@ -18,12 +19,14 @@ export function renderOrderEmail(order) {
   const notice = test ? 'SANDBOX TEST. No real payment was taken. Do not ship this test order.' : '';
   const currency = /^[a-z]{3}$/i.test(order.currency ?? '') ? order.currency.toUpperCase() : 'USD';
   const number = clean(order.orderNumber || order.id);
-  const lines = (order.items ?? []).map(item => `${clean(item.name)} | Size ${clean(item.size)} | Qty ${item.quantity} | ${amount(item.lineTotalCents,currency)}`);
+  const physical=(order.items??[]).some(item=>item.type!=='mx_setup');
+  const lines = (order.items ?? []).map(item => `${clean(item.name)} | ${item.type==='mx_setup'?'Digital setup':`Size ${clean(item.size)}`} | Qty ${item.quantity} | ${amount(item.lineTotalCents,currency)}`);
   const totals = [['Subtotal',order.subtotalCents],['Shipping',order.shippingCents],['Tax',order.taxCents],['Total',order.totalCents]].map(([label,value])=>`${label}: ${amount(value,currency)}`);
   const shipping = order.shippingAddress ?? {};
   const destination = [order.shippingName,shipping.line1,shipping.line2,[shipping.city,shipping.state,shipping.postal_code ?? shipping.postalCode].filter(Boolean).join(' '),shipping.country].filter(Boolean).map(clean);
-  const text = [notice, `DualBore Media | Order ${number}`, 'Payment confirmed. Thank you for your order.', ...lines, ...totals, 'Ship to:', ...destination, 'This confirms payment, not shipment.'].join('\n');
-  return {subject:`${test?'[TEST] ':''}DualBore Media order ${number} confirmed`,text,html:`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Order confirmation</title></head><body style="font-family:Arial,sans-serif;font-size:16px;line-height:1.6;color:#f5f7fb;background:#0b0d10"><main style="max-width:600px;margin:auto;padding:28px;background:#13161c;border-top:4px solid #ff2a3b"><p style="color:#00f0ff;font-weight:bold;letter-spacing:3px">DUALBORE / MEDIA</p><h1>Order ${escape(number)} confirmed</h1>${notice?`<p><strong>${escape(notice)}</strong></p>`:''}<p>Payment confirmed. Thank you for your order.</p><ul>${lines.map(line=>`<li>${escape(line)}</li>`).join('')}</ul>${totals.map(line=>`<p>${escape(line)}</p>`).join('')}<h2>Ship to</h2><p>${destination.map(escape).join('<br>')}</p><p>This confirms payment, not shipment.</p></main></body></html>`};
+  const delivery=physical?'This confirms payment, not shipment.':'Your setup files are delivered separately by email. No physical package is shipped for digital setups.';
+  const text = [notice, `DualBore Media | Order ${number}`, 'Payment confirmed. Thank you for your order.', ...lines, ...totals, ...(physical?['Ship to:',...destination]:[]), delivery].join('\n');
+  return {subject:`${test?'[TEST] ':''}DualBore Media order ${number} confirmed`,text,html:`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Order confirmation</title></head><body style="font-family:Arial,sans-serif;font-size:16px;line-height:1.6;color:#f5f7fb;background:#0b0d10"><main style="max-width:600px;margin:auto;padding:28px;background:#13161c;border-top:4px solid #ff2a3b"><p style="color:#00f0ff;font-weight:bold;letter-spacing:3px">DUALBORE / MEDIA</p><h1>Order ${escape(number)} confirmed</h1>${notice?`<p><strong>${escape(notice)}</strong></p>`:''}<p>Payment confirmed. Thank you for your order.</p><ul>${lines.map(line=>`<li>${escape(line)}</li>`).join('')}</ul>${totals.map(line=>`<p>${escape(line)}</p>`).join('')}${physical?`<h2>Ship to</h2><p>${destination.map(escape).join('<br>')}</p>`:''}<p>${escape(delivery)}</p></main></body></html>`};
 }
 
 export function renderShipmentEmail(order) {
@@ -39,14 +42,17 @@ export function renderShipmentEmail(order) {
 
 async function sendType({repository,orderId,type,eventId,env,fetchImpl,now}) {
   if(env.AUTH_ACCESS_MODE==='staff-only'||env.COMMERCE_ENVIRONMENT==='production' && env.TRANSACTIONAL_EMAILS_ENABLED!=='true')return {type,status:'disabled'};
+  const digital=type==='customer-setup-files';
+  if(digital&&(env.DIGITAL_DELIVERY_ENABLED!=='true'||env.TRANSACTIONAL_EMAILS_ENABLED!=='true'))return {type,status:'disabled'};
   const timestamp = now().getTime();
   const id = eventId || `${orderId}:${type}`;
   const token = randomUUID();
-  const claim = await repository.transaction(async state => {
+  const claim = await repository.transaction(async (state,assets) => {
     const order = state.orders[orderId];
     if (!order || !['paid','fulfilled',...(type.startsWith('lifecycle-')?['refunded']:[])].includes(order.status)) return {status:'not-paid'};
     if(type==='customer-shipment'&&order.status!=='fulfilled')return {status:'not-shipped'};
     if (order.testProvider==='mock') return {status:'mock-suppressed'};
+    if(digital&&!paidSetupOrder(state,order))return {status:'payment-or-fulfillment-review-required'};
     const previous = state.emails[id];
     if (previous?.status === 'sent' || previous?.status === 'manual-review') return {status:previous.status};
     if (previous?.status === 'sending' && Date.parse(previous.leaseExpiresAt) > timestamp) return {status:'in-progress'};
@@ -59,16 +65,26 @@ async function sendType({repository,orderId,type,eventId,env,fetchImpl,now}) {
     const recipient = type !== 'merchant-notification' ? order.customerEmail : env.RESEND_NOTIFY_TO;
     if (!recipient && type === 'merchant-notification') return {status:'not-configured'};
     if (!address(recipient)) return {status:'recipient-invalid'};
-    const template = previous?.template || (type==='customer-shipment'?renderShipmentEmail(order):renderOrderEmail(order));
+    let attachmentRefs;
+    if(digital){
+      try {attachmentRefs=previous?.attachmentRefs||setupDeliveryRefs(order);await setupEmailAttachments(assets,attachmentRefs);}
+      catch {state.emails[id]={...previous,id,orderId,emailType:type,provider:'resend',status:'manual-review',lastError:'setup-integrity-review-required',attemptCount:previous?.attemptCount||0,createdAt:previous?.createdAt||new Date(timestamp).toISOString()};return{status:'manual-review'};}
+    }
+    const template = previous?.template || (digital?renderSetupEmail(order):type==='customer-shipment'?renderShipmentEmail(order):renderOrderEmail(order));
     const payload = previous?.payload ?? {from:env.RESEND_FROM,to:[recipient],...template,...(env.RESEND_REPLY_TO?{reply_to:env.RESEND_REPLY_TO}:{}),...(type==='merchant-notification'?{subject:`${sandboxOrder(order)?'[TEST] ':''}Paid order ${clean(order.orderNumber || order.id)} | DualBore Media`}:{})};
     const row = {...previous,id,orderId,emailType:type,provider:'resend',providerMessageId:previous?.providerMessageId ?? null,status:'sending',attemptCount:(previous?.attemptCount ?? 0)+1,lastError:null,createdAt:previous?.createdAt ?? new Date(timestamp).toISOString(),sentAt:null,firstAttemptAt:previous?.firstAttemptAt ?? new Date(timestamp).toISOString(),leaseToken:token,leaseExpiresAt:new Date(timestamp+leaseMs).toISOString(),retryAfter:null,uncertain:Boolean(previous?.uncertain || previous?.status==='sending'),payload};
+    if(digital)row.attachmentRefs=attachmentRefs;
     state.emails[id]=row;
     return {status:'claimed',payload,attemptCount:row.attemptCount};
   });
   if (claim.status !== 'claimed') return {type,status:claim.status};
   let status='failed',lastError='provider-unavailable',providerMessageId=null,uncertain=true,retryable=true;
   try {
-    const response = await fetchImpl('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${env.RESEND_API_KEY}`,'Content-Type':'application/json','Idempotency-Key':`dbm-order-${createHash('sha256').update(id).digest('hex')}`},body:JSON.stringify(claim.payload),signal:AbortSignal.timeout(10_000)});
+    const payload=digital?await repository.transaction(async(state,assets)=>{
+      if(!paidSetupOrder(state,state.orders[orderId]))throw Error('Setup delivery no longer authorized.');
+      return {...claim.payload,attachments:await setupEmailAttachments(assets,state.emails[id].attachmentRefs)};
+    }):claim.payload;
+    const response = await fetchImpl('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${env.RESEND_API_KEY}`,'Content-Type':'application/json','Idempotency-Key':`dbm-order-${createHash('sha256').update(id).digest('hex')}`},body:JSON.stringify(payload),signal:AbortSignal.timeout(10_000)});
     if(response.ok){
       const data=await response.json();
       if(typeof data?.id==='string' && /^[A-Za-z0-9_-]{1,200}$/.test(data.id)){status='sent';lastError=null;providerMessageId=data.id;uncertain=false;}
@@ -108,6 +124,8 @@ export async function deliverOrderEmails({repository,orderId,env={},fetchImpl=fe
   try {
     const results=[];
     for(const type of ['customer-confirmation','merchant-notification']) results.push(await sendType({repository,orderId,type,env,fetchImpl,now}));
+    const digital=env.AUTH_ACCESS_MODE!=='staff-only'&&env.DIGITAL_DELIVERY_ENABLED==='true'&&env.TRANSACTIONAL_EMAILS_ENABLED==='true'&&await repository.transaction(s=>setupItems(s.orders[orderId]).length>0);
+    if(digital)results.push(await sendType({repository,orderId,type:'customer-setup-files',env,fetchImpl,now}));
     return {status:'processed',results};
   } catch(error) {await deliveryFailure(error,env);return {status:'storage-or-order-unavailable',results:[]};}
 }

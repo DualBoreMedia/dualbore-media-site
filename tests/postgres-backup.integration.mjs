@@ -29,8 +29,10 @@ test('real PostgreSQL backup restores checksums, stock and immutable actor audit
   const actor={userId:'workos:backup_fixture',email:'fixture@example.invalid',role:'admin',mfa:true,mfaFresh:true};
   await createOperationsService({repository,env:{AUTH_ACCESS_MODE:'staff-only'}}).mutate(actor,{action:'inventory',variantId:'e92-tee-m',availableQuantity:3,active:false,reason:'Synthetic restore rehearsal',expectedVersion:0});
   const migrations=(await app.query('SELECT name,checksum FROM commerce_migrations ORDER BY name')).rows;
-  assert.deepEqual(migrations.map(row=>row.name),['001_commerce.sql','002_operations.sql','003_support_marketing.sql','004_fulfillment_attribution.sql','005_public_video_sync.sql','006_managed_products.sql']);
+  assert.deepEqual(migrations.map(row=>row.name),['001_commerce.sql','002_operations.sql','003_support_marketing.sql','004_fulfillment_attribution.sql','005_public_video_sync.sql','006_managed_products.sql','007_private_setup_assets.sql']);
   assert.ok(migrations.every(row=>/^[a-f0-9]{64}$/.test(row.checksum)),'Every migrated schema must have a SHA-256 checksum.');
+  const bytes=Buffer.alloc(244);Buffer.from('c85393451601','hex').copy(bytes);bytes.write('MX1OEM_2023_Yamaha_YZ450F',6);
+  const privateFile=await repository.transaction((_,assets)=>assets.put(bytes,{filename:'Synthetic restore fixture.stp',actor:actor.userId,createdAt:new Date().toISOString()}));
   const dump=tool('pg_dump',['--format=custom','--inserts','--no-owner','--no-acl','--schema='+schema]);assert.ok(dump.length>0);
   // Restore only the generated synthetic schema under another generated name.
   // No elevated CREATEDB permission or production restore operation is needed.
@@ -40,6 +42,7 @@ test('real PostgreSQL backup restores checksums, stock and immutable actor audit
   const recovered=createPostgresRepository(restored);const state=await recovered.transaction(s=>s);
   assert.equal(Object.keys(state.variants).length,15);assert.equal(state.variants['e92-tee-m'].availableQuantity,3);assert.equal(state.variants['e92-tee-m'].active,false);
   assert.equal(Object.keys(state.orders).length,0);assert.ok(Object.values(state.audit).some(row=>row.actor===actor.userId&&row.action==='inventory'));
+  const restoredFile=await recovered.transaction((_,assets)=>assets.read(privateFile.id));assert.deepEqual(Buffer.from(restoredFile.bytes),bytes);assert.equal(restoredFile.metadata.sha256,privateFile.sha256);await assert.rejects(restored.query('UPDATE private_setup_assets SET payload=payload'));
   await assert.rejects(restored.query("UPDATE audit_events SET actor='changed'"));
   await createOperationsService({repository:recovered,env:{AUTH_ACCESS_MODE:'staff-only'}}).mutate(actor,{action:'inventory',variantId:'e92-tee-m',availableQuantity:4,active:false,reason:'Restore write check',expectedVersion:1});
   assert.equal(await recovered.transaction(s=>s.variants['e92-tee-m'].availableQuantity),4);

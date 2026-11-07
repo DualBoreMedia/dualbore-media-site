@@ -1,4 +1,5 @@
 import {createProductManager} from '../netlify/operations/products.mjs';
+import {createSetupFileManager} from '../netlify/setups/file-manager.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import pg from 'pg';import {randomBytes,randomUUID}from'node:crypto';
 import {runMigrations,createPostgresRepository}from'../netlify/commerce/repository.mjs';import {seedTestCatalog}from'../netlify/commerce/catalog.mjs';import{createOperationsService}from'../netlify/operations/service.mjs';
 import {captureShippingPromise} from '../netlify/operations/shipping-compliance.mjs';
@@ -43,5 +44,13 @@ test('real PostgreSQL operations lifecycle, split packages, immutable audit and 
   product=(await freshRepository.transaction(s=>s.products[product.id]));assert.equal(product.status,'published');assert.equal(product.approvedBy,actor.userId);
   await manager.mutate(actor,{action:'product-unpublish',productId:product.id,expectedVersion:product.version});assert.equal((await freshRepository.readPublishedProducts())[0].status,'draft');
   await assert.rejects(pool.query('INSERT INTO managed_products(id,data) VALUES($1,$2)',['duplicate',JSON.stringify({id:'duplicate',draft:{sku:'DB-QA'}})]));
+  const setup=(await manager.mutate(actor,{action:'product-save',product:{type:'mx_setup',name:'Synthetic private-file fixture',sku:'PG-SETUP',compatibility:'verified'}})).product;
+  const files=createSetupFileManager({repository}),bytes=Buffer.alloc(244);Buffer.from('c85393451601','hex').copy(bytes);bytes.write('MX1OEM_2023_Yamaha_YZ450F',6);
+  const uploads=await Promise.allSettled([0,1].map(()=>files.attach(actor,{productId:setup.id,expectedVersion:0,filename:'Synthetic.stp',bytes})));
+  assert.equal(uploads.filter(r=>r.status==='fulfilled').length,1);assert.equal(uploads.find(r=>r.status==='rejected').reason.code,'stale_record');
+  const persisted=await freshRepository.transaction(s=>s.products[setup.id]);assert.equal(persisted.version,1);assert.equal(persisted.draft.compatibility,'unverified');assert.equal((await pool.query('SELECT count(*)::int n FROM private_setup_assets')).rows[0].n,1);
+  assert.deepEqual(Buffer.from((await freshRepository.transaction((_,assets)=>assets.read(persisted.setupFile.assetId))).bytes),bytes);
+  const changed=Buffer.from(bytes);changed[243]=7;await assert.rejects(repository.transaction(async(_,assets)=>{await assets.put(changed,{filename:'Rollback.stp',actor:actor.userId,createdAt:new Date().toISOString()});throw Error('synthetic rollback');}));assert.equal((await pool.query('SELECT count(*)::int n FROM private_setup_assets')).rows[0].n,1);
+  await assert.rejects(pool.query('UPDATE private_setup_assets SET payload=payload'));await assert.rejects(pool.query('DELETE FROM private_setup_assets'));
  }finally{await pool?.end();await adminPool.query('DROP SCHEMA '+schema+' CASCADE');await adminPool.end();}
 });

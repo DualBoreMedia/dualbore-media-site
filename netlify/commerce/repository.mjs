@@ -2,6 +2,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { emptyState } from './memory-repository.mjs';
+import {transactionSetupAssets} from '../setups/private-assets.mjs';
 export { emptyState, initialEmptyState } from './memory-repository.mjs';
 
 // Low-volume store tradeoff: one transaction-scoped advisory lock serializes ALL
@@ -164,7 +165,7 @@ export function createPostgresRepository(pool) {
         await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
         await client.query(lockSql);
         const state = await load(client);
-        const result = structuredClone(await callback(state));
+        const result = structuredClone(await callback(state,transactionSetupAssets(client)));
         await persist(client, state);
         await client.query('COMMIT');
         return result;
