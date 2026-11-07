@@ -2,13 +2,14 @@ import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {beforeEach,afterEach,expect,test,vi} from 'vitest';
 import {page} from 'vitest/browser';
+import {withPublicCatalog} from './catalog-fixture.js';
 import '../../src/styles.css';
 
 let root,host,App;
 beforeEach(async()=>{
  vi.stubEnv('MODE','commerce');localStorage.clear();sessionStorage.clear();history.replaceState(null,'','/#merch');
  ({App}=await import('../../src/App.jsx'));host=document.createElement('div');document.body.append(host);root=createRoot(host);
- vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json({enabled:false,mode:'test',shippingCents:700})));
+ vi.stubGlobal('fetch',vi.fn(withPublicCatalog(async()=>Response.json({enabled:false,mode:'test',shippingCents:700}))));
 });
 afterEach(()=>{root.unmount();host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();vi.unstubAllEnvs();history.replaceState(null,'','/');});
 

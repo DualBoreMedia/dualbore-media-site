@@ -6,6 +6,7 @@ export async function runMadeToOrderBrowserChecks({page,baseUrl,evidenceDirector
   const variants=['M','L','XL'].map(size=>({id:'e92-tee-'+size.toLowerCase(),productId:'e92-tee',name:'E92 Coupe Line-Art Tee',size,unitAmount:3000,inventoryPolicy:'made_to_order',availableQuantity:null,available:size!=='XL'}));
   const stocked={id:'e90-crewneck-m',productId:'e90-crewneck',name:'E90 Sedan Front-Clip Crewneck',size:'M',unitAmount:5000,availableQuantity:0,available:false};
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.route('**/api/products',route=>route.fulfill({json:{products:[],hiddenProductIds:[],setupPreviews:[]}}));
   await page.route('**/api/commerce/catalog',route=>route.fulfill({json:{enabled:true,mode:'production',shippingCents:995,variants:[...variants,stocked]}}));
   const results=[];
   for(const width of [320,375,390,414,768,1024,1440]) {

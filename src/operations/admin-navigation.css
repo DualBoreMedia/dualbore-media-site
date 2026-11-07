@@ -1,0 +1,5 @@
+@media(max-width:700px){
+ .ops-app .ops-rail nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:8px 0;width:100%;overflow:visible}
+ .ops-app .ops-rail nav button{min-height:48px;min-width:0;padding:10px 6px;font-size:12px;text-align:center;white-space:normal;overflow-wrap:anywhere;border:1px solid #354052}
+ .ops-app .ops-rail nav button[aria-current=page]{border-color:#ff6472}
+}

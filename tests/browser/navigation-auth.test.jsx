@@ -5,10 +5,11 @@ import {page} from 'vitest/browser';
 import {App} from '../../src/App.jsx';
 import WorkosOperations from '../../src/operations/WorkosOperations.jsx';
 import {workosSessionFetch,workosSignInUrl,rememberOperationsView} from '../../src/operations/workos-session.js';
+import {withPublicCatalog} from './catalog-fixture.js';
 import '../../src/styles.css';
 
 let root,host;
-beforeEach(()=>{host=document.createElement('div');document.body.append(host);root=createRoot(host);history.replaceState(null,'','/');});
+beforeEach(()=>{vi.stubGlobal('fetch',withPublicCatalog());host=document.createElement('div');document.body.append(host);root=createRoot(host);history.replaceState(null,'','/');});
 afterEach(()=>{root.unmount();host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();history.replaceState(null,'','/');});
 const json=(body,status=200)=>Response.json(body,{status});
 function key(element,key){element.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true,cancelable:true}));}
@@ -19,6 +20,8 @@ test('public tabs wrap with keyboard, legacy hashes work and the skip link moves
  await expect.element(page.getByRole('tab',{name:/Pit Crew/})).toHaveFocus();
  key(document.activeElement,'Home');await expect.element(garage).toHaveFocus();
  key(document.activeElement,'ArrowRight');await expect.element(page.getByRole('tab',{name:/Video Vault/})).toHaveFocus();
+ await expect.element(page.getByRole('tab',{name:/Video Vault/})).toHaveAttribute('aria-selected','true');
+ key(document.activeElement,'ArrowRight');key(document.activeElement,'ArrowRight');await expect.element(page.getByRole('tab',{name:'04 MX Bikes Setups',exact:true})).toHaveFocus();expect(location.pathname).toBe('/');await expect.element(page.getByRole('tab',{name:/Garage Merch/})).toHaveAttribute('aria-selected','true');
  key(document.activeElement,'End');await expect.element(page.getByRole('tab',{name:/Pit Crew/})).toHaveFocus();
  key(document.activeElement,'Enter');await expect.element(page.getByRole('tab',{name:/Pit Crew/})).toHaveFocus();
  history.replaceState(null,'','/#films');window.dispatchEvent(new HashChangeEvent('hashchange'));
@@ -146,7 +149,7 @@ test('channel avatar is the visible, accessible motorsport badge and all tab num
  expect(logoElement).not.toBeNull();
  const visual={radius:getComputedStyle(logoElement).borderRadius,border:getComputedStyle(logoElement).borderWidth,width:logoElement.getBoundingClientRect().width};
  expect(visual.radius).toBe('50%');expect(visual.border).toBe('2px');expect(visual.width).toBeGreaterThanOrEqual(41);
- for(const [number,label] of [['01','Garage Builds'],['02','Video Vault'],['03','Garage Merch (Drop 01)'],['04','About / Pit Crew']]){
+ for(const [number,label] of [['01','Garage Builds'],['02','Video Vault'],['03','Garage Merch (Drop 01)'],['04','MX Bikes Setups'],['05','About / Pit Crew']]){
   await expect.element(page.getByRole('tab',{name:`${number} ${label}`,exact:true})).toBeVisible();
   const drawerButton=Array.from(host.querySelectorAll('#mobile-navigation button[aria-label]')).find(button=>button.getAttribute('aria-label')===`${number} ${label}`);
   expect(drawerButton).toBeTruthy();
@@ -163,7 +166,7 @@ test('channel avatar is the visible, accessible motorsport badge and all tab num
 
 test('verified upload becomes hero and journal feature, while curated builds remain',async()=>{
  const video={id:'aB1cD2eF3gH',title:'Synthetic latest ride',image:'https://i.ytimg.com/vi/aB1cD2eF3gH/hqdefault.jpg',category:'V-Twins',label:'CHANNEL UPLOAD',duration:'0:30'};
- vi.stubGlobal('fetch',vi.fn(async()=>json({source:'youtube',items:[video]})));
+ vi.stubGlobal('fetch',vi.fn(withPublicCatalog(async()=>json({source:'youtube',items:[video]}))));
  root.render(<App/>);
  await vi.waitFor(()=>expect(host.querySelector('.hero-feature-caption strong')?.textContent).toBe('Synthetic latest ride'));
  expect(host.querySelector('.hero-feature img')?.getAttribute('src')).toBe(video.image);

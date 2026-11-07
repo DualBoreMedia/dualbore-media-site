@@ -20,6 +20,13 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### MX Bikes Admin sprint, November 7, 2026
+
+- Primary navigation has five destinations: Garage, Video Vault, Drop 01, MX Bikes (/setups), Pit Crew. The roster stays the existing 53 reference bikes; default setup browsing is manufacturer then exact bike, with compact MX/SX/track slots.
+- MX Bikes Admin reuses product transactions, private assets, fresh MFA and audit. Canonical roster IDs govern identity and bike/file matching. Public preview approval is a separate whitelisted metadata snapshot; it never permits digital publication, checkout, attachment delivery or downloads. Preserve the three untested TC125 sample assignments.
+- Both public merch entry points use the same authoritative managed catalog. On API failure show an honest retry state rather than resurrecting unpublished/archived legacy listings.
+- Keep all six sales/refund/sending/signup/digital-delivery switches false. No production migrations, role grants, new deployments or main merge are authorized by this sprint.
+
 ### Private setup management, November 6, 2026
 
 - Owner requests Admin management of original MX Bikes STP files and automatic post-purchase email delivery. Store immutable versions privately, never in public assets or Git. Restrict uploads to current Admins with fresh MFA; preserve compatibility and publication gates.

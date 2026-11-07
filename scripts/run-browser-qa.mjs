@@ -126,6 +126,7 @@ try {
       setupQaContext={repository:productRepository,principal:{...principal,role:'admin'}};
       let products;try{products=await runProductsBrowserChecks({page:productPage,baseUrl,publicBaseUrl,repository:productRepository,service:createOperationsService({repository:productRepository}),principal:setupQaContext.principal,evidenceDirectory:output+'/'+name});}finally{setupQaContext=null;}
       const publicPage = await context.newPage();
+      await publicPage.route('**/api/products',route=>route.fulfill({json:{products:[],hiddenProductIds:[],setupPreviews:[]}}));
       page = publicPage;
       publicPage.setDefaultTimeout(10000);
       const viewportResults = [];
@@ -272,6 +273,9 @@ try {
           if (/Ships within 3 (?:business )?days|No change-of-mind returns|30 calendar days of delivery|Made-to-order policies/i.test(merchCopy)) throw Error('Public Coming Soon dialog presents purchase policies as active offers');
           await publicPage.keyboard.press('Escape');
           await publicPage.goto(`${publicBaseUrl}/setups`);
+          await expect(publicPage.getByRole('heading',{name:'Choose your bike',exact:true,level:2})).toBeVisible();
+          await expect(publicPage.getByRole('tab',{name:'04 MX Bikes Setups'})).toHaveAttribute('aria-selected','true');
+          await publicPage.getByRole('button',{name:'Setup previews',exact:true}).click();
           await expect(publicPage.getByRole('heading',{name:'Setup finder',exact:true})).toBeVisible();
           await expect(publicPage.getByText('No verified setups listed yet.',{exact:true})).toBeVisible();
           if(await publicPage.locator('a[download],a[href$=".stp"],a[href*="checkout"],form input[type="email"]').count())throw Error('Setup preview exposed checkout, download or email collection');
@@ -282,14 +286,21 @@ try {
           await publicPage.getByRole('button',{name:'Clear filters',exact:true}).click();
           await capturePublic(publicPage,`${output}/${name}-setups-preview.png`);
           await publicPage.getByRole('button',{name:'Bike library 53 placeholders',exact:true}).click();
-          await expect(publicPage.getByText('53 of 53 bike placeholders',{exact:true})).toBeVisible();
+          await expect(publicPage.getByText('53 matching reference bikes',{exact:true})).toBeVisible();
           await publicPage.getByRole('searchbox',{name:'Search bikes',exact:true}).fill('TC125');
-          await expect(publicPage.getByText('1 of 53 bike placeholders',{exact:true})).toBeVisible();
+          await expect(publicPage.getByText('1 matching reference bikes',{exact:true})).toBeVisible();
+          await publicPage.getByRole('combobox',{name:'Exact bike',exact:true}).selectOption('husqvarna-tc-125-2023');
           await expect(publicPage.getByRole('heading',{name:'2023 Husqvarna TC 125',exact:true})).toBeVisible();
+          await expect(publicPage.getByRole('heading',{name:'General Motocross',exact:true})).toBeVisible();
+          await expect(publicPage.getByRole('heading',{name:'Assen',exact:true})).toBeVisible();
+          await capturePublic(publicPage,`${output}/${name}-bike-first-${width}.png`);
+          await publicPage.goBack();await expect(publicPage.getByText('Your bike comes first.',{exact:true})).toBeVisible();
+          await publicPage.goForward();await expect(publicPage.getByRole('heading',{name:'2023 Husqvarna TC 125',exact:true})).toBeVisible();
+          await publicPage.getByRole('searchbox',{name:'Search bikes',exact:true}).fill('TC125');
           await publicPage.getByRole('combobox',{name:'Manufacturer',exact:true}).selectOption('Honda');
-          await expect(publicPage.getByText('No bikes match these filters.',{exact:true})).toBeVisible();
+          await expect(publicPage.getByText('0 matching reference bikes',{exact:true})).toBeVisible();
           await publicPage.getByRole('button',{name:'Reset bike filters',exact:true}).click();
-          await expect(publicPage.getByText('53 of 53 bike placeholders',{exact:true})).toBeVisible();
+          await expect(publicPage.getByText('53 matching reference bikes',{exact:true})).toBeVisible();
           if(await publicPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Bike library overflows at '+width+'px');
           if(await publicPage.locator('a[download],a[href$=".stp"],a[href*="checkout"],input[type="email"]').count())throw Error('Bike library exposed a download, checkout or signup');
           if([320,390,1440].includes(width)){

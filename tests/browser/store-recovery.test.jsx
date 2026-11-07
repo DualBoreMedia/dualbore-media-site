@@ -4,6 +4,7 @@ import {afterEach,beforeEach,expect,test,vi} from 'vitest';
 import {page} from 'vitest/browser';
 import ProductionStore from '../../src/commerce/ProductionStore.jsx';
 import {CartDrawer} from '../../src/commerce/Storefront.jsx';
+import {withPublicCatalog} from './catalog-fixture.js';
 import '../../src/styles.css';
 let root,host;
 const json=(body,status=200)=>Response.json(body,{status});
@@ -13,7 +14,7 @@ afterEach(()=>{root.unmount();host.remove();vi.restoreAllMocks();vi.unstubAllGlo
 
 test('production-shaped store handles price review, definitive failure and unavailable size without losing cart',async()=>{
  const variants=['S','M','L'].map(size=>({id:'e92-tee-'+size.toLowerCase(),productId:'e92-tee',name:'E92 Tee',size,unitAmount:3000,available:size!=='L',inventoryPolicy:'stocked'}));
- let attempts=0;const request=vi.fn(async(url,options)=>url==='/api/commerce/catalog'?json({enabled:true,shippingCents:995,variants}):++attempts===1?json({code:'cart_changed',quoteToken:'fixture-quote',lines:[line]},409):json({code:'checkout_failed',error:'Checkout could not be created. Your cart stays saved.'},409));vi.stubGlobal('fetch',request);
+ let attempts=0;const request=vi.fn(withPublicCatalog(async(url,options)=>url==='/api/commerce/catalog'?json({enabled:true,shippingCents:995,variants}):++attempts===1?json({code:'cart_changed',quoteToken:'fixture-quote',lines:[line]},409):json({code:'checkout_failed',error:'Checkout could not be created. Your cart stays saved.'},409)));vi.stubGlobal('fetch',request);
  root.render(<ProductionStore getToken={async()=> 'synthetic-account-token'}/>);const product=page.getByRole('article').first();
  await product.getByRole('button',{name:'M',exact:true}).click();await product.getByRole('button',{name:'Add to cart'}).click();await page.getByRole('button',{name:'Cart (1)'}).click();
  await page.getByRole('button',{name:'Continue to secure checkout'}).click();await expect.element(page.getByRole('heading',{name:'Review current prices'})).toBeVisible();
@@ -37,7 +38,7 @@ test('test-cart checkout accepts an explicit price review and resets only defini
 test('production checkout locks cart edits during a pending request and restores controls after failure',async()=>{
  const variants=[{id:'e92-tee-m',productId:'e92-tee',name:'E92 Tee',size:'M',unitAmount:3000,available:true,inventoryPolicy:'stocked'}];
  let finish;const pending=new Promise(resolve=>{finish=resolve;});
- vi.stubGlobal('fetch',vi.fn(url=>url==='/api/commerce/catalog'?Promise.resolve(json({enabled:true,shippingCents:995,variants})):pending));
+ vi.stubGlobal('fetch',vi.fn(withPublicCatalog(url=>url==='/api/commerce/catalog'?Promise.resolve(json({enabled:true,shippingCents:995,variants})):pending)));
  root.render(<ProductionStore/>);
  const product=page.getByRole('article').first();
  await product.getByRole('button',{name:'M',exact:true}).click();

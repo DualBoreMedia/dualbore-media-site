@@ -4,6 +4,7 @@ import {PLANNED_PREVIEWS, PLANNED_TRACKS, RECEIVED_SETUP_PREVIEWS, SETUP_CATALOG
 import './setups.css';
 import {BikeLibrary} from './BikeLibrary.jsx';
 import {BIKE_PLACEHOLDERS} from './bike-roster.js';
+import {PrimaryNavigation} from '../PrimaryNavigation.jsx';
 
 export default function SetupShop() {
   const staffOnly = import.meta.env.VITE_AUTH_ACCESS_MODE === 'staff-only';
@@ -11,7 +12,7 @@ export default function SetupShop() {
   const [kind, setKind] = useState('all');
   const [track, setTrack] = useState('all');
   const [bike, setBike] = useState('all');
-  const [section,setSection] = useState('previews');
+  const [section,setSection] = useState('bikes');
   const shownBikes = useMemo(() => [...new Map([...RECEIVED_SETUP_PREVIEWS, ...SETUP_CATALOG].map(item => [item.bikeId, {id:item.bikeId, name:item.bikeName}])).values()], []);
   const received = useMemo(() => filterSetupListings(RECEIVED_SETUP_PREVIEWS, {query, kind, track, bike}), [query, kind, track, bike]);
   const published = useMemo(() => filterSetupListings(SETUP_CATALOG, {query, kind, track, bike}), [query, kind, track, bike]);
@@ -29,13 +30,14 @@ export default function SetupShop() {
       <nav aria-label="Website navigation"><a href="/#vault">Videos</a><a href="/shop">Merch</a>{!staffOnly&&<a href="/account">My Garage</a>}</nav>
     </header>
 
-    <div className="mxb-shell" id="mxb-main">
+    <PrimaryNavigation active="setups"/>
+    <div className="mxb-shell" id="panel-setups" role="tabpanel" aria-labelledby="tab-setups"><div id="mxb-main"/>
       <section className="mxb-hero" aria-labelledby="mxb-title">
         <div className="mxb-hero-copy">
           <span className="mxb-kicker"><FaFlagCheckered aria-hidden="true"/> MX BIKES / OEM TUNING</span>
           <h1 id="mxb-title">Your bike. <span>Your track.</span> Your setup.</h1>
           <p>Affordable MX Bikes setups organized by OEM bike and track. Built for players who want a better starting point without paying premium prices for every track.</p>
-          <div className="mxb-hero-actions"><a className="button" href="#setup-finder" onClick={event=>{event.preventDefault();setSection('previews');requestAnimationFrame(()=>document.getElementById('setup-finder')?.scrollIntoView({block:'start'}));}}>Explore the setup finder <FaArrowRight aria-hidden="true"/></a><a className="mxb-text-link" href="#how-it-works">How it works</a></div>
+          <div className="mxb-hero-actions"><a className="button" href="#setup-finder" onClick={event=>{event.preventDefault();setSection('bikes');requestAnimationFrame(()=>document.getElementById('setup-finder')?.scrollIntoView({block:'start'}));}}>Explore the setup finder <FaArrowRight aria-hidden="true"/></a><a className="mxb-text-link" href="#how-it-works">How it works</a></div>
         </div>
         <aside className="mxb-hero-info" aria-label="Planned setup prices">
           <span>THE PLAN / PRICING</span>
@@ -45,7 +47,7 @@ export default function SetupShop() {
         </aside>
       </section>
 
-      <div className="mxb-status" role="status"><FaBolt aria-hidden="true"/><span><strong>BUILD IN PROGRESS</strong> — No setups are for sale yet. Three TC 125 files were received for inspection; private storage, compatibility testing and delivery are still pending.</span></div>
+      <div className="mxb-status" role="status"><FaBolt aria-hidden="true"/><span><strong>BUILD IN PROGRESS</strong> : No setups are for sale yet. Choose a bike to see its setup slots. Compatibility and delivery verification are still pending.</span></div>
 
       <nav className="mxb-section-nav" aria-label="Setup catalog views">
         <button type="button" aria-pressed={section==='previews'} aria-controls="setup-preview-view" onClick={()=>setSection('previews')}>Setup previews</button>
@@ -53,7 +55,7 @@ export default function SetupShop() {
       </nav>
       <div id="bike-library-view" hidden={section!=='bikes'}>{section==='bikes'&&<BikeLibrary/>}</div>
       <div id="setup-preview-view" hidden={section!=='previews'}>
-      <section className="mxb-finder" id="setup-finder" aria-labelledby="finder-heading">
+      <section className="mxb-finder" id="preview-finder" aria-labelledby="finder-heading">
         <div className="mxb-section-title"><div><span className="mxb-kicker">FIND YOUR LINE</span><h2 id="finder-heading">Setup finder</h2></div><p>Search planned categories and tracks. Verified bike listings will appear here after their files are tested.</p></div>
         <div className="mxb-controls">
           <label className="mxb-field"><span>Search</span><span className="mxb-search"><FaMagnifyingGlass aria-hidden="true"/><input type="search" value={query} maxLength={100} onChange={e=>setQuery(e.target.value)} placeholder="Search tracks or OEM bikes"/></span></label>

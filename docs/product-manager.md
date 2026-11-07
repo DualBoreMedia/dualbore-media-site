@@ -26,7 +26,9 @@ MX Bikes records support exact OEM bike/version, game version, track or general
 MX/SX classification and compatibility testing status. **All digital publication
 is deliberately rejected**, including records marked tested, until actual file,
 private storage, entitlement checks and delivery/recovery are separately verified.
-There is no file-upload field or public download URL.
+Private file upload/replacement is now available through the dedicated MX Bikes
+Admin workspace. Metadata preview approval is separate from digital sales;
+see [the current workflow](next-admin-sprint.md). There is no public download URL.
 
 ## Images and listings
 
@@ -40,8 +42,8 @@ Published physical snapshots appear in the public Garage Merch listing. Search,
 category/audience options and numeric price sorting derive from metadata. The
 legacy three previews remain available until replaced by a published managed
 record; subsequently unpublishing/archiving that record hides the legacy fallback.
-Unavailable catalog storage preserves the existing curated preview, rather than
-claiming a successful managed refresh. Successful API snapshots may cache at the
+Unavailable catalog storage shows a retry state on both public entry points,
+without resurrecting unpublished legacy previews. Successful API snapshots may cache at the
 CDN for 30 seconds. The bounded endpoint supports up to 1,000 previously published
 records and reads only the product table, without commerce mutations.
 

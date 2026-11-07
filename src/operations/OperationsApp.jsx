@@ -1,4 +1,5 @@
 import {Products} from './Products.jsx';
+import {MxBikes} from './MxBikes.jsx';
 import {rememberOperationsView} from './workos-session.js';
 import {attentionQueue} from './attention.js';
 import {ShippingCompliance} from './ShippingCompliance.jsx';
@@ -6,6 +7,7 @@ import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {merch} from '../content.js';
 import {date,fulfillmentLabels,fulfillmentSteps,label,money,operationsRequest,safeTrackingUrl} from './client.js';
 import './operations.css';
+import './admin-navigation.css';
 
 const imageFor=item=>merch.find(p=>p.id===item.productId||item.variantId?.startsWith(p.id+'-'))?.image;
 const orderVersion=order=>order.version??0;
@@ -15,7 +17,7 @@ function Field({name,title,...props}){return <label className="ops-field">{title
 
 export default function OperationsApp({admin=false,auth={}}){
  const {isLoaded=false,isSignedIn=false,getToken,fetcher,user,signOut,signInElement,accountElement}=auth;
- const [data,setData]=useState(null),[lastChecked,setLastChecked]=useState(null),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[section,setSection]=useState(()=>{const view=new URLSearchParams(window.location.search).get('view');return(admin?['Overview','Orders','Products','Inventory','Activity','Support']:['My orders','Profile','Help']).find(item=>item.toLowerCase()===view)||(admin?'Overview':'My orders');}),[selected,setSelected]=useState(null);
+ const [data,setData]=useState(null),[lastChecked,setLastChecked]=useState(null),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[section,setSection]=useState(()=>{const view=new URLSearchParams(window.location.search).get('view');return(admin?['Overview','Orders','Products','MX Bikes','Inventory','Activity','Support']:['My orders','Profile','Help']).find(item=>item.toLowerCase()===view)||(admin?'Overview':'My orders');}),[selected,setSelected]=useState(null);
  const [query,setQuery]=useState({page:1,sort:'newest'}),[selectedOrder,setSelectedOrder]=useState(null);
  // Keep the newest search/filter result even when an older request ignores abort.
  const loadGeneration=useRef(0);
@@ -45,13 +47,14 @@ export default function OperationsApp({admin=false,auth={}}){
   document.addEventListener('keydown',onKey);
   return()=>{document.body.style.overflow=oldOverflow;document.removeEventListener('keydown',onKey);};
  },[selected]);
- const navigation=admin?['Overview','Orders','Products','Inventory','Activity','Support']:['My orders','Profile','Help'];
+ const navigation=admin?['Overview','Orders','Products','MX Bikes','Inventory','Activity','Support']:['My orders','Profile','Help'];
  return <main className="ops-app"><aside className="ops-rail"><a className="ops-brand" href="/#garage" aria-label="DualBore Media garage">DUALBORE<span>MEDIA</span></a><nav aria-label={admin?'Operations navigation':'Account navigation'}>{navigation.map(item=><button key={item} ref={item==='Orders'?ordersNavigation:undefined} type="button" aria-current={section===item?'page':undefined} onClick={()=>{setSection(item);rememberOperationsView(item);setSelected(null);}}>{item}</button>)}</nav><a href="/#shop">Back to garage</a>{isSignedIn&&<button type="button" onClick={()=>signOut?.()}>Sign out</button>}</aside><div className="ops-main"><header className="ops-heading"><div><h1>{admin?'Garage operations':'My garage'}</h1><p>{admin?'Orders, inventory and shipping in one place.':'Your orders, from our garage to yours.'}</p></div><div className="ops-account">{admin&&<><span>Live payments disabled</span><div className="ops-refresh"><button type="button" onClick={()=>load()} disabled={busy||loading||!isSignedIn}>Refresh dashboard</button>{lastChecked&&<small aria-live="polite">Checked {lastChecked.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}</small>}</div></>}{accountElement}</div></header><div role="status" aria-live="polite" className={notice?'ops-message ops-success':'ops-announcement'}>{notice}</div>{error&&<div role="alert" className="ops-message ops-error"><p>{error}</p><button type="button" onClick={()=>load()} disabled={busy}>Try again</button></div>}
  {!isLoaded?<Empty title="Preparing secure sign-in">Your account area is loading.</Empty>:!isSignedIn?<section className="ops-panel ops-signin"><h2>{admin?'Secure operations access':'Welcome to your garage'}</h2><p>{admin?'Sign in with an authorized account and complete two-step verification.':'Sign in to see your orders and manage communication preferences. Orders are currently paused.'}</p>{signInElement||<p>Secure sign-in is not configured yet. The storefront remains available.</p>}</section>:loading&&!data?<Empty title="Loading your garage">Checking your secure account.</Empty>:!data?<Empty title="Garage temporarily unavailable">Your account data has not loaded. Use Try again above.</Empty>:<>
  {admin&&section==='Overview'&&<Overview videoSync={data.publicVideoSync} overview={data.overview||{}} workLists={data.workLists} variants={data.variants||[]} failures={data.failures||[]} act={act} busy={busy} openSupport={()=>setSection('Support')} workOrders={status=>{setSection('Orders');setSelected(null);setQuery({page:1,sort:'oldest',status:'paid',fulfillmentStatus:status});}} supportCount={(data.supportTickets||[]).filter(t=>t.status!=='resolved').length} reviewOrder={(number,element)=>selectOrder(number,element)} attentionOrder={(number,element)=>{setSection('Orders');selectOrder(number,element);}}/>}
  {(section==='Overview'||section==='Orders'||section==='My orders')&&<div className="ops-order-layout"><Orders orders={orders} admin={admin} selected={selected} select={selectOrder} query={query} setQuery={setQuery} pagination={data.pagination} loading={loading}/><section ref={inspectorRef} className={`ops-panel ops-inspector${order?' ops-inspector-open':''}`} aria-label="Order detail">{order?<OrderDetail key={order.orderNumber} order={order} admin={admin} act={act} busy={busy} close={closeOrder}/>:<Empty title="Select an order">Review the items, timeline and shipments here.</Empty>}</section></div>}
  {!admin&&!orders.length&&section==='My orders'&&<aside className="ops-next-visit"><h3>The garage is still open.</h3><p>Orders are paused while we prepare Drop 01. Explore the designs or catch a channel episode while you wait.</p><a href="/#merch" className="ops-primary">Explore Drop 01</a></aside>}
  {admin&&section==='Products'&&<Products products={data.products||[]} auth={auth} reload={load}/>}
+ {admin&&section==='MX Bikes'&&<MxBikes products={data.products||[]} auth={auth} reload={load}/>}
  {section==='Inventory'&&<Inventory variants={data.variants||[]} busy={busy} act={act}/>}
  {section==='Activity'&&<Activity audit={data.audit||[]} failures={data.failures||[]} act={act} busy={busy}/>}
  {(section==='Support'||section==='Help')&&<Support tickets={data.supportTickets||[]} admin={admin} act={act} busy={busy} orders={orders}/> }

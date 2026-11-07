@@ -5,10 +5,11 @@ import {page} from 'vitest/browser';
 import {App} from '../../src/App.jsx';
 import ProductionStore from '../../src/commerce/ProductionStore.jsx';
 import {RetailMerch} from '../../src/commerce/Storefront.jsx';
+import {withPublicCatalog} from './catalog-fixture.js';
 import '../../src/styles.css';
 let host,root;
 const body=()=>host;
-beforeEach(()=>{localStorage.clear();sessionStorage.clear();history.replaceState(null,'','/#merch');host=document.createElement('div');document.body.append(host);root=createRoot(host);});
+beforeEach(()=>{vi.stubGlobal('fetch',withPublicCatalog());localStorage.clear();sessionStorage.clear();history.replaceState(null,'','/#merch');host=document.createElement('div');document.body.append(host);root=createRoot(host);});
 afterEach(()=>{root.unmount();host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();history.replaceState(null,'','/');});
 
 test('public Drop 01 preview searches, filters, sorts and recovers without inventing inventory',async()=>{
@@ -53,7 +54,7 @@ test('local commerce preview filters only visual cards without changing cart',as
 });
 test('gated /shop previews remain searchable while checkout and sales stay closed',async()=>{
  history.replaceState(null,'','/shop');
- vi.stubGlobal('fetch',vi.fn(async()=>Response.json({enabled:false,variants:[]})));
+ vi.stubGlobal('fetch',vi.fn(withPublicCatalog(async()=>Response.json({enabled:false,variants:[]}))));
  root.render(<ProductionStore/>);
  await expect.element(page.getByRole('region',{name:'Drop 01 design previews'})).toBeVisible();
  await page.getByRole('searchbox',{name:'Search products'}).fill('sedan');
@@ -71,7 +72,7 @@ test('server catalog controls each product and cart size without invented option
   {id:'e92-tee-l',productId:'e92-tee',name:'E92 Tee',size:'3XL',available:true,inventoryPolicy:'made_to_order',unitAmount:3500},
   {id:'e92-tee-xl',productId:'e92-tee',name:'E92 Tee',size:'2XS',available:false,inventoryPolicy:'stocked',unitAmount:3000},
  ];
- vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({enabled:true,variants,shippingCents:995}),{status:200,headers:{'Content-Type':'application/json'}})));
+ vi.stubGlobal('fetch',vi.fn(withPublicCatalog(async()=>new Response(JSON.stringify({enabled:true,variants,shippingCents:995}),{status:200,headers:{'Content-Type':'application/json'}}))));
  root.render(<ProductionStore/>);
  const product=page.getByRole('article').filter({has:page.getByRole('heading',{name:'E92 Coupe Line-Art Tee',exact:true})});
  await expect.element(product.getByRole('button',{name:'XS',exact:true})).toBeVisible();

@@ -9,7 +9,7 @@ export function checkAdminRelease({env={}}={}){
  const blockers=[];
  const expected={COMMERCE_ENVIRONMENT:'production',SITE_ORIGIN:'https://dualboremedia.com',AUTH_PROVIDER:'workos',VITE_AUTH_PROVIDER:'workos',AUTH_ACCESS_MODE:'staff-only',VITE_AUTH_ACCESS_MODE:'staff-only',WORKOS_ENVIRONMENT:'production',WORKOS_STAFF_GOOGLE_ENABLED:'true',ERROR_MONITORING_ENABLED:'true',VITE_ERROR_MONITORING_ENABLED:'true'};
  for(const [key,value]of Object.entries(expected))if(env[key]!==value)blockers.push(`${key} must match the reviewed admin-only production configuration.`);
- for(const key of ['PAYMENTS_ENABLED','REFUNDS_ENABLED','TRANSACTIONAL_EMAILS_ENABLED','MARKETING_EMAILS_ENABLED','DROP_WAITLIST_ENABLED'])if(env[key]!=='false')blockers.push(`${key} must explicitly remain false.`);
+ for(const key of ['PAYMENTS_ENABLED','REFUNDS_ENABLED','TRANSACTIONAL_EMAILS_ENABLED','MARKETING_EMAILS_ENABLED','DROP_WAITLIST_ENABLED','DIGITAL_DELIVERY_ENABLED'])if(env[key]!=='false')blockers.push(`${key} must explicitly remain false.`);
  if(env.COMMERCE_MOCK==='true'||env.COMMERCE_TEST_ENABLED==='true')blockers.push('Hosted test checkout and simulation must remain disabled.');
  if(env.STRIPE_SECRET_KEY||env.RESEND_API_KEY)blockers.push('Omit payment and sending credentials from the admin-only release.');
  if(!productionWorkosKey(env))blockers.push('An isolated WorkOS production key is required; opaque sk_ keys need verified production-environment evidence.');

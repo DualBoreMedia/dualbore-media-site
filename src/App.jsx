@@ -1,4 +1,5 @@
-import {listingProduct} from './products.js';
+import {CatalogStatus,usePublicCatalog} from './usePublicCatalog.jsx';
+import {PrimaryNavigation} from './PrimaryNavigation.jsx';
 import { TestCheckout } from './commerce/TestCheckout.jsx';
 import { OrderStatus } from './commerce/OrderStatus.jsx';
 import { useEffect, useRef, useState } from 'react';
@@ -11,13 +12,12 @@ import {ShopEmpty,ShopFilters,useShopDiscovery} from './commerce/ShopFilters.jsx
 import { StoreFooter, StorePage, readPage, policyPages } from './commerce/Pages.jsx';
 import { channel, views, filters, projects, films, merch, previewSizes, madeToOrder } from './content';
 
-const viewIcons = { garage: FaWrench, vault: FaFilm, merch: FaShirt, crew: FaUsers };
 const merchSources = item => item.managed ? undefined : `${item.image.replace('.jpg', '-480.jpg')} 480w, ${item.image.replace('.jpg', '-768.jpg')} 768w`;
 const videoUrl = id => `https://www.youtube.com/watch?v=${id}`;
 const readView = () => {
   const hash = window.location.hash.slice(1);
   const aliases = { films: 'vault', shop: 'merch', about: 'crew', top: 'garage' };
-  return views.find(view => view.id === (aliases[hash] || hash))?.id || 'garage';
+  return views.find(view => !view.href&&view.id === (aliases[hash] || hash))?.id || 'garage';
 };
 
 function External({ href, label, children, ...props }) {
@@ -41,9 +41,8 @@ export function App() {
   const buildEnvironment=import.meta.env;
   const staffOnly=buildEnvironment.VITE_AUTH_ACCESS_MODE==='staff-only';
   const cart = useTestCart();
-  const [managedProducts,setManagedProducts]=useState([]),[hiddenProducts,setHiddenProducts]=useState([]);
-  useEffect(()=>{const controller=new AbortController();fetch('/api/products',{signal:controller.signal,cache:'no-store'}).then(r=>r.ok?r.json():null).then(data=>{if(Array.isArray(data?.products)){setManagedProducts(data.products.filter(p=>p.type==='physical'&&p.images?.length).map(listingProduct));setHiddenProducts(data.hiddenProductIds||[]);}}).catch(()=>{});return()=>controller.abort();},[]);
-  const catalog=[...merch.filter(p=>!hiddenProducts.includes(p.id)&&!managedProducts.some(m=>m.id===p.id)),...managedProducts];
+  const publicCatalog=usePublicCatalog();
+  const catalog=publicCatalog.products;
   const merchShop = useShopDiscovery(catalog);
   const [cartOpen,setCartOpen]=useState(false);
   const [page,setPage]=useState(()=>{const p=readPage();return testCommerceEnabled||p&&!p.startsWith('order/')?p:null;});
@@ -75,6 +74,7 @@ export function App() {
     toastTimer.current = setTimeout(() => setToast(''), 4500);
   };
   const chooseView = (next, focusTab = false) => {
+    if(next==='setups'){window.location.assign('/setups');return;}
     if (focusTab) pendingTabFocus.current = next;
     setPage(null);
     if(window.location.pathname!=='/') window.history.pushState(null,'',`/#${next}`);
@@ -109,15 +109,6 @@ export function App() {
       .catch(()=>{});
     return()=>controller.abort();
   },[]);
-  const handleTabKey = (event, index) => {
-    let next;
-    if (event.key === 'ArrowRight') next = (index + 1) % views.length;
-    if (event.key === 'ArrowLeft') next = (index - 1 + views.length) % views.length;
-    if (event.key === 'Home') next = 0;
-    if (event.key === 'End') next = views.length - 1;
-    if (next !== undefined) { event.preventDefault(); chooseView(views[next].id, true); }
-  };
-
   useEffect(() => {
     const onHash = () => { setView(readView()); setMenu(false); window.scrollTo({ top: 0, behavior: 'instant' }); };
     window.addEventListener('hashchange', onHash);
@@ -158,10 +149,7 @@ export function App() {
       <button className={`drawer-backdrop${menu ? ' is-open' : ''}`} aria-label="Close navigation overlay" tabIndex={menu ? 0 : -1} aria-hidden={!menu} onClick={() => { setMenu(false); menuButton.current?.focus(); }} /><nav id="mobile-navigation" className={`mobile-drawer${menu ? ' is-open' : ''}`} aria-label="Mobile navigation" inert={!menu}>{views.map(item => <button key={item.id} aria-label={`${item.number} ${item.label}`} aria-current={view === item.id ? 'page' : undefined} onClick={() => chooseView(item.id, true)}><span className="mobile-drawer__index" aria-hidden="true">{item.number}</span><span className="mobile-drawer__label">{item.label}</span><FaArrowRight aria-hidden="true" /></button>)}{!staffOnly&&<a className="drawer-channel" href="/account">My Garage <FaArrowRight aria-hidden="true"/></a>}<a className="drawer-channel" href="/setups">MX Bikes Setups <FaArrowRight aria-hidden="true" /></a><External className="drawer-channel" href={channel.url} label="Subscribe to DualBore Media on YouTube"><FaYoutube aria-hidden="true" /> YouTube channel <FaArrowUpRightFromSquare aria-hidden="true" /></External></nav>
     </header>
 
-    <div className="workspace-nav" hidden={!!page}><div className="tabs" role="tablist" aria-label="Explore DualBore Media">{views.map((item, index) => {
-      const Icon = viewIcons[item.id];
-      return <button key={item.id} ref={element => { tabRefs.current[item.id] = element; }} id={`tab-${item.id}`} role="tab" aria-label={`${item.number} ${item.label}`} aria-selected={view === item.id} aria-controls={`panel-${item.id}`} tabIndex={view === item.id ? 0 : -1} onKeyDown={event => handleTabKey(event, index)} onClick={() => chooseView(item.id)}><Icon aria-hidden="true" /><span>{item.label}</span><span className="mobile-tab-label">{item.short}</span><small aria-hidden="true">{item.number}</small></button>;
-    })}</div></div>
+    <PrimaryNavigation active={view} onChoose={chooseView} refs={tabRefs} hidden={!!page}/>
 
     <main id="content" ref={panelTop} tabIndex="-1">
       {page&&(page==='order/test-checkout'?<TestCheckout/>:page.startsWith('order/')&&new URLSearchParams(window.location.search).has('session_id')?<OrderStatus cart={cart} onBack={()=>chooseView('merch',true)}/>:<StorePage page={page} draft={testCommerceEnabled} waitlistEnabled={false} onBrowse={()=>chooseView('merch',true)}/>)}
@@ -187,8 +175,9 @@ export function App() {
         {testCommerceEnabled ? <RetailMerch cart={cart} onAdded={notify} onReview={openCart} onDetails={item=>openModal({type:'merch',item})} onAlert={()=>openModal({type:'alert'})}/> : <>
         <SectionTitle eyebrow="Drop 01 / Apparel preview" title="Garage bred." accent="Ride inspired."><p>The machines that bring us together. The first DualBore designs, made for life beyond the screen.</p><button className="button" onClick={event => openModal({type: 'alert'}, event.currentTarget)}><FaYoutube aria-hidden="true" /> Release updates</button></SectionTitle>
         <div className="drop-banner"><span className="pulse-dot" /><strong>Drop 01 Preview</strong><span>Coming soon · Orders aren’t open yet.</span></div>
+        <CatalogStatus catalog={publicCatalog}/>
         <ShopFilters shop={merchShop}/>
-        {!merchShop.results.length&&<ShopEmpty shop={merchShop}/>}
+        {!publicCatalog.loading&&!publicCatalog.error&&!merchShop.results.length&&<ShopEmpty shop={merchShop}/>}
         <div className="merch-grid">{merchShop.results.map(item => {const index=catalog.findIndex(product=>product.id===item.id);return <article className="merch-card" key={item.id}><button className="merch-image" onClick={event => openModal({type:'merch', item}, event.currentTarget)} aria-label={`Quick View ${item.name}`}><span className="merch-art-window"><img src={item.managed?item.image:item.image.replace('.jpg', '-768.jpg')} srcSet={merchSources(item)} sizes="(max-width: 700px) 90vw, 420px" alt={`${item.name} supplied mockup`} width="1290" height="2796" loading="lazy" decoding="async" /></span><span className="drop-badge">DBM / 0{index + 1}</span><span className="quick-view-label">Quick View <FaArrowUpRightFromSquare aria-hidden="true" /></span></button><div className="card-copy"><span className="eyebrow">{item.type}</span><h3>{item.name}</h3><p className="product-subtitle">{item.detail}</p><div className="merch-preview-price"><strong>${item.previewPrice}</strong><span>USD / Planned release price</span></div>{(item.testVariantsEnabled||item.managed)&&<p className="merch-size-plan">Planned sizes <span>{(item.sizes||previewSizes).join(" / ")}</span></p>}<div className="merch-card-footer"><span className="coming">Coming soon</span><MerchAction item={item} className="text-link" onTest={()=>openModal({type:'merch',item})} onAction={(item, trigger) => openModal({type: 'merch', item}, trigger)} /></div></div></article>;})}</div>
         <p className="shop-note">Existing Drop 01 apparel size plans are provisional. Each future product must have its own verified size, fit and specification information before sale.</p>
         </>}
