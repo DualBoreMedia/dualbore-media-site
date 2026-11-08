@@ -1,5 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
 import {channel,films,projects} from './content.js';
+import {PrimaryNavigation} from './PrimaryNavigation.jsx';
 import {resolvePublicVideo} from './public-video-route.js';
 
 const patterns={
@@ -67,11 +68,11 @@ export function PublicDetail(){
  const title=project?project.name+' | DualBore Media Builds':video?video.title+' | DualBore Media':missing?'Page unavailable | DualBore Media':'Loading video | DualBore Media';
  const description=project?project.description:video?'Watch '+video.title+' on DualBore Media.':'Explore authentic DualBore Media build and video episodes.';
  usePageMetadata(title,description,canonical,missing);
- return <div className="detail-shell"><a className="skip-link" href="#detail-main">Skip to content</a><Header/><main id="detail-main" className="detail-main" tabIndex="-1">
+ return <div className="detail-shell"><a className="skip-link" href="#detail-main">Skip to content</a><Header/><PrimaryNavigation active={kind==='builds'?'garage':'vault'}/><main id="detail-main" className="detail-main" tabIndex="-1">
   {project?<>
     <Intro title={project.name} description={project.description} category={project.category}/>
-    <div className="detail-hero"><img src={project.image} alt={project.name+' channel project'} width="960" height="720"/><div className="detail-status"><h2>Inside the build</h2><p>{project.tag}</p><dl>{project.specs.map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl><p className="detail-muted">Progress is documented through published episodes. An unannounced modification is not marked complete.</p><a href={channel.url} target="_blank" rel="noopener noreferrer">Follow the next upload on YouTube</a></div></div>
-    <section className="detail-episodes" aria-labelledby="build-episodes-title"><h2 id="build-episodes-title">Build episodes</h2><p>Published channel footage tied to this platform, in series order where known.</p><div className="detail-episode-grid">{buildEpisodes.map(film=><a key={film.id} href={filmHref(film)}><img src={film.image} alt="" width="480" height="270" loading="lazy"/><span>{film.duration}</span><strong>{film.title}</strong></a>)}</div>{!buildEpisodes.length&&<p>No public episodes are currently listed for this platform.</p>}</section>
+    <div className="detail-hero"><img src={project.image} alt={project.name+' channel project'} width="960" height="720"/><div className="detail-status"><h2>Inside the build</h2><p>{project.tag}</p><dl>{project.specs.map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl><p className="detail-muted">Follow the work as it happens in the build series.</p><a href={channel.url} target="_blank" rel="noopener noreferrer">Follow the next upload on YouTube</a></div></div>
+    <section className="detail-episodes" aria-labelledby="build-episodes-title"><h2 id="build-episodes-title">Build episodes</h2><p>The parts, fixes and rides behind this project.</p><div className="detail-episode-grid">{buildEpisodes.map(film=><a key={film.id} href={filmHref(film)}><img src={film.image} alt="" width="480" height="270" loading="lazy"/><span>{film.duration}</span><strong>{film.title}</strong></a>)}</div>{!buildEpisodes.length&&<p>No public episodes are currently listed for this platform.</p>}</section>
   </>:video?<>
     <Intro title={video.title} description={'Watch this '+video.category.toLowerCase()+' episode from DualBore Media.'} category={video.category}/>
     <div className="detail-video-frame"><iframe src={'https://www.youtube-nocookie.com/embed/'+video.id} title={video.title} referrerPolicy="strict-origin-when-cross-origin" allowFullScreen/></div>

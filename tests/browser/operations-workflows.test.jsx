@@ -123,6 +123,11 @@ test('inventory adjustments require confirmation and preserve reserved and sold 
  confirm.mockReturnValue(true);await page.getByRole('button',{name:'Save',exact:true}).click();
  await expect.poll(()=>posted(f,'inventory')).toEqual({action:'inventory',variantId:'e92-tee-m',availableQuantity:7,active:false,reason:'Synthetic physical recount',expectedVersion:3});
  await expect.element(page.getByText('Available 2 | Reserved 1 | Sold 1')).toBeVisible();
+ await page.getByLabelText('Search inventory').fill('no matching product');
+ await expect.element(page.getByRole('heading',{name:'No matching inventory'})).toBeVisible();
+ await expect.element(page.getByText('Try another product, SKU or size.')).toBeVisible();
+ await page.getByLabelText('Search inventory').fill('E92');
+ await expect.element(page.getByRole('button',{name:'Save',exact:true})).toBeVisible();
 });
 
 test('customer consent, deletion requests and support remain separate from transactions',async()=>{

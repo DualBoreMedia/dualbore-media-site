@@ -149,7 +149,7 @@ test('channel avatar is the visible, accessible motorsport badge and all tab num
  expect(logoElement).not.toBeNull();
  const visual={radius:getComputedStyle(logoElement).borderRadius,border:getComputedStyle(logoElement).borderWidth,width:logoElement.getBoundingClientRect().width};
  expect(visual.radius).toBe('50%');expect(visual.border).toBe('2px');expect(visual.width).toBeGreaterThanOrEqual(41);
- for(const [number,label] of [['01','Garage Builds'],['02','Video Vault'],['03','Garage Merch (Drop 01)'],['04','MX Bikes Setups'],['05','About / Pit Crew']]){
+ for(const [number,label] of [['01','Garage Builds'],['02','Video Vault'],['03','Garage Merch'],['04','MX Bikes Setups'],['05','About / Pit Crew']]){
   await expect.element(page.getByRole('tab',{name:`${number} ${label}`,exact:true})).toBeVisible();
   const drawerButton=Array.from(host.querySelectorAll('#mobile-navigation button[aria-label]')).find(button=>button.getAttribute('aria-label')===`${number} ${label}`);
   expect(drawerButton).toBeTruthy();

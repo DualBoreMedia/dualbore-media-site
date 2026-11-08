@@ -32,6 +32,7 @@ const posted=(f,action)=>f.posts.findLast(p=>p.action===action);
 test('staff searches, paginates and filters the queue before opening and closing an order',async()=>{
  const f=fixture();root.render(<StaffApp auth={f.auth}/>);
  await expect.element(page.getByRole('heading',{name:'Fulfillment workspace'})).toBeVisible();
+ await expect.element(page.getByRole('button',{name:'Fulfillment queue'})).toHaveAttribute('aria-current','page');
  await page.getByLabelText('Order search').fill('DBM-STAFF');await page.getByRole('button',{name:'Search',exact:true}).click();
  await expect.poll(()=>f.fetcher.mock.calls.at(-1)[0]).toContain('search=DBM-STAFF');
  await page.getByRole('combobox').selectOptions('packing');
@@ -40,6 +41,7 @@ test('staff searches, paginates and filters the queue before opening and closing
  await expect.element(page.getByText('Page 2',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Previous',exact:true}).click();
  await page.getByRole('button',{name:'Shipments',exact:true}).click();
+ await expect.element(page.getByRole('button',{name:'Shipments',exact:true})).toHaveAttribute('aria-current','page');
  await expect.poll(()=>f.fetcher.mock.calls.at(-1)[0]).toContain('shipmentStatus=packed');
  await page.getByRole('button',{name:'Fulfillment queue'}).click();
  const opener=page.getByRole('button',{name:/DBM-STAFF-QA/});await opener.click();
@@ -102,6 +104,7 @@ test('staff tracking validates URLs, saves package quantities and records shipme
 test('staff management confirms invitations, role changes, revocations and provider reconciliation',async()=>{
  const f=fixture();const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);root.render(<StaffApp auth={f.auth}/>);
  await page.getByRole('button',{name:'Employees',exact:true}).click();
+ await expect.element(page.getByRole('button',{name:'Employees',exact:true})).toHaveAttribute('aria-current','page');
  await expect.element(page.getByText('Synthetic Employee',{exact:true})).toBeVisible();
  await page.getByLabelText('Invitation email').fill('new@example.invalid');await page.getByRole('button',{name:'Invite employee'}).click();expect(f.posts).toHaveLength(0);
  confirm.mockReturnValue(true);await page.getByRole('button',{name:'Invite employee'}).click();

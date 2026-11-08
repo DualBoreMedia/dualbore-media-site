@@ -142,6 +142,8 @@ try {
         if (!/DualBore Media \| Garage Builds, Films & Merch/.test(await publicPage.title())) throw Error('Public site page title is incorrect');
         const layout = await publicPage.evaluate(() => ({width: innerWidth, documentWidth: document.documentElement.scrollWidth, bodyWidth: document.body.scrollWidth}));
         if (layout.documentWidth > width || layout.bodyWidth > width) throw Error(`Public site overflows horizontally at ${width}px: ${JSON.stringify(layout)}`);
+        const tabLabels=await publicPage.locator('.workspace-nav [role="tab"]>span:not(.mobile-tab-label)').evaluateAll(elements=>elements.filter(element=>getComputedStyle(element).display!=='none'&&element.getBoundingClientRect().width>0).map(element=>element.textContent));
+        if(JSON.stringify(tabLabels)!==JSON.stringify(['Garage Builds','Video Vault','Garage Merch','MX Bikes Setups','About / Pit Crew']))throw Error('Five navigation labels are not painted at '+width+'px: '+JSON.stringify(tabLabels));
         const navigation = await publicPage.evaluate(() => {
           const header = document.querySelector('.header').getBoundingClientRect();
           const garage = document.querySelector('.header-meta .text-link');
@@ -277,7 +279,7 @@ try {
           await expect(publicPage.getByRole('tab',{name:'04 MX Bikes Setups'})).toHaveAttribute('aria-selected','true');
           await publicPage.getByRole('button',{name:'Setup previews',exact:true}).click();
           await expect(publicPage.getByRole('heading',{name:'Setup finder',exact:true})).toBeVisible();
-          await expect(publicPage.getByText('No verified setups listed yet.',{exact:true})).toBeVisible();
+          await expect(publicPage.getByText('The first releases are on the way.',{exact:true})).toBeVisible();
           if(await publicPage.locator('a[download],a[href$=".stp"],a[href*="checkout"],form input[type="email"]').count())throw Error('Setup preview exposed checkout, download or email collection');
           if(await publicPage.getByRole('button',{name:/buy|checkout|download|join/i}).count())throw Error('Setup preview exposed a selling or signup control');
           await publicPage.getByRole('searchbox',{name:'Search',exact:true}).fill('Assen');
@@ -285,22 +287,22 @@ try {
           await expect(publicPage.getByRole('heading',{name:'Forest',exact:true})).toHaveCount(0);
           await publicPage.getByRole('button',{name:'Clear filters',exact:true}).click();
           await capturePublic(publicPage,`${output}/${name}-setups-preview.png`);
-          await publicPage.getByRole('button',{name:'Bike library 53 placeholders',exact:true}).click();
-          await expect(publicPage.getByText('53 matching reference bikes',{exact:true})).toBeVisible();
+          await publicPage.getByRole('button',{name:'Browse motorcycles',exact:true}).click();
+          await expect(publicPage.getByText('53 motorcycles found',{exact:true})).toBeVisible();
           await publicPage.getByRole('searchbox',{name:'Search bikes',exact:true}).fill('TC125');
-          await expect(publicPage.getByText('1 matching reference bikes',{exact:true})).toBeVisible();
+          await expect(publicPage.getByText('1 motorcycle found',{exact:true})).toBeVisible();
           await publicPage.getByRole('combobox',{name:'Exact bike',exact:true}).selectOption('husqvarna-tc-125-2023');
           await expect(publicPage.getByRole('heading',{name:'2023 Husqvarna TC 125',exact:true})).toBeVisible();
           await expect(publicPage.getByRole('heading',{name:'General Motocross',exact:true})).toBeVisible();
           await expect(publicPage.getByRole('heading',{name:'Assen',exact:true})).toBeVisible();
           await capturePublic(publicPage,`${output}/${name}-bike-first-${width}.png`);
-          await publicPage.goBack();await expect(publicPage.getByText('Your bike comes first.',{exact:true})).toBeVisible();
+          await publicPage.goBack();await expect(publicPage.getByRole('heading',{name:'Browse by manufacturer',exact:true})).toBeVisible();
           await publicPage.goForward();await expect(publicPage.getByRole('heading',{name:'2023 Husqvarna TC 125',exact:true})).toBeVisible();
           await publicPage.getByRole('searchbox',{name:'Search bikes',exact:true}).fill('TC125');
           await publicPage.getByRole('combobox',{name:'Manufacturer',exact:true}).selectOption('Honda');
-          await expect(publicPage.getByText('0 matching reference bikes',{exact:true})).toBeVisible();
+          await expect(publicPage.getByText('0 motorcycles found',{exact:true})).toBeVisible();
           await publicPage.getByRole('button',{name:'Reset bike filters',exact:true}).click();
-          await expect(publicPage.getByText('53 matching reference bikes',{exact:true})).toBeVisible();
+          await expect(publicPage.getByText('53 motorcycles found',{exact:true})).toBeVisible();
           if(await publicPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Bike library overflows at '+width+'px');
           if(await publicPage.locator('a[download],a[href$=".stp"],a[href*="checkout"],input[type="email"]').count())throw Error('Bike library exposed a download, checkout or signup');
           if([320,390,1440].includes(width)){

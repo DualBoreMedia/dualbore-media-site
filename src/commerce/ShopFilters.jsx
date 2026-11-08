@@ -26,7 +26,7 @@ export function ShopFilters({shop}){
    <label><span>Sort by</span><select aria-label="Sort by" name="sort" value={shop.sort} onChange={event=>shop.setSort(event.currentTarget.value)}>{shopSorts.map(option=><option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
    <button type="submit" className="button shop-discovery__apply">Apply filters</button>
   </form>
-  <div className="shop-discovery__foot"><p>Results update as you type or select a filter. Search also works with Enter or Apply filters. Prices sort by planned release price; local test-checkout prices may differ. Gender-specific, unisex and kids' fits are unconfirmed. Accessories and stickers are coming soon.</p>{hasFilters&&<button type="button" className="text-link" onClick={shop.reset}>Clear shop filters</button>}</div>
+  <div className="shop-discovery__foot"><p>Results update as you search or choose a filter. Prices shown are planned release prices. Fit details will be available before orders open.</p>{hasFilters&&<button type="button" className="text-link" onClick={shop.reset}>Clear shop filters</button>}</div>
  </section>;
 }
 export function ShopEmpty({shop}){

@@ -9,7 +9,7 @@ export const channel = {
 export const views = [
   { id: 'garage', label: 'Garage Builds', short: 'Garage Builds', number: '01' },
   { id: 'vault', label: 'Video Vault', short: 'Video Vault', number: '02' },
-  { id: 'merch', label: 'Garage Merch (Drop 01)', short: 'Drop 01 Merch', number: '03' },
+  { id: 'merch', label: 'Garage Merch', short: 'Garage Merch', number: '03' },
   { id: 'setups', label: 'MX Bikes Setups', short: 'MX Bikes', number: '04', href:'/setups' },
   { id: 'crew', label: 'About / Pit Crew', short: 'Pit Crew', number: '05' },
 ];

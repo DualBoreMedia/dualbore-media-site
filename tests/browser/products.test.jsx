@@ -2,14 +2,30 @@ import React,{useState} from 'react';import {createRoot} from 'react-dom/client'
 import {Products} from '../../src/operations/Products.jsx';import {App} from '../../src/App.jsx';import '../../src/styles.css';import '../../src/operations/operations.css';
 let root,host;beforeEach(()=>{host=document.createElement('div');document.body.append(host);root=createRoot(host);history.replaceState(null,'','/');});afterEach(()=>{root.unmount();host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();});
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
+test('empty product and upload status regions stay mounted for later announcements',async()=>{
+ root.render(<Products reload={async()=>{}}/>);
+ await page.getByRole('button',{name:'Create Product',exact:true}).click();
+ await page.getByLabelText('Product type').selectOptions('mx_setup');
+ await expect.element(page.getByRole('heading',{name:'Private setup file',exact:true})).toBeVisible();
+ for(const selector of ['.ops-product-notice','.ops-setup-file [role=status]']){
+  const region=host.querySelector(selector);expect(region).not.toBeNull();
+  expect(region.getAttribute('role')).toBe('status');expect(region.textContent).toBe('');
+  expect(getComputedStyle(region).display).not.toBe('none');
+ }
+});
 test('product editor creates, previews and saves metadata, requires explicit publication approval and exposes lifecycle controls',async()=>{
  const posts=[];let row;const fetcher=async(url,options)=>{const payload=JSON.parse(options.body);posts.push(payload);if(payload.action==='product-import')return json({saved:true});row={id:'fixture',draft:payload.product||row.draft,version:(row?.version??-1)+1,status:payload.action==='product-publish'?'published':payload.action==='product-archive'?'archived':'draft'};return json({product:row});};
  function Harness(){const[products,setProducts]=useState([]);return <Products products={products} auth={{getToken:async()=> 'fixture',fetcher}} reload={async()=>setProducts(row?[structuredClone(row)]:[])}/>;}
  root.render(<Harness/>);await page.getByRole('button',{name:'Import existing Drop 01 drafts'}).click();await page.getByRole('button',{name:'Create Product',exact:true}).click();
+ await expect.element(page.getByRole('status',{name:'Product editing status'})).toHaveTextContent('Not saved yet');
  await page.getByLabelText('Product name',{exact:true}).fill('Synthetic tee');await page.getByLabelText('Product SKU').fill('QA-TEE');await page.getByLabelText('Category',{exact:true}).fill('QA category');await page.getByLabelText('Audience classification').fill('QA audience');await page.getByLabelText('Planned USD price').fill('30');await page.getByLabelText('Description',{exact:true}).fill('Synthetic description');await page.getByLabelText('Fulfillment method').selectOptions('made_to_order');await page.getByLabelText(/Approved images/).fill('/assets/IMG_5076.jpg');await userEvent.type(page.getByLabelText(/Approved sizes/),'S, M');await expect.element(page.getByLabelText(/Approved sizes/)).toHaveValue('S, M');
+ await expect.element(page.getByRole('status',{name:'Product editing status'})).toHaveTextContent('Unsaved changes');
  await expect.element(page.getByRole('button',{name:'Publish',exact:true})).toBeDisabled();await page.getByRole('button',{name:'Preview',exact:true}).click();await expect.element(page.getByText('PRIVATE DRAFT PREVIEW / NOT AN ORDER PAGE')).toBeVisible();await page.getByRole('button',{name:'Back to editor'}).click();await page.getByRole('button',{name:'Save Draft'}).click();
+ await expect.element(page.getByRole('status',{name:'Product editing status'})).toHaveTextContent('Saved draft');
  await page.getByRole('checkbox').click();await page.getByRole('button',{name:'Publish',exact:true}).click();await expect.element(page.getByText('Listing published. Orders and email collection remain paused.')).toBeVisible();expect(posts.find(p=>p.action==='product-publish').priceApproved).toBe(true);
- await page.getByRole('button',{name:'Unpublish',exact:true}).click();await page.getByLabelText('Product name',{exact:true}).fill('Edited name');await page.getByRole('button',{name:'Save Draft'}).click();vi.spyOn(window,'confirm').mockReturnValue(true);await page.getByRole('button',{name:'Archive',exact:true}).click();await expect.element(page.getByRole('button',{name:'Save Draft'})).toBeDisabled();
+ await expect.element(page.getByRole('status',{name:'Product editing status'})).toHaveTextContent('Listing visible: saved snapshot');
+ await page.getByRole('button',{name:'Unpublish',exact:true}).click();await expect.element(page.getByText('Listing hidden. Existing orders are preserved.')).toBeVisible();await page.getByLabelText('Product name',{exact:true}).fill('Edited name');await page.getByRole('button',{name:'Save Draft'}).click();vi.spyOn(window,'confirm').mockReturnValue(true);await page.getByRole('button',{name:'Archive',exact:true}).click();await expect.element(page.getByRole('button',{name:'Save Draft'})).toBeDisabled();
+ await expect.element(page.getByText('Product archived. Its listing is hidden.')).toBeVisible();
  await page.getByRole('button',{name:'Create Product',exact:true}).click();await page.getByLabelText('Product type').selectOptions('mx_setup');await page.getByLabelText('Exact OEM bike').fill('Synthetic OEM');await page.getByLabelText('OEM bike version').fill('Synthetic version');await page.getByLabelText('MX Bikes version').fill('Synthetic version');await page.getByLabelText('Setup classification').selectOptions('track');await page.getByLabelText('Exact track (if track specific)').fill('Synthetic track');await page.getByLabelText('Compatibility / testing status').selectOptions('testing');await page.getByLabelText('Fulfillment method').selectOptions('digital');await page.getByRole('button',{name:'Save Draft'}).click();expect(posts.at(-1).product.type).toBe('mx_setup');
 });
 test('product editor preserves failed drafts, shows server errors and requires confirmation before losing edits',async()=>{
@@ -27,6 +43,7 @@ test('setup file editor uploads privately, renders immutable metadata, blocks di
  root.render(<Products products={[row]} auth={{getToken:async()=> 'fixture',fetcher}} reload={async()=>{}}/>);
  await page.getByRole('button',{name:/Synthetic setup/}).click();await expect.element(page.getByText('No file attached.',{exact:true})).toBeVisible();
  const input=page.getByLabelText('Choose .stp file');await userEvent.upload(input,new File([new Uint8Array(244)],'Synthetic.stp'));await page.getByRole('button',{name:'Save private file',exact:true}).click();await expect.element(page.getByText('Private file saved. Compatibility testing must be reviewed again. No email was sent.')).toBeVisible();await expect.element(page.getByText('MX1OEM_2023_Yamaha_YZ450F',{exact:true})).toBeVisible();
+ await expect.element(input).toHaveValue('');await expect.element(page.getByRole('button',{name:'Save private file',exact:true})).toBeDisabled();
  await page.getByLabelText('Product name',{exact:true}).fill('Changed');await expect.element(input).toBeDisabled();
  root.render(<Products key="fresh" products={[row]} auth={{getToken:async()=> 'fixture',fetcher}} reload={async()=>{}}/>);await page.getByRole('button',{name:/Synthetic setup/}).click();fail=true;await userEvent.upload(page.getByLabelText('Choose .stp file'),new File([new Uint8Array(244)],'Synthetic.stp'));await page.getByRole('button',{name:'Save private file',exact:true}).click();await expect.element(page.getByRole('alert')).toHaveTextContent('This record changed.');
 });

@@ -52,8 +52,12 @@ release; no merge, deployment or production migration is included.
   sensitive step-up and immediate role/session revocation.
 - Database CLI local status is not production evidence. Remote status refused:
   `The project must be linked with netlify link to target a remote branch.`
-  No lower-level API/credential workaround was used. Netlify's browser also needs
-  sign-in. Production schema/roles, current backup coverage, costs and restore
+  The checkout was then linked locally to the existing project using the
+  documented CLI link step (no deployment). Remote status now reports:
+  `No database branch found for "main". Has a deploy been published for this branch?`
+  This is not proof that the historical managed database is absent. No lower-level
+  API/credential workaround was used. Netlify's browser also needs sign-in.
+  Production schema/roles, current backup coverage, costs and restore
   evidence therefore remain unverified in this sprint.
 - Existing migrations 001 through 007 are unchanged. This sprint adds JSON
   metadata and uses those tables; no eighth migration is required. The documented
@@ -81,7 +85,9 @@ existing data. No production migrations were run.
 CodeRabbit reviews found and prompted fixes for normal-tab keyboard activation,
 archive/import success wording, archived records consuming the active catalog
 query limit, and duplicate browser-history entries. Each correction has regression
-coverage. No paid review allowance or plan was purchased.
+coverage. The committed review additionally requested a setup-preview Retry
+button; the follow-up adds and tests recovery without stale public metadata.
+No paid review allowance or plan was purchased.
 
 Node and rendered component tests, real local PostgreSQL generated schemas and
 three-browser journeys exercise the implementation. Browser Admin identities and

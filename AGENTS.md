@@ -20,6 +20,14 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Full UI polish, November 7, 2026
+
+- Preserve the black/red garage aesthetic and authentic assets. Use shared spacing, typography, control and container tokens; correct measured layout issues rather than globally shrinking type or hiding content.
+- The five exact primary labels are Garage Builds, Video Vault, Garage Merch, MX Bikes Setups, About / Pit Crew, numbered 01 through 05. Keep them available on public detail and information pages as well as the homepage.
+- Customer copy should be concise and natural. Keep internal storage, testing and publication mechanics in Admin/docs, while retaining clear Coming soon availability, truthful specifications and customer policies.
+- Verify 320/360/375/390/414/768/1024/1280/1440/1920 widths in Chromium, Firefox and WebKit. Genuine browser zoom must be identified separately from viewport or CSS reflow checks.
+- This sprint permits tested development commits and GitHub push with [skip netlify] only. No deployment, main merge, provider configuration, payments, refunds, email, signup or private delivery activation.
+
 ### MX Bikes Admin sprint, November 7, 2026
 
 - Primary navigation has five destinations: Garage, Video Vault, Drop 01, MX Bikes (/setups), Pit Crew. The roster stays the existing 53 reference bikes; default setup browsing is manufacturer then exact bike, with compact MX/SX/track slots.

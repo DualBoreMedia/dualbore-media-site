@@ -10,8 +10,81 @@ export function Products({products=[],auth={},reload}){
  const open=row=>{setImagesText((row?.draft.images||[]).join('\n'));setSizesText((row?.draft.sizes||[]).join(', '));setRecord(row);setDraft(structuredClone({...blank,...row?.draft}));setPreview(false);setApproved(false);setError('');setNotice('');};
  const update=(key,value)=>{setDraft(p=>({...p,[key]:value}));setApproved(false);};
  const dirty=!!draft&&JSON.stringify(draft)!==JSON.stringify({...blank,...record?.draft});
- const act=async action=>{setBusy(true);setError('');setNotice('');try{const result=await operationsRequest(auth.getToken,{action,...record?{productId:record.id,expectedVersion:record.version}:{},...action==='product-save'?{product:draft}:{},...action==='product-publish'?{priceApproved:approved}:{}},{fetcher:auth.fetcher});if(result.product){setImagesText((result.product.draft.images||[]).join('\n'));setSizesText((result.product.draft.sizes||[]).join(', '));setRecord(result.product);setDraft(structuredClone({...blank,...result.product.draft}));}setApproved(false);await reload();setNotice(action==='product-publish'?'Listing published. Orders and email collection remain paused.':'Product saved. No payment or email settings changed.');}catch(e){setError(e.message);}finally{setBusy(false);}};
- const field=(key,title,props={})=><label className="ops-field" key={key}>{title}<input value={draft[key]||''} maxLength={120} onChange={e=>update(key,e.target.value)} {...props}/></label>;
- const select=(key,title,choices)=><label className="ops-field">{title}<select value={draft[key]} onChange={e=>update(key,e.target.value)}><option value="">Not confirmed</option>{choices.map(([v,t])=><option key={v} value={v}>{t}</option>)}</select></label>;
- return <section className="ops-products" aria-label="Product manager"><header className="ops-panel ops-product-heading"><div><span className="ops-muted">CATALOG / EDITORIAL CONTROL</span><h2>Products</h2><p>Prepare merchandise and MX Bikes setups. Publishing a listing never enables checkout or signups.</p></div><button className="ops-primary" disabled={busy} onClick={()=>{if(!dirty||window.confirm('Discard unsaved product edits?'))open(null);}}>Create Product</button></header><div role="status" className="ops-product-notice">{notice}</div>{error&&<p role="alert" className="ops-message ops-error">{error}</p>}<div className="ops-product-layout"><section className="ops-panel"><button disabled={busy} onClick={()=>act('product-import')}>Import existing Drop 01 drafts</button><button disabled={busy} onClick={()=>act('product-import-setups')}>Import received MX Bikes drafts</button><h3>Catalog <span className="ops-muted">{products.length}</span></h3>{!products.length&&<p>No managed products yet. Existing Drop 01 previews are preserved. Create a draft using confirmed details only.</p>}<ul className="ops-product-list">{products.map(p=><li key={p.id}><button disabled={busy} aria-pressed={record?.id===p.id} onClick={()=>{if(!dirty||window.confirm('Discard unsaved product edits?'))open(p);}}><strong>{p.draft.name||'Untitled draft'}</strong><span>{p.draft.type==='mx_setup'?'MX Bikes setup':'Merchandise'} / {p.status}</span><small>{p.draft.sku||'SKU pending'} | {money(p.draft.priceCents)}</small></button></li>)}</ul></section><section className="ops-panel">{!draft?<><h3>Your next product starts here.</h3><p>Select a product to edit, or create a draft. Incomplete drafts stay private. Private setup files can be attached to saved drafts. Digital publication remains blocked.</p></>:<><div className="ops-detail-title"><h3>{record?'Edit Product':'Create Product'}</h3><span className="ops-status">{record?.status||'New draft'}</span></div>{record?.status==='published'&&<p className="ops-muted">Edits are private until you save and publish again. The current published snapshot stays unchanged.</p>}{preview?<article className="ops-product-preview"><span className="ops-muted">PRIVATE DRAFT PREVIEW / NOT AN ORDER PAGE</span>{draft.images[0]&&<img src={draft.images[0]} alt={draft.name||'Product draft'} width="240" height="280"/>}<h2>{draft.name||'Untitled draft'}</h2><p>{draft.description||'Description pending.'}</p><strong>{money(draft.priceCents)} / Planned USD price</strong><p>{draft.category||'Category pending'} | {draft.audience||'Audience pending'}</p><p>Orders, digital delivery and Drop Alert signups are paused.</p></article>:<fieldset disabled={busy||record?.status==='archived'} className="ops-product-fields"><legend>Product details</legend><div className="ops-form-grid">{select('type','Product type',[['physical','Physical merchandise'],['mx_setup','MX Bikes digital setup']])}{field('name','Product name')}{field('sku','Product SKU',{maxLength:80})}{field('category','Category')}{field('audience','Audience classification')}<label className="ops-field">Planned USD price<input type="number" min="0.01" max="10000" step="0.01" value={draft.priceCents===null?'':draft.priceCents/100} onChange={e=>update('priceCents',e.target.value===''?null:Math.round(Number(e.target.value)*100))}/></label>{select('fulfillment','Fulfillment method',draft.type==='physical'?[['made_to_order','Made to order'],['stocked','Stocked / finite inventory']]:[['digital','Private digital delivery (blocked)']])}</div><label className="ops-field">Description<textarea maxLength={3000} value={draft.description} onChange={e=>update('description',e.target.value)}/></label><label className="ops-field">Approved images: one /assets/ path per line<textarea value={imagesText} onChange={e=>{setImagesText(e.target.value);update('images',e.target.value.split('\n').map(s=>s.trim()).filter(Boolean));}}/></label><p className="ops-muted">Use authentic images already added to the repository. No private file paths or external image URLs.</p>{draft.type==='physical'?<label className="ops-field">Approved sizes: comma separated<input value={sizesText} onChange={e=>{setSizesText(e.target.value);update('sizes',e.target.value.split(',').map(s=>s.trim()).filter(Boolean));}}/></label>:<div className="ops-form-grid">{field('oemBike','Exact OEM bike')}{field('bikeVersion','OEM bike version')}{field('gameVersion','MX Bikes version')}{select('discipline','Setup classification',[['MX','General MX'],['SX','General SX'],['track','Specific track']])}{field('track','Exact track (if track specific)')}{select('compatibility','Compatibility / testing status',[['unverified','Unverified'],['testing','Testing in progress'],['verified','Owner-tested (publication still blocked)']])}<p>Use only confirmed bike, pack and game details. Digital publication stays blocked until compatibility and delivery are independently verified.</p></div>}</fieldset>}{draft.type==='mx_setup'&&!preview&&<SetupFile key={record?.id||'new'} record={record} dirty={dirty} busy={busy} auth={auth} onBusyChange={setBusy} onSaved={async row=>{open(row);await reload();}}/>}<div className="ops-actions"><button disabled={busy||record?.status==='archived'} onClick={()=>act('product-save')}>Save Draft</button><button disabled={busy} onClick={()=>setPreview(v=>!v)}>{preview?'Back to editor':'Preview'}</button></div><fieldset disabled={busy||dirty||!record||record.status==='archived'} className="ops-product-publish"><legend>Publication controls</legend><label><input type="checkbox" checked={approved} onChange={e=>setApproved(e.target.checked)}/> I approve the saved price and confirm the saved product metadata and images.</label><div className="ops-actions"><button disabled={!approved} onClick={()=>act('product-publish')}>Publish</button><button disabled={record?.status!=='published'} onClick={()=>act('product-unpublish')}>Unpublish</button><button onClick={()=>{if(window.confirm('Archive this product? The listing will be hidden. Existing orders are preserved.'))act('product-archive');}}>Archive</button></div></fieldset>{dirty&&<p className="ops-muted">Unsaved changes. Save Draft before publishing or changing publication status.</p>}</>}</section></div></section>;
+ const act=async action=>{setBusy(true);setError('');setNotice('');try{const result=await operationsRequest(auth.getToken,{action,...record?{productId:record.id,expectedVersion:record.version}:{},...action==='product-save'?{product:draft}:{},...action==='product-publish'?{priceApproved:approved}:{}},{fetcher:auth.fetcher});if(result.product){setImagesText((result.product.draft.images||[]).join('\n'));setSizesText((result.product.draft.sizes||[]).join(', '));setRecord(result.product);setDraft(structuredClone({...blank,...result.product.draft}));}setApproved(false);await reload();setNotice({'product-publish':'Listing published. Orders and email collection remain paused.','product-unpublish':'Listing hidden. Existing orders are preserved.','product-archive':'Product archived. Its listing is hidden.','product-import':'Drop 01 drafts are ready. Existing records were preserved.','product-import-setups':'Received setup drafts are ready. Existing records were preserved.'}[action]||'Product saved. No payment or email settings changed.');}catch(e){setError(e.message);}finally{setBusy(false);}};
+ const field=(key,title,props={})=>
+<label className="ops-field" key={key}>{title}<input value={draft[key]||''} maxLength={120} onChange={e=>update(key,e.target.value)} {...props}/>
+</label>;
+ const select=(key,title,choices)=>
+<label className="ops-field">{title}<select value={draft[key]} onChange={e=>update(key,e.target.value)}>
+<option value="">Not confirmed</option>{choices.map(([v,t])=>
+<option key={v} value={v}>{t}</option>)}</select>
+</label>;
+ return <section className="ops-products" aria-label="Product manager">
+<header className="ops-panel ops-product-heading">
+<div>
+<span className="ops-muted">CATALOG / EDITORIAL CONTROL</span>
+<h2>Products</h2>
+<p>Prepare merchandise and MX Bikes setups. Publishing a listing never enables checkout or signups.</p>
+</div>
+<button className="ops-primary" disabled={busy} onClick={()=>{if(!dirty||window.confirm('Discard unsaved product edits?'))open(null);}}>Create Product</button>
+</header>
+<div role="status" className="ops-product-notice">{notice}</div>{error&&<p role="alert" className="ops-message ops-error">{error}</p>}<div className="ops-product-layout">
+<section className="ops-panel ops-product-catalog">
+<div className="ops-actions ops-import-actions">
+<button disabled={busy} onClick={()=>act('product-import')}>Import existing Drop 01 drafts</button>
+<button disabled={busy} onClick={()=>act('product-import-setups')}>Import received MX Bikes drafts</button>
+</div>
+<h3>Catalog <span className="ops-muted">{products.length}</span>
+</h3>{!products.length&&<p>No managed products yet. Existing Drop 01 previews are preserved. Create a draft using confirmed details only.</p>}<ul className="ops-product-list">{products.map(p=>
+<li key={p.id}>
+<button disabled={busy} aria-pressed={record?.id===p.id} onClick={()=>{if(!dirty||window.confirm('Discard unsaved product edits?'))open(p);}}>
+<strong>{p.draft.name||'Untitled draft'}</strong>
+<span>{p.draft.type==='mx_setup'?'MX Bikes setup':'Merchandise'} / {p.status}</span>
+<small>{p.draft.sku||'SKU pending'} | {money(p.draft.priceCents)}</small>
+</button>
+</li>)}</ul>
+</section>
+<section className="ops-panel ops-product-editor">{!draft?<>
+<h3>Your next product starts here.</h3>
+<p>Select a product to edit, or create a draft. Incomplete drafts stay private. Private setup files can be attached to saved drafts. Digital publication remains blocked.</p>
+</>:<>
+<div className="ops-detail-title">
+<h3>{record?'Edit Product':'Create Product'}</h3>
+<span className="ops-status">{record?.status||'New draft'}</span>
+</div>
+<div className="ops-editor-status" role="status" aria-label="Product editing status" data-dirty={dirty}>
+<strong>{busy?'Saving or updating...':dirty?'Unsaved changes':record?'Saved draft':'Not saved yet'}</strong>
+<span>{record?.status==='published'?'Listing visible: saved snapshot':'Listing hidden'}</span>
+</div>{record?.status==='published'&&<p className="ops-muted">Edits are private until you save and publish again. The current published snapshot stays unchanged.</p>}{preview?<article className="ops-product-preview">
+<span className="ops-muted">PRIVATE DRAFT PREVIEW / NOT AN ORDER PAGE</span>{draft.images[0]&&<img src={draft.images[0]} alt={draft.name||'Product draft'} width="240" height="280"/>}<h2>{draft.name||'Untitled draft'}</h2>
+<p>{draft.description||'Description pending.'}</p>
+<strong>{money(draft.priceCents)} / Planned USD price</strong>
+<p>{draft.category||'Category pending'} | {draft.audience||'Audience pending'}</p>
+<p>Orders, digital delivery and Drop Alert signups are paused.</p>
+</article>:<fieldset disabled={busy||record?.status==='archived'} className="ops-product-fields">
+<legend>Product details</legend>
+<div className="ops-form-grid">{select('type','Product type',[['physical','Physical merchandise'],['mx_setup','MX Bikes digital setup']])}{field('name','Product name')}{field('sku','Product SKU',{maxLength:80})}{field('category','Category')}{field('audience','Audience classification')}<label className="ops-field">Planned USD price<input type="number" min="0.01" max="10000" step="0.01" value={draft.priceCents===null?'':draft.priceCents/100} onChange={e=>update('priceCents',e.target.value===''?null:Math.round(Number(e.target.value)*100))}/>
+</label>{select('fulfillment','Fulfillment method',draft.type==='physical'?[['made_to_order','Made to order'],['stocked','Stocked / finite inventory']]:[['digital','Private digital delivery (blocked)']])}</div>
+<label className="ops-field">Description<textarea maxLength={3000} value={draft.description} onChange={e=>update('description',e.target.value)}/>
+</label>
+<label className="ops-field">Approved images: one /assets/ path per line<textarea value={imagesText} onChange={e=>{setImagesText(e.target.value);update('images',e.target.value.split('\n').map(s=>s.trim()).filter(Boolean));}}/>
+</label>
+<p className="ops-muted">Use authentic images already added to the repository. No private file paths or external image URLs.</p>{draft.type==='physical'?<label className="ops-field">Approved sizes: comma separated<input value={sizesText} onChange={e=>{setSizesText(e.target.value);update('sizes',e.target.value.split(',').map(s=>s.trim()).filter(Boolean));}}/>
+</label>:<div className="ops-form-grid">{field('oemBike','Exact OEM bike')}{field('bikeVersion','OEM bike version')}{field('gameVersion','MX Bikes version')}{select('discipline','Setup classification',[['MX','General MX'],['SX','General SX'],['track','Specific track']])}{field('track','Exact track (if track specific)')}{select('compatibility','Compatibility / testing status',[['unverified','Unverified'],['testing','Testing in progress'],['verified','Owner-tested (publication still blocked)']])}<p>Use only confirmed bike, pack and game details. Digital publication stays blocked until compatibility and delivery are independently verified.</p>
+</div>}</fieldset>}{draft.type==='mx_setup'&&!preview&&<SetupFile key={record?.id||'new'} record={record} dirty={dirty} busy={busy} auth={auth} onBusyChange={setBusy} onSaved={async row=>{open(row);await reload();}}/>}<div className="ops-actions ops-editor-actions">
+<button className="ops-primary" disabled={busy||record?.status==='archived'} onClick={()=>act('product-save')}>Save Draft</button>
+<button disabled={busy} onClick={()=>setPreview(v=>!v)}>{preview?'Back to editor':'Preview'}</button>
+</div>
+<fieldset disabled={busy||dirty||!record||record.status==='archived'} className="ops-product-publish">
+<legend>Publication controls</legend>
+<label>
+<input type="checkbox" checked={approved} onChange={e=>setApproved(e.target.checked)}/> I approve the saved price and confirm the saved product metadata and images.</label>
+<div className="ops-actions">
+<button disabled={!approved} onClick={()=>act('product-publish')}>Publish</button>
+<button disabled={record?.status!=='published'} onClick={()=>act('product-unpublish')}>Unpublish</button>
+<button className="ops-danger" onClick={()=>{if(window.confirm('Archive this product? The listing will be hidden. Existing orders are preserved.'))act('product-archive');}}>Archive</button>
+</div>
+</fieldset>{dirty&&<p className="ops-muted">Unsaved changes. Save Draft before publishing or changing publication status.</p>}</>}</section>
+</div>
+</section>;
 }
