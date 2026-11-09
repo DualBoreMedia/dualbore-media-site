@@ -1,12 +1,17 @@
 // An allowlist, rather than regex-only scrubbing, keeps customer/provider payloads out.
 const token = value => typeof value === 'string' && /^[a-zA-Z0-9_.:/-]{1,120}$/.test(value) && !/(?:sk_|rk_|pk_|whsec_|re_|postgres|bearer|@)/i.test(value) ? value : undefined;
+const publicCodeOrigins=new Set(['https://dualboremedia.com','https://www.dualboremedia.com','https://dualbore-media-site.netlify.app']);
 function codeFilename(value){
  if(typeof value!=='string')return undefined;
- let filename=value.split(/[?#]/)[0];
- try {const url=new URL(value);filename=url.origin+url.pathname;}catch{}
+ let filename=value.split(/[?#]/)[0],codePath=filename;
+ try {
+  const url=new URL(value),loopback=url.protocol==='http:'&&['127.0.0.1','localhost','[::1]'].includes(url.hostname);
+  if(url.username||url.password||!publicCodeOrigins.has(url.origin)&&!loopback)return undefined;
+  codePath=url.pathname;filename=url.origin+codePath;
+ }catch{}
  if(filename.length>500||/[@%]|\.\.|(?:sk_|rk_|whsec_|re_)/.test(filename))return undefined;
  // Keep deployed code frames for source maps; never retain arbitrary URLs or personal local paths.
- return /(?:\/assets\/[A-Za-z0-9_.-]+\.js|\/(?:src|netlify)\/[A-Za-z0-9_./-]+\.(?:m?js|jsx|tsx?)|\/var\/task\/[A-Za-z0-9_./-]+\.m?js)$/.test(filename)?filename:undefined;
+ return /^(?:\/(?:assets|_vite)\/[A-Za-z0-9_.-]+\.js|\/(?:src|netlify)\/[A-Za-z0-9_./-]+\.(?:m?js|jsx|tsx?)|\/var\/task\/[A-Za-z0-9_./-]+\.m?js)$/.test(codePath)?filename:undefined;
 }
 export function safeMetadata(input = {}) {
  const out = {};

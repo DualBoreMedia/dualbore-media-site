@@ -44,6 +44,21 @@ test('monitoring beforeSend strips ambient sensitive data and preserves source-m
  const text=JSON.stringify(clean);for(const secret of ['private','secret','Authorization','Bearer','password','@'])assert.equal(text.includes(secret),false);
  assert.equal(clean.exception.values[0].stacktrace.frames[0].filename,'https://dualboremedia.com/assets/app.js');assert.equal(clean.exception.values[0].stacktrace.frames[0].lineno,23);
 });
+
+test('current Vite bundles retain sanitized stack frames and debug IDs for private source-map resolution',()=>{
+ const debugId='12345678-1234-1234-1234-123456789012';
+ for(const filename of ['https://dualboremedia.com/_vite/index-B7f29ab.js','https://www.dualboremedia.com/_vite/app.js','https://dualbore-media-site.netlify.app/_vite/app.js','http://127.0.0.1:4320/_vite/Pages-C4d6e8f.js','http://localhost:4320/_vite/app.js','http://[::1]:4320/_vite/app.js','/_vite/SetupShop-D6ea35c.js','/var/task/netlify/functions/api.mjs']){
+  const event=sanitizeMonitoringEvent({debug_meta:{images:[{debug_id:debugId,code_file:filename+'?token=private',source:'private'}]},exception:{values:[{type:'Error',value:'private',stacktrace:{frames:[{filename:filename+'?token=private#private',lineno:23,colno:4,in_app:true,vars:{password:'private'},pre_context:['private']}]}}]}});
+  assert.deepEqual(event.debug_meta.images,[{type:'sourcemap',code_file:filename,debug_id:debugId}]);
+  assert.deepEqual(event.exception.values[0].stacktrace.frames,[{filename,lineno:23,colno:4,in_app:true}]);
+  assert.equal(JSON.stringify(event).includes('private'),false);
+ }
+ for(const filename of ['C:/Users/Owner/private.js','file:///C:/Users/Owner/_vite/app.js','/Users/Owner/_vite/app.js','/home/owner/assets/app.js','https://dualboremedia.com/Users/Owner/_vite/app.js','https://client-name.example/_vite/app.js','https://dualboremedia.com.evil.example/_vite/app.js','https://private:private@dualboremedia.com/_vite/app.js','https://dualboremedia.com/_vite/sk_SYNTHETIC.js','https://dualboremedia.com/_vite/app%40private.js','https://dualboremedia.com/_vite/customer.json']){
+  const event=sanitizeMonitoringEvent({debug_meta:{images:[{debug_id:debugId,code_file:filename}]},exception:{values:[{stacktrace:{frames:[{filename}]}}]}});
+  assert.deepEqual(event.debug_meta.images,[]);
+  assert.deepEqual(event.exception.values[0].stacktrace.frames,[{in_app:false}]);
+ }
+});
 test('monitoring stays disabled without explicit configuration and isolated transport failure never fails commerce',async()=>{
  let options,captured=0;const sdk={init:value=>{options=value;},withScope:fn=>fn({setTags:()=>{}}),captureException:()=>{captured++;},flush:async()=>{throw new Error('transport secret');}};
  assert.equal(createErrorReporter({sdk,env:{}}).enabled,false);
