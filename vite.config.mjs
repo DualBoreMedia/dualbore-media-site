@@ -3,6 +3,10 @@ import react from "@vitejs/plugin-react";
 import {sentryVitePlugin} from '@sentry/vite-plugin';
 import { handleQuoteRequest } from './netlify/lib/cart-quote.mjs';
 
+// Sentry discovers each compiled script's adjacent hidden map; map-only globs
+// produce no upload candidates. Limit the upload to generated application code.
+export const sentrySourceMapAssets='./dist/client/_vite/**/*.js';
+
 function localCommerce(mode) {
   return { name:'local-commerce-quote', configureServer(server) {
     if (mode !== 'commerce') return;
@@ -92,6 +96,6 @@ export default defineConfig(({mode}) => {
       clientFiles: ["./src/main.jsx"],
     },
   },
-  plugins: [react(),localCommerce(mode),sentryVitePlugin({telemetry:false,authToken:process.env.SENTRY_AUTH_TOKEN,org:process.env.SENTRY_ORG,project:process.env.SENTRY_PROJECT,release:{name:release,create:upload,finalize:upload},sourcemaps:{disable:!upload,assets:'./dist/client/**/*.map'}})],
+  plugins: [react(),localCommerce(mode),sentryVitePlugin({telemetry:false,authToken:process.env.SENTRY_AUTH_TOKEN,org:process.env.SENTRY_ORG,project:process.env.SENTRY_PROJECT,release:{name:release,create:upload,finalize:upload},sourcemaps:{disable:!upload,assets:sentrySourceMapAssets}})],
  });
 });
