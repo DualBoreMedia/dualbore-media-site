@@ -34,6 +34,9 @@ export function releaseMetadata(env = {}) {
 // Sentry attaches ambient request, breadcrumbs and user data. Reconstruct only safe fields.
 export function sanitizeMonitoringEvent(event = {}) {
  const out = {level:event.level === 'warning' ? 'warning' : 'error',tags:safeMetadata(event.tags),message:'DualBore application exception'};
+ // The ingest service uses platform to select JavaScript symbolication.
+ // Accept protocol constants only; never copy arbitrary runtime metadata.
+ if(['javascript','node'].includes(event.platform))out.platform=event.platform;
  if (/^[a-f0-9]{32}$/.test(event.event_id || '')) out.event_id=event.event_id;
  for(const key of ['release','environment']) {const value=token(event[key]);if(value)out[key]=value;}
  if(event.exception?.values) out.exception={values:event.exception.values.slice(0,5).map(value=>({type:token(value.type)||'Error',value:'Application exception (details redacted)',...(value.stacktrace?{stacktrace:{frames:(value.stacktrace.frames||[]).slice(-50).map(frame=>{

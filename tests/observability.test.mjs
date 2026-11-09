@@ -59,6 +59,24 @@ test('current Vite bundles retain sanitized stack frames and debug IDs for priva
   assert.deepEqual(event.exception.values[0].stacktrace.frames,[{in_app:false}]);
  }
 });
+
+test('only supported runtime platform identifiers survive event redaction for symbolication',()=>{
+ for(const platform of ['javascript','node'])assert.equal(sanitizeMonitoringEvent({platform}).platform,platform);
+ for(const platform of ['other','customer@example.com','sk_SYNTHETIC',{},null])assert.equal(sanitizeMonitoringEvent({platform}).platform,undefined);
+});
+
+test('real server SDK serialization keeps its platform and drops private context without network access',async()=>{
+ const sdk=await import('@sentry/node'),events=[];let inputPlatform;
+ sdk.init({dsn:'https://public@o0.ingest.us.sentry.io/1',defaultIntegrations:false,sendDefaultPii:false,tracesSampleRate:0,autoSessionTracking:false,
+  beforeSend:event=>{inputPlatform=event.platform;return sanitizeMonitoringEvent(event);},
+  transport:()=>({send:async envelope=>{for(const [header,event]of envelope[1])if(header.type==='event')events.push(event);return {statusCode:200};},flush:async()=>true})});
+ try{
+  sdk.withScope(scope=>{scope.setUser({email:'customer@example.com'});scope.setExtra('password','sk_SYNTHETIC');sdk.captureException(new Error('customer@example.com private request'));});
+  await sdk.flush(2000);assert.equal(inputPlatform,'node');assert.equal(events.length,1);assert.equal(events[0].platform,'node');
+  for(const key of ['user','request','contexts','extra','breadcrumbs'])assert.equal(events[0][key],undefined);
+  assert.equal(/customer@example\.com|sk_SYNTHETIC|C:[\\/]|\/Users\//.test(JSON.stringify(events[0])),false);
+ }finally{await sdk.close(2000);}
+});
 test('monitoring stays disabled without explicit configuration and isolated transport failure never fails commerce',async()=>{
  let options,captured=0;const sdk={init:value=>{options=value;},withScope:fn=>fn({setTags:()=>{}}),captureException:()=>{captured++;},flush:async()=>{throw new Error('transport secret');}};
  assert.equal(createErrorReporter({sdk,env:{}}).enabled,false);
