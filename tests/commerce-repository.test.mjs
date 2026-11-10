@@ -7,6 +7,29 @@ import { PGlite } from '@electric-sql/pglite';
 const variant = { id: 'tee-m', productId: 'tee', sku: 'DBM-TEE-M', name: 'Tee', size: 'M', active: true, priceCents: 3000, stripePriceId: 'price_test', availableQuantity: 1, reservedQuantity: 0, soldQuantity: 0 };
 const now = '2026-10-12T12:00:00.000Z';
 
+test('audit persistence works with append-only database permissions and rejects rewriting history', async () => {
+  const database = new PGlite();
+  const client = {query: async (sql, params) => {
+    if (sql.includes('pg_advisory_xact_lock')) return {rows: []};
+    return !params && sql.includes(';') ? (await database.exec(sql)).at(-1) : database.query(sql, params);
+  }, release() {}};
+  const pool = {connect: async () => client};
+  try {
+    await runMigrations(pool);
+    await database.exec('CREATE ROLE restricted_app; GRANT USAGE ON SCHEMA public TO restricted_app; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO restricted_app; REVOKE UPDATE, DELETE ON audit_events, private_setup_assets FROM restricted_app; SET ROLE restricted_app;');
+    const repository = createPostgresRepository(pool);
+    const event = {id: 'audit-append-only', actor: 'verified-admin', action: 'product-draft', target: 'product-1', createdAt: now};
+    await repository.transaction(state => {state.audit[event.id] = event;});
+    assert.deepEqual(await repository.transaction(state => state.audit[event.id]), event);
+    await assert.rejects(repository.transaction(state => {state.audit[event.id].actor = 'changed';}), /immutable/);
+    await assert.rejects(repository.transaction(state => {delete state.audit[event.id];}), /immutable/);
+    await assert.rejects(database.query("UPDATE audit_events SET actor='changed'"), error => error.code === '42501');
+    await assert.rejects(database.query('DELETE FROM audit_events'), error => error.code === '42501');
+    assert.deepEqual(await repository.transaction(state => state.audit[event.id]), event);
+    assert.equal((await database.query('SELECT count(*)::int n FROM audit_events')).rows[0].n, 1);
+  } finally {await database.close();}
+});
+
 test('memory transactions serialize final-unit reservations and roll back failures', async () => {
   const repository = createMemoryRepository({ variants: { 'tee-m': variant } });
   const reserve = () => repository.transaction(async state => {

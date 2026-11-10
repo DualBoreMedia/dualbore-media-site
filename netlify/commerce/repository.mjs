@@ -105,6 +105,10 @@ async function upsert(client, table, primaryKey, fields, object) {
       if(!isDeepStrictEqual(data, object)) throw new Error('Audit history is immutable.');
       return;
     }
+    // Audit writers receive INSERT, never UPDATE. Even an unused conflict-update
+    // clause requires UPDATE privileges, so new history uses an insert only.
+    await client.query(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map((_, i) => `$${i + 1}`).join(', ')})`, values);
+    return;
   }
   // Identifiers come only from the static descriptors above; ALL values are bound.
   await client.query(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map((_, i) => `$${i + 1}`).join(', ')}) ON CONFLICT (${primaryKey}) DO UPDATE SET ${columns.filter(column => column !== primaryKey).map(column => `${column} = EXCLUDED.${column}`).join(', ')}${table === 'product_variants' ? ', updated_at = now()' : ''}`, values);
