@@ -11,6 +11,13 @@ export const detailPages=[
  ...films.map(film=>({path:'videos/'+film.id+'/',title:film.title+' | DualBore Media',description:'Watch '+film.title+' on DualBore Media.',image:film.image}))
 ];
 
+// Content-first, non-selling pages need their own canonical and social previews.
+export const sectionPages=[
+ {path:'shop/',title:'Garage Merch Preview | DualBore Media',description:'Explore original DualBore Media apparel designs. Drop 01 is coming soon; orders are not open.',image:'/assets/IMG_5076-768.jpg'},
+ {path:'setups/',title:'MX Bikes Setups | DualBore Media',description:'Browse MX Bikes motorcycles and planned motocross, supercross and track-specific setup previews. Purchases and downloads are not open.',image:'/assets/channel-logo.jpg'}
+];
+export const publicPages=[...detailPages,...sectionPages];
+
 export function renderDetailHtml(html,page){
  const url=origin+page.path,title=escapeHtml(page.title),description=escapeHtml(page.description),image=escapeHtml(origin+page.image.replace(/^\//,''));
  let output=html.replace(/<title>[^<]*<\/title>/,'<title>'+title+'</title>');
@@ -22,14 +29,15 @@ export function renderDetailHtml(html,page){
  ];
  for(const [tag,value] of tags){const start=output.indexOf('<'+tag+' content="');if(start===-1)throw Error('Missing metadata tag '+tag);const from=start+('<'+tag+' content="').length;const end=output.indexOf('"',from);if(end===-1)throw Error('Invalid metadata tag '+tag);output=output.slice(0,from)+value+output.slice(end);}
  output=output.replace(/<link rel="canonical" href="[^"]*"\s*\/>/,'<link rel="canonical" href="'+escapeHtml(url)+'" />');
+ output=output.replace(/(<meta name="twitter:image:alt" content=")[^"]*(")/,(_,prefix,suffix)=>prefix+escapeHtml(page.title+' preview image')+suffix);
  const schema=JSON.stringify({'@context':'https://schema.org','@type':'WebPage',url,name:page.title,description:page.description}).replaceAll('<','\\u003c');
  return output.replace('</head>','<script type="application/ld+json">'+schema+'</script>\n  </head>');
 }
 export async function prerenderDetails({directory=resolve(root,'dist/client')}={}){
  const original=await readFile(resolve(directory,'index.html'),'utf8');
- for(const page of detailPages){const target=resolve(directory,page.path,'index.html');await mkdir(dirname(target),{recursive:true});await writeFile(target,renderDetailHtml(original,page),'utf8');}
- const sitemap='<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+[origin,...detailPages.map(page=>origin+page.path)].map(url=>'  <url><loc>'+escapeHtml(url)+'</loc></url>').join('\n')+'\n</urlset>\n';
+ for(const page of publicPages){const target=resolve(directory,page.path,'index.html');await mkdir(dirname(target),{recursive:true});await writeFile(target,renderDetailHtml(original,page),'utf8');}
+ const sitemap='<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+[origin,...publicPages.map(page=>origin+page.path)].map(url=>'  <url><loc>'+escapeHtml(url)+'</loc></url>').join('\n')+'\n</urlset>\n';
  await writeFile(resolve(directory,'sitemap.xml'),sitemap,'utf8');
- return detailPages.length;
+ return publicPages.length;
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))console.log('Generated '+await prerenderDetails()+' public build/video pages.');

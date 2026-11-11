@@ -16,7 +16,7 @@ export async function start(element=document.getElementById('root')){
  if(!element)throw new Error('The application root is missing.');
  const detailRoute=/^\/(?:builds\/[a-z0-9_-]+|videos\/[A-Za-z0-9_-]{11})\/?$/.test(window.location.pathname);
  const setupRoute=/^\/setups\/?$/.test(window.location.pathname);
- const store=window.location.pathname==='/shop'||(import.meta.env.MODE!=='commerce'&&/^\/order\/(success|pending|cancel)$/.test(window.location.pathname));
+ const store=/^\/shop\/?$/.test(window.location.pathname)||(import.meta.env.MODE!=='commerce'&&/^\/order\/(success|pending|cancel)$/.test(window.location.pathname));
  const operations=/^\/(account|admin|staff)(\/|$)/.test(window.location.pathname);
  if(import.meta.env.VITE_ERROR_MONITORING_ENABLED==='true'){
   try{const Sentry=await import('@sentry/react');configureBrowserMonitoring(Sentry,{dsn:import.meta.env.VITE_SENTRY_DSN,enabled:true,release:__APP_RELEASE__,environment:__APP_ENVIRONMENT__});}
