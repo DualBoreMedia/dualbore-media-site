@@ -138,7 +138,7 @@ try {
         // unique URL so this check measures a fresh public document response.
         const response = await publicPage.goto(`${publicBaseUrl}/?qaViewport=${width}`);
         if (!response?.ok()) throw Error(`Public site returned ${response?.status()} at ${width}px`);
-        await publicPage.getByRole('heading', {name: /Four platforms/}).waitFor();
+        await publicPage.getByRole('heading', {name: /Five sections/}).waitFor();
         if (!/DualBore Media \| Garage Builds, Films & Merch/.test(await publicPage.title())) throw Error('Public site page title is incorrect');
         const layout = await publicPage.evaluate(() => ({width: innerWidth, documentWidth: document.documentElement.scrollWidth, bodyWidth: document.body.scrollWidth}));
         if (layout.documentWidth > width || layout.bodyWidth > width) throw Error(`Public site overflows horizontally at ${width}px: ${JSON.stringify(layout)}`);
@@ -163,7 +163,7 @@ try {
         const formRoute = await publicPage.goto(`${publicBaseUrl}/__forms.html?qaViewport=${width}`);
         if (!formRoute?.ok() || await publicPage.locator('form[name="drop-waitlist"]').count()) throw Error('The paused Netlify Drop 01 detector is still published');
         await publicPage.goto(publicBaseUrl + '/');
-        await publicPage.getByRole('heading', {name: /Four platforms/}).waitFor();
+        await publicPage.getByRole('heading', {name: /Five sections/}).waitFor();
         const visualAssets = await publicPage.evaluate(async () => {
           await document.fonts.ready;
           const visibleImages = [...document.images].filter(image => image.getClientRects().length > 0);
@@ -251,7 +251,7 @@ try {
             if([390,1440].includes(width))await capturePublic(publicPage,`${output}/${name}-${route}-${width}.png`);
           }
           await publicPage.goto(publicBaseUrl+'/');
-          await publicPage.getByRole('heading',{name:/Four platforms/}).waitFor();
+          await publicPage.getByRole('heading',{name:/Five sections/}).waitFor();
         }
         if (width === 390) {
           await publicPage.emulateMedia({reducedMotion: 'reduce'});

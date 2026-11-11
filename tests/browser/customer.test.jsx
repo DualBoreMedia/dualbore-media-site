@@ -162,7 +162,7 @@ test('an order return with mismatched purchased items cannot clear the cart',asy
 test('public garage tabs, filters, details and waitlist remain usable without checkout',async()=>{
   window.history.replaceState(null,'','/');
   mount(<App/>);
-  await expect.element(page.getByRole('heading',{name:/Four platforms/})).toBeVisible();
+  await expect.element(page.getByRole('heading',{name:/Five sections/})).toBeVisible();
   await page.getByRole('button',{name:'Explore BMW N54 platform details'}).click();
   await expect.element(page.getByRole('dialog').getByRole('heading',{name:/BMW N54/})).toBeVisible();
   await page.getByRole('button',{name:'Close details'}).click();
