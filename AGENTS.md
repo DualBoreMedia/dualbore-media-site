@@ -20,6 +20,34 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Two-stage non-selling verification release, November 10, 2026
+
+- The owner approved separating pre-deployment provider/database/security checks from the hosted Admin, session, persistence and monitoring checks that require the deployed build.
+- The preflight may permit only an explicitly configured verification rollout. It must authenticate the actual WorkOS key to the configured staff organization and verify the actual restricted PostgreSQL connection, immutable migration ledger and permissions without writing data.
+- Keep the strict final Admin gate intact. Configuration declarations are not hosted verification evidence. Never mark production authentication, monitoring or operational readiness verified until the corresponding real checks pass.
+- Preserve the five tabs and all six disabled commerce/refund/email/signup/download switches. No paid service or unrelated redesign. Normal development commits retain [skip netlify]; deployment approval remains required for the tested candidate.
+
+### Full UI polish, November 7, 2026
+
+- Preserve the black/red garage aesthetic and authentic assets. Use shared spacing, typography, control and container tokens; correct measured layout issues rather than globally shrinking type or hiding content.
+- The five exact primary labels are Garage Builds, Video Vault, Garage Merch, MX Bikes Setups, About / Pit Crew, numbered 01 through 05. Keep them available on public detail and information pages as well as the homepage.
+- Customer copy should be concise and natural. Keep internal storage, testing and publication mechanics in Admin/docs, while retaining clear Coming soon availability, truthful specifications and customer policies.
+- Verify 320/360/375/390/414/768/1024/1280/1440/1920 widths in Chromium, Firefox and WebKit. Genuine browser zoom must be identified separately from viewport or CSS reflow checks.
+- This sprint permits tested development commits and GitHub push with [skip netlify] only. No deployment, main merge, provider configuration, payments, refunds, email, signup or private delivery activation.
+
+### MX Bikes Admin sprint, November 7, 2026
+
+- Primary navigation has five destinations: Garage, Video Vault, Drop 01, MX Bikes (/setups), Pit Crew. The roster stays the existing 53 reference bikes; default setup browsing is manufacturer then exact bike, with compact MX/SX/track slots.
+- MX Bikes Admin reuses product transactions, private assets, fresh MFA and audit. Canonical roster IDs govern identity and bike/file matching. Public preview approval is a separate whitelisted metadata snapshot; it never permits digital publication, checkout, attachment delivery or downloads. Preserve the three untested TC125 sample assignments.
+- Both public merch entry points use the same authoritative managed catalog. On API failure show an honest retry state rather than resurrecting unpublished/archived legacy listings.
+- Keep all six sales/refund/sending/signup/digital-delivery switches false. No production migrations, role grants, new deployments or main merge are authorized by this sprint.
+
+### Private setup management, November 6, 2026
+
+- Owner requests Admin management of original MX Bikes STP files and automatic post-purchase email delivery. Store immutable versions privately, never in public assets or Git. Restrict uploads to current Admins with fresh MFA; preserve compatibility and publication gates.
+- Future delivery uses the verified-payment webhook and existing durable email outbox with private STP attachments. A saved file or browser success URL is not payment or compatibility proof. Keep all payment/email/signup/download gates closed and do not deploy or migrate production without exact approval.
+- Newly listed Downloads paths were unavailable during this intake. Do not claim those files were received or invent their embedded bike IDs, model years, pack/game versions or test results. Complete digital checkout snapshot integration and actual sandbox/provider verification before digital sales.
+
 ### Live Admin request and bike library, November 2, 2026
 
 - Owner requests usable private live Admin for merchandise metadata and a visible MX Bikes placeholder library. Keep all purchasing, refunds, sending, signups and downloads disabled. Do not substitute a public or staging-authenticated editor for secure production Admin.

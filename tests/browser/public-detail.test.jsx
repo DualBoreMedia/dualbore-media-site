@@ -4,11 +4,12 @@ import {beforeEach,afterEach,expect,test,vi} from 'vitest';
 import {page} from 'vitest/browser';
 import {PublicDetail} from '../../src/PublicDetail.jsx';
 import {App} from '../../src/App.jsx';
+import {withPublicCatalog} from './catalog-fixture.js';
 import '../../src/styles.css';
 import '../../src/public-detail.css';
 
 let root,host;
-beforeEach(()=>{host=document.createElement('div');document.body.append(host);root=createRoot(host);history.replaceState(null,'','/');vi.stubGlobal('fetch',vi.fn(async()=>Response.json({source:'curated',items:[]})));});
+beforeEach(()=>{host=document.createElement('div');document.body.append(host);root=createRoot(host);history.replaceState(null,'','/');vi.stubGlobal('fetch',vi.fn(withPublicCatalog(async()=>Response.json({source:'curated',items:[]}))));});
 afterEach(()=>{root.unmount();host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();history.replaceState(null,'','/');});
 
 test('each build has a direct journal URL with its real published episode links',async()=>{

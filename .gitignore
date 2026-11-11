@@ -12,6 +12,7 @@ playwright-report/
 *.db
 *.sqlite
 *.sqlite3
+*.stp
 
 .vitest-attachments/
 tests/browser/__screenshots__/

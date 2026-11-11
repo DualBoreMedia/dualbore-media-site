@@ -81,3 +81,7 @@ test('public endpoint reads only published physical snapshots without draft meta
  assert.equal((await productsHttp(new Request('https://example.invalid/api/products',{method:'POST'}),{runtime})).status,405);
  assert.equal((await productsHttp(new Request('https://example.invalid/api/products'),{runtime:async()=>{throw Error('private connection');}})).status,503);
 });
+test('archiving an imported legacy draft hides its static preview even before first publication',async()=>{
+ const f=fixture();await f.manager.mutate(admin,{action:'product-import'});const original=await f.repository.transaction(s=>s.products['e92-tee']);await f.action(original,'archive');
+ const rows=await f.repository.transaction(s=>Object.values(s.products));const response=await productsHttp(new Request('https://example.invalid/api/products'),{runtime:async()=>({repository:{readPublishedProducts:async()=>rows}})});const data=await response.json();assert.deepEqual(data.hiddenProductIds,['e92-tee']);assert.equal(data.products.length,0);
+});

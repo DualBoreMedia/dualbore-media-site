@@ -1,4 +1,5 @@
-import {createProductManager} from '../netlify/operations/products.mjs';
+import {createProductManager,publicSetupPreviews} from '../netlify/operations/products.mjs';
+import {createSetupFileManager} from '../netlify/setups/file-manager.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import pg from 'pg';import {randomBytes,randomUUID}from'node:crypto';
 import {runMigrations,createPostgresRepository}from'../netlify/commerce/repository.mjs';import {seedTestCatalog}from'../netlify/commerce/catalog.mjs';import{createOperationsService}from'../netlify/operations/service.mjs';
 import {captureShippingPromise} from '../netlify/operations/shipping-compliance.mjs';
@@ -41,7 +42,35 @@ test('real PostgreSQL operations lifecycle, split packages, immutable audit and 
   assert.equal(attempts.filter(r=>r.status==='fulfilled').length,1);assert.equal(attempts.find(r=>r.status==='rejected').reason.code,'stale_record');
   const freshRepository=createPostgresRepository(pool);assert.equal((await freshRepository.readPublishedProducts()).length,1);
   product=(await freshRepository.transaction(s=>s.products[product.id]));assert.equal(product.status,'published');assert.equal(product.approvedBy,actor.userId);
-  await manager.mutate(actor,{action:'product-unpublish',productId:product.id,expectedVersion:product.version});assert.equal((await freshRepository.readPublishedProducts())[0].status,'draft');
+  await manager.mutate(actor,{action:'product-unpublish',productId:product.id,expectedVersion:product.version});assert.equal((await freshRepository.readPublishedProducts()).length,0);assert.equal((await freshRepository.readPublishedProducts([product.id]))[0].status,'draft');
   await assert.rejects(pool.query('INSERT INTO managed_products(id,data) VALUES($1,$2)',['duplicate',JSON.stringify({id:'duplicate',draft:{sku:'DB-QA'}})]));
+  const setup=(await manager.mutate(actor,{action:'product-save',product:{type:'mx_setup',name:'Synthetic private-file fixture',sku:'PG-SETUP',compatibility:'verified'}})).product;
+  const files=createSetupFileManager({repository}),bytes=Buffer.alloc(244);Buffer.from('c85393451601','hex').copy(bytes);bytes.write('MX1OEM_2023_Yamaha_YZ450F',6);
+  const uploads=await Promise.allSettled([0,1].map(()=>files.attach(actor,{productId:setup.id,expectedVersion:0,filename:'Synthetic.stp',bytes})));
+  assert.equal(uploads.filter(r=>r.status==='fulfilled').length,1);assert.equal(uploads.find(r=>r.status==='rejected').reason.code,'stale_record');
+  const persisted=await freshRepository.transaction(s=>s.products[setup.id]);assert.equal(persisted.version,1);assert.equal(persisted.draft.compatibility,'unverified');assert.equal((await pool.query('SELECT count(*)::int n FROM private_setup_assets')).rows[0].n,1);
+  assert.deepEqual(Buffer.from((await freshRepository.transaction((_,assets)=>assets.read(persisted.setupFile.assetId))).bytes),bytes);
+  const changed=Buffer.from(bytes);changed[243]=7;await assert.rejects(repository.transaction(async(_,assets)=>{await assets.put(changed,{filename:'Rollback.stp',actor:actor.userId,createdAt:new Date().toISOString()});throw Error('synthetic rollback');}));assert.equal((await pool.query('SELECT count(*)::int n FROM private_setup_assets')).rows[0].n,1);
+  await assert.rejects(pool.query('UPDATE private_setup_assets SET payload=payload'));await assert.rejects(pool.query('DELETE FROM private_setup_assets'));
+  // Canonical setup identity and preview/file snapshots survive a new connection.
+  const setupInput={type:'mx_setup',name:'Synthetic TC125 setup',sku:'PG-TC125-SX',bikeId:'husqvarna-tc-125-2023',discipline:'SX',track:'',description:'Synthetic database preview only',priceCents:200,fulfillment:'digital',compatibility:'unverified'};
+  const duplicates=await Promise.allSettled(['A','B'].map(suffix=>manager.mutate(actor,{action:'product-save',product:{...setupInput,sku:setupInput.sku+'-'+suffix}})));
+  assert.equal(duplicates.filter(result=>result.status==='fulfilled').length,1);assert.equal(duplicates.find(result=>result.status==='rejected').reason.code,'duplicate_setup');
+  let canonical=duplicates.find(result=>result.status==='fulfilled').value.product;
+  const tcBytes=Buffer.alloc(244);Buffer.from('c85393451601','hex').copy(tcBytes);tcBytes.write('MX2OEM_2023_Husqvarna_TC_125',6);
+  ({product:canonical}=await files.attach(actor,{productId:canonical.id,expectedVersion:canonical.version,filename:'Synthetic-TC125.stp',bytes:tcBytes}));
+  const originalAsset=canonical.setupFile.assetId;
+  ({product:canonical}=await manager.mutate(actor,{action:'product-preview-publish',productId:canonical.id,expectedVersion:canonical.version}));
+  assert.equal((await freshRepository.readPublishedProducts()).filter(row=>row.id===canonical.id).length,1);
+  const publicRows=await freshRepository.transaction(publicSetupPreviews);assert.equal(publicRows.length,1);assert.equal(publicRows[0].stage,'File received');assert.equal(JSON.stringify(publicRows).includes(originalAsset),false);
+  const nextTcBytes=Buffer.from(tcBytes);nextTcBytes[243]=9;
+  ({product:canonical}=await files.attach(actor,{productId:canonical.id,expectedVersion:canonical.version,filename:'Synthetic-TC125-v2.stp',bytes:nextTcBytes}));
+  const canonicalRestored=await createPostgresRepository(pool).transaction(s=>s.products[canonical.id]);
+  assert.equal(canonicalRestored.setupFileHistory.length,1);assert.equal(canonicalRestored.setupFileHistory[0].assetId,originalAsset);assert.notEqual(canonicalRestored.setupFile.assetId,originalAsset);
+  assert.deepEqual(Buffer.from((await freshRepository.transaction((_,assets)=>assets.read(originalAsset))).bytes),tcBytes);
+  const wrongBike=Buffer.from(tcBytes);wrongBike.fill(0,6);wrongBike.write('MX2OEM_2024_Husqvarna_TC_125',6);
+  await assert.rejects(files.attach(actor,{productId:canonical.id,expectedVersion:canonical.version,filename:'Wrong-year.stp',bytes:wrongBike}),{code:'bike_file_mismatch'});
+  assert.equal((await freshRepository.transaction(s=>s.products[canonical.id])).version,canonical.version);
+  await manager.mutate(actor,{action:'product-preview-unpublish',productId:canonical.id,expectedVersion:canonical.version});assert.deepEqual(await freshRepository.transaction(publicSetupPreviews),[]);
  }finally{await pool?.end();await adminPool.query('DROP SCHEMA '+schema+' CASCADE');await adminPool.end();}
 });

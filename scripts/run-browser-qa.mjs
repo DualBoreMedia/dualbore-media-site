@@ -1,4 +1,5 @@
 import {runProductsBrowserChecks} from '../tests/products.browser.mjs';
+import {setupFilesHttp} from '../netlify/setups/files-http.mjs';
 import {chromium, firefox, webkit, expect} from '@playwright/test';
 import {createServer, preview} from 'vite';
 import react from '@vitejs/plugin-react';
@@ -52,12 +53,26 @@ for (const [name, component, extra] of [['staff', 'StaffApp', ''], ['admin', 'Op
   await writeFile(`${fixtures}/${name}.jsx`, `import React from 'react';import {createRoot} from 'react-dom/client';import '../../src/styles.css';import App from '../../src/operations/${component}.jsx';${auth}createRoot(document.getElementById('root')).render(<App ${extra} auth={auth}/>);`);
 }
 await writeFile(`${fixtures}/error-boundary.jsx`, `import React from 'react';import {createRoot} from 'react-dom/client';import '../../src/styles.css';import {ErrorBoundary} from '../../src/observability/ErrorBoundary.jsx';import {configureBrowserMonitoring} from '../../src/observability/client.js';window.__qaMonitoring={calls:0,tags:null};const sdk={init:()=>{},withScope:callback=>callback({setTags:tags=>window.__qaMonitoring.tags=tags}),captureException:()=>window.__qaMonitoring.calls++};configureBrowserMonitoring(sdk,{dsn:'https://synthetic@example.invalid/1',enabled:true,release:'synthetic-browser',environment:'test'});function Broken(){throw new Error('DBM_SYNTHETIC_BOUNDARY_EXCEPTION customer-sensitive-fixture');}createRoot(document.getElementById('root')).render(<ErrorBoundary><Broken/></ErrorBoundary>);`);
+let setupQaContext=null;
 const server = await createServer({
   configFile: false, mode: 'test',
   define: {__APP_RELEASE__: JSON.stringify('synthetic-browser'), __APP_ENVIRONMENT__: JSON.stringify('test')},
   server: {host: '127.0.0.1', port: Number(process.env.QA_PORT || 4197), strictPort: true, watch: null},
   plugins: [react(), {name: 'synthetic-browser-fixtures', configureServer(vite) {
     vite.middlewares.use(async (request, response, next) => {
+      // Exercise binary uploads over real loopback HTTP. WebKit's intercepted
+      // Playwright request metadata omits File bodies, so replaying postDataBuffer
+      // would test an empty request rather than the browser's actual upload.
+      if(request.url.startsWith('/api/setup-files?')&&setupQaContext){
+        try{
+          if(request.headers.host!==new URL(baseUrl).host){response.writeHead(403);response.end();return;}
+          const chunks=[];let length=0;for await(const chunk of request){length+=chunk.length;if(length>2*1024*1024){response.writeHead(413);response.end();return;}chunks.push(chunk);}
+          const req=new Request(baseUrl+request.url,{method:request.method,headers:request.headers,...(['GET','HEAD'].includes(request.method)?{}:{body:Buffer.concat(chunks)})});
+          const result=await setupFilesHttp(req,{env:{SITE_ORIGIN:baseUrl},runtime:async()=>({repository:setupQaContext.repository}),auth:async()=>setupQaContext.principal,clientIp:'synthetic-browser'});
+          response.writeHead(result.status,Object.fromEntries(result.headers));response.end(await result.text());
+        }catch{response.writeHead(503,{'Content-Type':'application/json'});response.end(JSON.stringify({error:'Synthetic upload fixture unavailable.'}));}
+        return;
+      }
       const name = request.url === '/.tools/operations-qa/staff.html' ? 'staff' : request.url === '/__qa/admin' ? 'admin' : request.url === '/__qa/error-boundary' ? 'error-boundary' : null;
       if (!name) return next();
       const html = await vite.transformIndexHtml(request.url, `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/assets/favicon.svg"></head><body style="margin:0"><div id="root"></div><script type="module" src="/${fixtures}/${name}.jsx"></script></body></html>`);
@@ -108,8 +123,10 @@ try {
       const productRepository=createMemoryRepository();
       const productPage=await context.newPage();
       page=productPage;
-      const products=await runProductsBrowserChecks({page:productPage,baseUrl,publicBaseUrl,repository:productRepository,service:createOperationsService({repository:productRepository}),principal:{...principal,role:'admin'},evidenceDirectory:output+'/'+name});
+      setupQaContext={repository:productRepository,principal:{...principal,role:'admin'}};
+      let products;try{products=await runProductsBrowserChecks({page:productPage,baseUrl,publicBaseUrl,repository:productRepository,service:createOperationsService({repository:productRepository}),principal:setupQaContext.principal,evidenceDirectory:output+'/'+name});}finally{setupQaContext=null;}
       const publicPage = await context.newPage();
+      await publicPage.route('**/api/products',route=>route.fulfill({json:{products:[],hiddenProductIds:[],setupPreviews:[]}}));
       page = publicPage;
       publicPage.setDefaultTimeout(10000);
       const viewportResults = [];
@@ -125,6 +142,8 @@ try {
         if (!/DualBore Media \| Garage Builds, Films & Merch/.test(await publicPage.title())) throw Error('Public site page title is incorrect');
         const layout = await publicPage.evaluate(() => ({width: innerWidth, documentWidth: document.documentElement.scrollWidth, bodyWidth: document.body.scrollWidth}));
         if (layout.documentWidth > width || layout.bodyWidth > width) throw Error(`Public site overflows horizontally at ${width}px: ${JSON.stringify(layout)}`);
+        const tabLabels=await publicPage.locator('.workspace-nav [role="tab"]>span:not(.mobile-tab-label)').evaluateAll(elements=>elements.filter(element=>getComputedStyle(element).display!=='none'&&element.getBoundingClientRect().width>0).map(element=>element.textContent));
+        if(JSON.stringify(tabLabels)!==JSON.stringify(['Garage Builds','Video Vault','Garage Merch','MX Bikes Setups','About / Pit Crew']))throw Error('Five navigation labels are not painted at '+width+'px: '+JSON.stringify(tabLabels));
         const navigation = await publicPage.evaluate(() => {
           const header = document.querySelector('.header').getBoundingClientRect();
           const garage = document.querySelector('.header-meta .text-link');
@@ -256,8 +275,11 @@ try {
           if (/Ships within 3 (?:business )?days|No change-of-mind returns|30 calendar days of delivery|Made-to-order policies/i.test(merchCopy)) throw Error('Public Coming Soon dialog presents purchase policies as active offers');
           await publicPage.keyboard.press('Escape');
           await publicPage.goto(`${publicBaseUrl}/setups`);
+          await expect(publicPage.getByRole('heading',{name:'Choose your bike',exact:true,level:2})).toBeVisible();
+          await expect(publicPage.getByRole('tab',{name:'04 MX Bikes Setups'})).toHaveAttribute('aria-selected','true');
+          await publicPage.getByRole('button',{name:'Setup previews',exact:true}).click();
           await expect(publicPage.getByRole('heading',{name:'Setup finder',exact:true})).toBeVisible();
-          await expect(publicPage.getByText('No verified setups listed yet.',{exact:true})).toBeVisible();
+          await expect(publicPage.getByText('The first releases are on the way.',{exact:true})).toBeVisible();
           if(await publicPage.locator('a[download],a[href$=".stp"],a[href*="checkout"],form input[type="email"]').count())throw Error('Setup preview exposed checkout, download or email collection');
           if(await publicPage.getByRole('button',{name:/buy|checkout|download|join/i}).count())throw Error('Setup preview exposed a selling or signup control');
           await publicPage.getByRole('searchbox',{name:'Search',exact:true}).fill('Assen');
@@ -265,15 +287,22 @@ try {
           await expect(publicPage.getByRole('heading',{name:'Forest',exact:true})).toHaveCount(0);
           await publicPage.getByRole('button',{name:'Clear filters',exact:true}).click();
           await capturePublic(publicPage,`${output}/${name}-setups-preview.png`);
-          await publicPage.getByRole('button',{name:'Bike library 53 placeholders',exact:true}).click();
-          await expect(publicPage.getByText('53 of 53 bike placeholders',{exact:true})).toBeVisible();
+          await publicPage.getByRole('button',{name:'Browse motorcycles',exact:true}).click();
+          await expect(publicPage.getByText('53 motorcycles found',{exact:true})).toBeVisible();
           await publicPage.getByRole('searchbox',{name:'Search bikes',exact:true}).fill('TC125');
-          await expect(publicPage.getByText('1 of 53 bike placeholders',{exact:true})).toBeVisible();
+          await expect(publicPage.getByText('1 motorcycle found',{exact:true})).toBeVisible();
+          await publicPage.getByRole('combobox',{name:'Exact bike',exact:true}).selectOption('husqvarna-tc-125-2023');
           await expect(publicPage.getByRole('heading',{name:'2023 Husqvarna TC 125',exact:true})).toBeVisible();
+          await expect(publicPage.getByRole('heading',{name:'General Motocross',exact:true})).toBeVisible();
+          await expect(publicPage.getByRole('heading',{name:'Assen',exact:true})).toBeVisible();
+          await capturePublic(publicPage,`${output}/${name}-bike-first-${width}.png`);
+          await publicPage.goBack();await expect(publicPage.getByRole('heading',{name:'Browse by manufacturer',exact:true})).toBeVisible();
+          await publicPage.goForward();await expect(publicPage.getByRole('heading',{name:'2023 Husqvarna TC 125',exact:true})).toBeVisible();
+          await publicPage.getByRole('searchbox',{name:'Search bikes',exact:true}).fill('TC125');
           await publicPage.getByRole('combobox',{name:'Manufacturer',exact:true}).selectOption('Honda');
-          await expect(publicPage.getByText('No bikes match these filters.',{exact:true})).toBeVisible();
+          await expect(publicPage.getByText('0 motorcycles found',{exact:true})).toBeVisible();
           await publicPage.getByRole('button',{name:'Reset bike filters',exact:true}).click();
-          await expect(publicPage.getByText('53 of 53 bike placeholders',{exact:true})).toBeVisible();
+          await expect(publicPage.getByText('53 motorcycles found',{exact:true})).toBeVisible();
           if(await publicPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Bike library overflows at '+width+'px');
           if(await publicPage.locator('a[download],a[href$=".stp"],a[href*="checkout"],input[type="email"]').count())throw Error('Bike library exposed a download, checkout or signup');
           if([320,390,1440].includes(width)){

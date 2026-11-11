@@ -1,0 +1,21 @@
+/* Shared dimensions for the public garage and private operations workspace. */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --content-width: 1280px;
+  --page-gutter: clamp(16px, 4vw, 48px);
+  --text-xs: .75rem;
+  --text-sm: .875rem;
+  --text-base: 1rem;
+  --heading-xl: clamp(2.5rem, 5vw, 4.5rem);
+  --heading-lg: clamp(2rem, 3.8vw, 3.25rem);
+  --control-height: 48px;
+  --card-radius: 8px;
+  --card-padding: clamp(16px, 2vw, 24px);
+}

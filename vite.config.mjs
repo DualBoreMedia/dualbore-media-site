@@ -3,10 +3,23 @@ import react from "@vitejs/plugin-react";
 import {sentryVitePlugin} from '@sentry/vite-plugin';
 import { handleQuoteRequest } from './netlify/lib/cart-quote.mjs';
 
+// Sentry discovers each compiled script's adjacent hidden map; map-only globs
+// produce no upload candidates. Limit the upload to generated application code.
+export const sentrySourceMapAssets='./dist/client/_vite/**/*.js';
+
 function localCommerce(mode) {
   return { name:'local-commerce-quote', configureServer(server) {
     if (mode !== 'commerce') return;
     const env={...loadEnv(mode,process.cwd(),''),...process.env};
+    server.middlewares.use('/api/setup-files',async(req,res)=>{
+      try{
+        const host=req.headers.host;if(!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(host||'')){res.writeHead(403);res.end();return;}
+        let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>2*1024*1024){res.writeHead(413,{'Cache-Control':'no-store'});res.end();return;}chunks.push(chunk);}
+        const request=new Request(`http://${host}${req.originalUrl}`,{method:req.method,headers:req.headers,...(['GET','HEAD'].includes(req.method)?{}:{body:Buffer.concat(chunks)})});
+        const {setupFilesHttp}=await import('./netlify/setups/files-http.mjs');const response=await setupFilesHttp(request,{env,clientIp:req.socket.remoteAddress||'local'});
+        res.writeHead(response.status,Object.fromEntries(response.headers));res.end(await response.text());
+      }catch{res.writeHead(503,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({error:'Private file storage is temporarily unavailable.'}));}
+    });
     server.middlewares.use('/api/products',async(req,res)=>{try{const host=req.headers.host;if(!/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host||'')){res.writeHead(403);res.end();return;}const {productsHttp}=await import('./netlify/functions/products.mjs');const response=await productsHttp(new Request(`http://${host}/api/products`,{method:req.method}),{env});res.writeHead(response.status,Object.fromEntries(response.headers));res.end(await response.text());}catch{res.writeHead(503);res.end();}});
     server.middlewares.use('/api/auth' ,async(req,res)=>{
       try{
@@ -83,6 +96,6 @@ export default defineConfig(({mode}) => {
       clientFiles: ["./src/main.jsx"],
     },
   },
-  plugins: [react(),localCommerce(mode),sentryVitePlugin({telemetry:false,authToken:process.env.SENTRY_AUTH_TOKEN,org:process.env.SENTRY_ORG,project:process.env.SENTRY_PROJECT,release:{name:release,create:upload,finalize:upload},sourcemaps:{disable:!upload,assets:'./dist/client/**/*.map'}})],
+  plugins: [react(),localCommerce(mode),sentryVitePlugin({telemetry:false,authToken:process.env.SENTRY_AUTH_TOKEN,org:process.env.SENTRY_ORG,project:process.env.SENTRY_PROJECT,release:{name:release,create:upload,finalize:upload},sourcemaps:{disable:!upload,assets:sentrySourceMapAssets}})],
  });
 });

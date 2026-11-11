@@ -1,5 +1,6 @@
 // Called by the local QA runner with its existing browser. Provider authentication
 // is deliberately not simulated as evidence of real Clerk enrollment or MFA.
+import {expect} from '@playwright/test';
 export async function runStaffBrowserChecks({page,baseUrl,evidenceDirectory,service,principal}) {
  if(!/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(baseUrl))throw Error('Local QA only.');
  const assert=(value,message)=>{if(!value)throw Error(message);};
@@ -38,7 +39,8 @@ export async function runStaffBrowserChecks({page,baseUrl,evidenceDirectory,serv
   await dialog.getByRole('button',{name:'Print packing slip',exact:true}).focus();
   await page.keyboard.press('Tab');assert(await dialog.getByRole('button',{name:'Back to order'}).evaluate(e=>e===document.activeElement),'Dialog focus escaped');
   if(evidenceDirectory){await page.screenshot({path:evidenceDirectory+'/staff-slip-'+width+'.png',fullPage:true});if(width===1440)await page.pdf({path:evidenceDirectory+'/packing-slip-letter.pdf',format:'Letter',printBackground:true,preferCSSPageSize:true});}
-  await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+  await page.keyboard.press('Escape');
+  await expect.poll(()=>page.locator('.packing-preview').count()).toBe(0);
   await page.waitForFunction(()=>document.activeElement?.textContent?.startsWith('Preview package PKG-A slip'));
   assert(await preview.evaluate(e=>e===document.activeElement),'Packing preview focus not restored');
   assert(!(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)),'Staff overflow at '+width);

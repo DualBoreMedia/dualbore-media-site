@@ -1,0 +1,63 @@
+/* Responsive sizing refinements; preserve the established garage artwork. */
+.view{max-width:calc(var(--content-width) + 2 * var(--page-gutter));padding:var(--space-7) var(--page-gutter) var(--space-8)}
+.garage-hero h1,.view-heading h1{font-size:var(--heading-xl);line-height:1.02;margin-top:var(--space-4)}
+.garage-hero{gap:var(--space-7);padding-bottom:var(--space-7)}
+.view-heading{gap:var(--space-6)}
+.garage-intro,.garage-journal{margin-top:var(--space-7)}
+.button,.text-link{min-height:var(--control-height);min-width:var(--control-height)}
+.view-heading p,.garage-hero p{max-width:56ch}
+.section-bar{flex-wrap:wrap;gap:var(--space-4)}
+.section-bar h2{white-space:normal}
+.film-card h3{line-height:1.1}
+.merch-card .card-copy{padding:var(--card-padding)}
+.merch-card h3{font-size:clamp(28px,2.5vw,36px);min-height:0}
+.merch-card .product-subtitle{min-height:0}
+.merch-preview-price strong{font-size:36px}
+.merch-preview-price{min-height:0;flex-direction:row;align-items:center;margin-top:auto;padding-top:var(--space-4)}
+.merch-card .merch-size-plan{margin:var(--space-4) 0}
+.merch-image{aspect-ratio:1/1}
+.merch-art-window{inset:var(--space-4) var(--space-4) 70px}
+.merch-art-window img{object-fit:cover}
+.merch-card-footer{padding-top:var(--space-3)}
+/* Share content rows across each shelf, including variable-length product names. */
+.merch-grid .merch-card{display:grid;grid-template-rows:subgrid;grid-row:span 7;row-gap:0}
+.merch-grid .merch-card .card-copy{display:grid;grid-template-rows:subgrid;grid-row:span 6;row-gap:0}
+.merch-grid .card-copy>.eyebrow{grid-row:1}
+.merch-grid .card-copy>h3{grid-row:2}
+.merch-grid .product-subtitle{grid-row:3}
+.merch-grid .merch-preview-price{grid-row:4;margin-top:var(--space-4);align-items:start}
+.merch-grid .merch-size-plan{grid-row:5}
+.merch-grid .merch-card-footer{grid-row:6}
+.detail-main{max-width:calc(var(--content-width) + 2 * var(--page-gutter));padding:var(--space-7) var(--page-gutter) var(--space-8)}
+.detail-intro h1{font-size:var(--heading-xl);line-height:1.04;overflow-wrap:anywhere}
+.detail-header{padding-inline:var(--page-gutter)}
+.detail-header nav a,.detail-footer a,.detail-status a,.detail-related-project,.build-permalinks a,.film-detail-links a{min-height:var(--control-height);display:inline-flex;align-items:center}
+.detail-header nav a,.detail-footer a{min-width:var(--control-height)}
+.detail-status{padding:var(--card-padding)}
+.policy-page.store-page{max-width:900px;padding:var(--space-7) var(--page-gutter) var(--space-8)}
+.policy-page h1,.production-store h1{font-size:var(--heading-xl);line-height:1.04}
+.policy-page>section{margin-top:var(--space-6)}
+.policy-page section p{font-size:var(--text-sm);line-height:1.85;max-width:75ch}
+.policy-page h2{font-size:28px;line-height:1.15}
+.production-store .workspace-nav{top:0;position:relative}
+body:has(.production-store)>.workspace-nav,body:has(.production-store) #root>.workspace-nav{position:relative;top:0}
+.production-store{max-width:calc(var(--content-width) + 2 * var(--page-gutter));padding:var(--space-6) var(--page-gutter) var(--space-8)}
+.closed-designs img{height:320px;object-fit:contain}
+.closed-designs h3{font-size:28px}
+@media(max-width:700px){
+ .view,.detail-main{padding-top:var(--space-6)}
+ .garage-hero{gap:var(--space-5);padding-bottom:var(--space-6)}
+ .garage-hero h1,.view-heading h1{font-size:clamp(40px,10vw,58px)}
+ .garage-hero p{margin:var(--space-4) 0}
+ .view-heading{gap:var(--space-5)}
+ .merch-image{aspect-ratio:1/1}
+ .merch-card h3{font-size:32px}
+ .merch-preview-price{margin-top:auto}
+ .detail-intro h1,.policy-page h1,.production-store h1{font-size:40px}
+ .detail-header{gap:var(--space-3);padding:var(--space-4)}
+ .detail-header nav{gap:var(--space-4)}
+ .detail-brand{font-size:26px}
+ .policy-page.store-page{padding-top:var(--space-6)}
+ .film-detail-links a{max-width:none}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}

@@ -13,11 +13,12 @@ import {StorePage} from '../../src/commerce/Pages.jsx';
 import StaffApp, {PackingSlip} from '../../src/operations/StaffApp.jsx';
 import {CartDrawer,ProductOptions} from '../../src/commerce/Storefront.jsx';
 import {merch} from '../../src/content.js';
+import {withPublicCatalog} from './catalog-fixture.js';
 import '../../src/styles.css';
 
 let root, host;
 const response=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
-beforeEach(()=>{host=document.createElement('div');document.body.append(host);root=createRoot(host);localStorage.clear();sessionStorage.clear();});
+beforeEach(()=>{vi.stubGlobal('fetch',withPublicCatalog());host=document.createElement('div');document.body.append(host);root=createRoot(host);localStorage.clear();sessionStorage.clear();});
 afterEach(()=>{root.unmount();host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();});
 const mount=element=>root.render(element);
 const variants=['S','M','L','XL','2XL'].map(size=>({id:'e92-tee-'+size.toLowerCase(),productId:'e92-tee',name:'E92 Coupe Line-Art Tee',size,unitAmount:3000,inventoryPolicy:'made_to_order',available:size!=='XL'}));
@@ -28,7 +29,7 @@ test('closed commerce fails safely without a cart or purchase button',async()=>{
   await expect.element(page.getByRole('button',{name:/Cart/})).not.toBeInTheDocument();
 });
 test('sizes, quantities and removal update the real persistent cart, and Escape restores focus',async()=>{
-  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response({enabled:true,shippingCents:995,variants})));mount(<ProductionStore/>);
+  vi.stubGlobal('fetch',vi.fn(withPublicCatalog(async()=>response({enabled:true,shippingCents:995,variants}))));mount(<ProductionStore/>);
   const first=page.getByRole('article').first();
   await first.getByRole('button',{name:'XL',exact:true}).click();
   await expect.element(first.getByRole('button',{name:'Orders paused'})).toBeDisabled();

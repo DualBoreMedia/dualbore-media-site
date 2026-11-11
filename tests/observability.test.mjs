@@ -8,6 +8,15 @@ test('structured metadata excludes secrets, bodies, email, address and untrusted
  const secret='sk_test_private';const row=safeMetadata({requestId:'safe-reference',Authorization:'Bearer '+secret,body:{address:'55 Private Street'},email:'customer@example.com',event:secret,provider:'stripe',orderReference:'DBM-123',status:503});
  assert.deepEqual(row,{requestId:'safe-reference',provider:'stripe',orderReference:'DBM-123',status:503});
 });
+
+test('opaque WorkOS credentials are excluded from allowed metadata and monitoring code paths',()=>{
+ const syntheticToken='sk_'+'SYNTHETIC'.repeat(4);
+ assert.deepEqual(safeMetadata({requestId:syntheticToken,provider:syntheticToken,release:syntheticToken}),{});
+ const event=sanitizeMonitoringEvent({release:syntheticToken,tags:{requestId:syntheticToken},debug_meta:{images:[{debug_id:'12345678-1234-1234-1234-123456789012',code_file:'https://dualboremedia.com/assets/'+syntheticToken+'.js'}]},exception:{values:[{type:syntheticToken,value:syntheticToken,stacktrace:{frames:[{filename:'https://dualboremedia.com/assets/'+syntheticToken+'.js'}]}}]}});
+ assert.equal(JSON.stringify(event).includes(syntheticToken),false);
+ assert.deepEqual(event.debug_meta.images,[]);
+ assert.deepEqual(event.exception.values[0].stacktrace.frames[0],{in_app:false});
+});
 test('background failures preserve retry rejection while reporting a safe correlation and hiding provider diagnostics',async()=>{
  const logs=[],reported=[];let reference;
  const task=observeTask(async()=>{reference=requestContext().requestId;throw Error('sk_live_secret customer@example.com');},{scope:'waitlist',reporter:{capture:async error=>reported.push(error)},log:line=>logs.push(line)});
@@ -34,6 +43,39 @@ test('monitoring beforeSend strips ambient sensitive data and preserves source-m
  const clean=sanitizeMonitoringEvent({message:'customer@example.com',request:{headers:{Authorization:'Bearer secret'},data:'private'},user:{email:'private@example.com'},breadcrumbs:[{message:'private'}],extra:{token:'secret'},contexts:{trace:{data:'private'}},tags:{requestId:'safe-id',email:'private@example.com'},exception:{values:[{type:'Error',value:'sk_test_private',stacktrace:{frames:[{filename:'https://dualboremedia.com/assets/app.js?token=secret',lineno:23,colno:4,vars:{password:'private'},pre_context:['private']}]}}]}});
  const text=JSON.stringify(clean);for(const secret of ['private','secret','Authorization','Bearer','password','@'])assert.equal(text.includes(secret),false);
  assert.equal(clean.exception.values[0].stacktrace.frames[0].filename,'https://dualboremedia.com/assets/app.js');assert.equal(clean.exception.values[0].stacktrace.frames[0].lineno,23);
+});
+
+test('current Vite bundles retain sanitized stack frames and debug IDs for private source-map resolution',()=>{
+ const debugId='12345678-1234-1234-1234-123456789012';
+ for(const filename of ['https://dualboremedia.com/_vite/index-B7f29ab.js','https://www.dualboremedia.com/_vite/app.js','https://dualbore-media-site.netlify.app/_vite/app.js','http://127.0.0.1:4320/_vite/Pages-C4d6e8f.js','http://localhost:4320/_vite/app.js','http://[::1]:4320/_vite/app.js','/_vite/SetupShop-D6ea35c.js','/var/task/netlify/functions/api.mjs']){
+  const event=sanitizeMonitoringEvent({debug_meta:{images:[{debug_id:debugId,code_file:filename+'?token=private',source:'private'}]},exception:{values:[{type:'Error',value:'private',stacktrace:{frames:[{filename:filename+'?token=private#private',lineno:23,colno:4,in_app:true,vars:{password:'private'},pre_context:['private']}]}}]}});
+  assert.deepEqual(event.debug_meta.images,[{type:'sourcemap',code_file:filename,debug_id:debugId}]);
+  assert.deepEqual(event.exception.values[0].stacktrace.frames,[{filename,lineno:23,colno:4,in_app:true}]);
+  assert.equal(JSON.stringify(event).includes('private'),false);
+ }
+ for(const filename of ['C:/Users/Owner/private.js','file:///C:/Users/Owner/_vite/app.js','/Users/Owner/_vite/app.js','/home/owner/assets/app.js','https://dualboremedia.com/Users/Owner/_vite/app.js','https://client-name.example/_vite/app.js','https://dualboremedia.com.evil.example/_vite/app.js','https://private:private@dualboremedia.com/_vite/app.js','https://dualboremedia.com/_vite/sk_SYNTHETIC.js','https://dualboremedia.com/_vite/app%40private.js','https://dualboremedia.com/_vite/customer.json']){
+  const event=sanitizeMonitoringEvent({debug_meta:{images:[{debug_id:debugId,code_file:filename}]},exception:{values:[{stacktrace:{frames:[{filename}]}}]}});
+  assert.deepEqual(event.debug_meta.images,[]);
+  assert.deepEqual(event.exception.values[0].stacktrace.frames,[{in_app:false}]);
+ }
+});
+
+test('only supported runtime platform identifiers survive event redaction for symbolication',()=>{
+ for(const platform of ['javascript','node'])assert.equal(sanitizeMonitoringEvent({platform}).platform,platform);
+ for(const platform of ['other','customer@example.com','sk_SYNTHETIC',{},null])assert.equal(sanitizeMonitoringEvent({platform}).platform,undefined);
+});
+
+test('real server SDK serialization keeps its platform and drops private context without network access',async()=>{
+ const sdk=await import('@sentry/node'),events=[];let inputPlatform;
+ sdk.init({dsn:'https://public@o0.ingest.us.sentry.io/1',defaultIntegrations:false,sendDefaultPii:false,tracesSampleRate:0,autoSessionTracking:false,
+  beforeSend:event=>{inputPlatform=event.platform;return sanitizeMonitoringEvent(event);},
+  transport:()=>({send:async envelope=>{for(const [header,event]of envelope[1])if(header.type==='event')events.push(event);return {statusCode:200};},flush:async()=>true})});
+ try{
+  sdk.withScope(scope=>{scope.setUser({email:'customer@example.com'});scope.setExtra('password','sk_SYNTHETIC');sdk.captureException(new Error('customer@example.com private request'));});
+  await sdk.flush(2000);assert.equal(inputPlatform,'node');assert.equal(events.length,1);assert.equal(events[0].platform,'node');
+  for(const key of ['user','request','contexts','extra','breadcrumbs'])assert.equal(events[0][key],undefined);
+  assert.equal(/customer@example\.com|sk_SYNTHETIC|C:[\\/]|\/Users\//.test(JSON.stringify(events[0])),false);
+ }finally{await sdk.close(2000);}
 });
 test('monitoring stays disabled without explicit configuration and isolated transport failure never fails commerce',async()=>{
  let options,captured=0;const sdk={init:value=>{options=value;},withScope:fn=>fn({setTags:()=>{}}),captureException:()=>{captured++;},flush:async()=>{throw new Error('transport secret');}};

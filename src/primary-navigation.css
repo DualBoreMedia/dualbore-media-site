@@ -1,0 +1,27 @@
+/* One navigation layout for home, individual films, policies and setup browsing. */
+.workspace-nav .tabs{max-width:var(--content-width);grid-template-columns:repeat(5,minmax(0,1fr))}
+.workspace-nav .tabs>:is(a,button){position:relative;display:flex;align-items:center;gap:var(--space-2);min-width:0;min-height:56px;padding:12px 16px;border-bottom:3px solid transparent;background:transparent;color:var(--muted);font:600 var(--text-xs)/1.4 Inter,Arial,sans-serif;text-align:left;text-decoration:none;transition:color .2s,background .2s}
+.workspace-nav .tabs small{display:block;margin-left:auto;font:600 18px/1 var(--display);color:#a8b4c7}
+.workspace-nav .tabs>:is(a,button)>span:not(.mobile-tab-label){display:block}
+.workspace-nav .tabs svg{font-size:14px;flex-shrink:0}
+.workspace-nav .tabs .mobile-tab-label{display:none}
+.workspace-nav .tabs>:is(a,button):hover{color:#fff;background:#ffffff04}
+.workspace-nav .tabs>[aria-selected=true]{color:#fff;background:#ff2a3b14;border-color:var(--red)}
+.workspace-nav .tabs>[aria-selected=true] :is(svg,small){color:#ff6472}
+.workspace-nav .tabs>:focus-visible{outline-offset:-5px}
+.detail-shell>.workspace-nav,.production-navigation{position:relative;top:0}
+@media(max-width:1100px){
+ .workspace-nav .tabs>:is(a,button){padding-inline:12px}
+ .workspace-nav .tabs svg{display:none}
+ .workspace-nav .tabs small{order:-1;margin:0;color:#a8b4c7}
+}
+@media(max-width:700px){
+ .workspace-nav{position:relative;top:0}
+ .workspace-nav .tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .workspace-nav .tabs>:is(a,button){min-height:48px;padding:10px 12px;gap:8px;font-size:12px}
+ .workspace-nav .tabs>:last-child{grid-column:1/-1}
+ .workspace-nav .tabs small{font-size:17px}
+ .workspace-nav .tabs>:is(a,button)>span:not(.mobile-tab-label){display:block}
+ .workspace-nav .tabs .mobile-tab-label{display:none}
+}
+@media(prefers-reduced-motion:reduce){.workspace-nav .tabs>:is(a,button){transition:none}}

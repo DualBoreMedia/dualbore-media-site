@@ -2,6 +2,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { emptyState } from './memory-repository.mjs';
+import {transactionSetupAssets} from '../setups/private-assets.mjs';
 export { emptyState, initialEmptyState } from './memory-repository.mjs';
 
 // Low-volume store tradeoff: one transaction-scoped advisory lock serializes ALL
@@ -33,12 +34,16 @@ export async function runMigrations(pool, directory = migrationDirectory) {
     const files = (await readdir(directory)).filter(name => /^\d+_[a-z0-9_-]+\.sql$/.test(name)).sort();
     for (const name of files) {
       const sql = await readFile(new URL(name, directory), 'utf8');
-      const checksum = createHash('sha256').update(sql).digest('hex');
+      const lf=sql.replaceAll('\r\n','\n');
+      const hash=value=>createHash('sha256').update(value).digest('hex');
+      const checksum=hash(lf);
       if (applied.has(name)) {
-        if (applied.get(name) !== checksum) throw new Error('Applied commerce migration has changed; create a new migration.');
+        // Git may check the same reviewed SQL out with LF or CRLF. Accept only
+        // these byte-equivalent line-ending variants; never rewrite history.
+        if (![hash(sql),checksum,hash(lf.replaceAll('\n','\r\n'))].includes(applied.get(name))) throw new Error('Applied commerce migration has changed; create a new migration.');
         continue;
       }
-      await client.query(sql);
+      await client.query(lf);
       await client.query('INSERT INTO commerce_migrations(name, checksum) VALUES ($1, $2)', [name, checksum]);
     }
     await client.query('COMMIT');
@@ -100,6 +105,10 @@ async function upsert(client, table, primaryKey, fields, object) {
       if(!isDeepStrictEqual(data, object)) throw new Error('Audit history is immutable.');
       return;
     }
+    // Audit writers receive INSERT, never UPDATE. Even an unused conflict-update
+    // clause requires UPDATE privileges, so new history uses an insert only.
+    await client.query(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map((_, i) => `$${i + 1}`).join(', ')})`, values);
+    return;
   }
   // Identifiers come only from the static descriptors above; ALL values are bound.
   await client.query(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${columns.map((_, i) => `$${i + 1}`).join(', ')}) ON CONFLICT (${primaryKey}) DO UPDATE SET ${columns.filter(column => column !== primaryKey).map(column => `${column} = EXCLUDED.${column}`).join(', ')}${table === 'product_variants' ? ', updated_at = now()' : ''}`, values);
@@ -133,9 +142,17 @@ async function persist(client, state) {
 export function createPostgresRepository(pool) {
   protectPool(pool);
   return {
-    async readPublishedProducts() {
+    async readPublishedProducts(legacyIds=[]) {
       const client=await pool.connect();
-      try{return (await client.query("SELECT data FROM managed_products WHERE data->'published' IS NOT NULL ORDER BY id LIMIT 1000")).rows.map(r=>typeof r.data==='string'?JSON.parse(r.data):r.data);}
+      try{return (await client.query(`
+        SELECT data FROM (
+        (SELECT data FROM managed_products WHERE data->>'status'='published' AND data->'published'->>'type'='physical' ORDER BY id LIMIT 1000)
+        UNION
+        (SELECT data FROM managed_products WHERE data->'setupPreview' IS NOT NULL AND data->>'status'<>'archived' ORDER BY id LIMIT 1000)
+        UNION
+        (SELECT data FROM managed_products WHERE id=ANY($1::text[]) AND data->>'status'<>'published' AND (data->'published' IS NOT NULL OR data->>'status'='archived'))
+        ) AS visible ORDER BY data->>'id'
+      `,[legacyIds])).rows.map(r=>typeof r.data==='string'?JSON.parse(r.data):r.data);}
       finally{client.release();}
     },
     async consumeRateLimit(id, {limit,windowMs,now}) {
@@ -164,7 +181,7 @@ export function createPostgresRepository(pool) {
         await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
         await client.query(lockSql);
         const state = await load(client);
-        const result = structuredClone(await callback(state));
+        const result = structuredClone(await callback(state,transactionSetupAssets(client)));
         await persist(client, state);
         await client.query('COMMIT');
         return result;

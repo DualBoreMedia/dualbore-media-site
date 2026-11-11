@@ -6,11 +6,12 @@ import {App} from '../../src/App.jsx';
 import WorkosOperations from '../../src/operations/WorkosOperations.jsx';
 import OperationsApp from '../../src/operations/OperationsApp.jsx';
 import ProductionStore from '../../src/commerce/ProductionStore.jsx';
+import {withPublicCatalog} from './catalog-fixture.js';
 import '../../src/styles.css';
 import '../../src/product-polish.css';
 
 let root,host;
-beforeEach(()=>{host=document.createElement('div');document.body.append(host);root=createRoot(host);history.replaceState(null,'','/');localStorage.clear();});
+beforeEach(()=>{vi.stubGlobal('fetch',withPublicCatalog());host=document.createElement('div');document.body.append(host);root=createRoot(host);history.replaceState(null,'','/');localStorage.clear();});
 afterEach(()=>{root.unmount();host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();history.replaceState(null,'','/');});
 
 test('homepage connects the channel story, featured episodes and first merch design',async()=>{
@@ -87,7 +88,7 @@ test('customer order progress identifies its current step without exposing inter
 });
 
 test('closed shop still presents the three original designs without a purchase button',async()=>{
- history.replaceState(null,'','/shop');vi.stubGlobal('fetch',vi.fn(async()=>Response.json({enabled:false,variants:[]})));root.render(<ProductionStore/>);
+ history.replaceState(null,'','/shop');vi.stubGlobal('fetch',vi.fn(withPublicCatalog(async()=>Response.json({enabled:false,variants:[]}))));root.render(<ProductionStore/>);
  await expect.element(page.getByRole('region',{name:'Drop 01 design previews'})).toBeVisible();expect(await page.getByRole('article').all()).toHaveLength(3);await expect.element(page.getByRole('button',{name:/cart|checkout|buy/i})).not.toBeInTheDocument();
 });
 

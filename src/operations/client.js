@@ -23,3 +23,18 @@ export async function operationsRequest(getToken,payload,{signal,admin=false,sta
  if(!response.ok){if(response.status>=500)reportBrowserError(new Error('Operations service unavailable'),{reference:data.reference||response.headers?.get('X-Request-ID')});const error=new Error(messages[data.code||data.error?.code||data.error]||(response.status===403?messages.forbidden:response.status===401?messages.unauthorized:'We could not save this change. Refresh and try again.'));error.code=typeof data.code==='string'?data.code:undefined;throw error;}
  return data;
 }
+
+export async function uploadSetupFile(getToken,{productId,expectedVersion,file},{fetcher=fetch}={}) {
+ if(!file||!Number.isSafeInteger(file.size)||file.size<48||file.size>2*1024*1024||!/^[A-Za-z0-9][A-Za-z0-9 ._()-]{0,119}\.stp$/i.test(file.name))throw new Error('Choose a supported .stp file, no larger than 2 MB, with a simple filename.');
+ const token=await getToken?.(),cookieAuth=getToken?.cookieSession===true;
+ if(!token&&!cookieAuth)throw new Error(messages.unauthorized);
+ let response;
+ try {
+  const url='/api/setup-files?'+new URLSearchParams({productId});
+  const options={method:'POST',headers:{...(cookieAuth?{}:{Authorization:`Bearer ${token}`}), 'Content-Type':'application/octet-stream','X-Setup-Filename':encodeURIComponent(file.name),'X-Product-Version':String(expectedVersion)},body:file,cache:'no-store',credentials:cookieAuth?'same-origin':'omit'};
+  response=await(cookieAuth?workosSessionFetch(url,options,fetcher):fetcher(url,options));
+ }catch{throw new Error('Private file upload could not be confirmed. Reload the draft before trying again.');}
+ let data;try{data=await response.json();}catch{throw new Error('Private file upload could not be confirmed. Reload the draft before trying again.');}
+ if(!response.ok){const error=new Error(messages[data.code]||'Private file upload was rejected. Check the file and reload the saved draft.');error.code=data.code;throw error;}
+ return data;
+}

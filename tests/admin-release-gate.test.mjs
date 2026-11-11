@@ -2,10 +2,22 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {checkAdminRelease} from '../scripts/check-admin-release.mjs';
 const evidence=['WORKOS_PRODUCTION_VERIFIED','WORKOS_STAFF_MFA_POLICY_VERIFIED','ADMIN_OWNERS_VERIFIED','AUTH_PRODUCTION_VERIFIED','ADMIN_MFA_VERIFIED','STAFF_MFA_VERIFIED','PRODUCTION_DATABASE_VERIFIED','MIGRATIONS_VERIFIED','DATABASE_BACKUP_RESTORE_VERIFIED','SECRETS_SCOPED_VERIFIED','SECURITY_REVIEW_PASSED','REQUIRED_TESTS_PASSED','COVERAGE_THRESHOLDS_PASSED','BROWSER_E2E_VERIFIED','FRONTEND_PRODUCTION_QA_VERIFIED','CODERABBIT_REVIEW_PASSED','GITHUB_CI_VERIFIED','ERROR_MONITORING_VERIFIED','SOURCEMAPS_VERIFIED','CORRELATION_REDACTION_VERIFIED'];
-const safe={COMMERCE_ENVIRONMENT:'production',SITE_ORIGIN:'https://dualboremedia.com',AUTH_PROVIDER:'workos',VITE_AUTH_PROVIDER:'workos',AUTH_ACCESS_MODE:'staff-only',VITE_AUTH_ACCESS_MODE:'staff-only',WORKOS_ENVIRONMENT:'production',WORKOS_API_KEY:'sk_live_syntheticfixture',WORKOS_CLIENT_ID:'client_fixture',WORKOS_COOKIE_PASSWORD:'a-test-only-cookie-password-at-least-32-characters',WORKOS_STAFF_ORGANIZATION_ID:'org_fixture',WORKOS_STAFF_GOOGLE_ENABLED:'true',DATABASE_URL:'postgresql://fixture:fixture@database.example.invalid/clean?sslmode=verify-full',ERROR_MONITORING_ENABLED:'true',VITE_ERROR_MONITORING_ENABLED:'true',SENTRY_DSN:'https://fixture@o1.ingest.sentry.io/1',VITE_SENTRY_DSN:'https://fixture@o1.ingest.sentry.io/1',RELEASE_SHA:'a'.repeat(40),...Object.fromEntries(['PAYMENTS_ENABLED','REFUNDS_ENABLED','TRANSACTIONAL_EMAILS_ENABLED','MARKETING_EMAILS_ENABLED','DROP_WAITLIST_ENABLED'].map(k=>[k,'false'])),...Object.fromEntries(evidence.map(k=>[k,'true']))};
+const safe={COMMERCE_ENVIRONMENT:'production',SITE_ORIGIN:'https://dualboremedia.com',AUTH_PROVIDER:'workos',VITE_AUTH_PROVIDER:'workos',AUTH_ACCESS_MODE:'staff-only',VITE_AUTH_ACCESS_MODE:'staff-only',WORKOS_ENVIRONMENT:'production',WORKOS_API_KEY:'sk_live_syntheticfixture',WORKOS_CLIENT_ID:'client_fixture',WORKOS_COOKIE_PASSWORD:'a-test-only-cookie-password-at-least-32-characters',WORKOS_STAFF_ORGANIZATION_ID:'org_fixture',WORKOS_STAFF_GOOGLE_ENABLED:'true',DATABASE_URL:'postgresql://fixture:fixture@database.example.invalid/clean?sslmode=verify-full',ERROR_MONITORING_ENABLED:'true',VITE_ERROR_MONITORING_ENABLED:'true',SENTRY_DSN:'https://fixture@o1.ingest.sentry.io/1',VITE_SENTRY_DSN:'https://fixture@o1.ingest.sentry.io/1',RELEASE_SHA:'a'.repeat(40),...Object.fromEntries(['PAYMENTS_ENABLED','REFUNDS_ENABLED','TRANSACTIONAL_EMAILS_ENABLED','MARKETING_EMAILS_ENABLED','DROP_WAITLIST_ENABLED','DIGITAL_DELIVERY_ENABLED'].map(k=>[k,'false'])),...Object.fromEntries(evidence.map(k=>[k,'true']))};
 test('admin-only readiness is separate from merchandise legal, Stripe and email activation',()=>{
  assert.deepEqual(checkAdminRelease({env:safe}),{ready:true,blockers:[],level:'admin-only'});
  assert.equal(safe.STRIPE_SECRET_KEY,undefined);assert.equal(safe.RESEND_API_KEY,undefined);assert.equal(safe.OHIO_TAX_REGISTRATION_VERIFIED,undefined);
+});
+
+test('admin release accepts verified opaque WorkOS keys while rejecting unverified and staging credentials',()=>{
+ const production={...safe,WORKOS_API_KEY:'sk_syntheticProductionFixture123'};
+ assert.equal(checkAdminRelease({env:production}).ready,true);
+ for(const changes of [{WORKOS_PRODUCTION_VERIFIED:undefined},{WORKOS_PRODUCTION_VERIFIED:'false'},{WORKOS_ENVIRONMENT:'staging'},{WORKOS_API_KEY:'sk_test_syntheticFixture'},{WORKOS_API_KEY:'sk_staging_syntheticFixture'},{WORKOS_API_KEY:'sk_bad value'},{WORKOS_API_KEY:'sk_syntheticFixture\n'}]){
+  const env={...production,...changes},result=checkAdminRelease({env});
+  assert.equal(result.ready,false);
+  const output=JSON.stringify(result);
+  assert.equal(output.includes(env.WORKOS_API_KEY),false);
+  assert.equal(output.includes(JSON.stringify(env.WORKOS_API_KEY).slice(1,-1)),false);
+ }
 });
 test('every admin release prerequisite fails closed independently and diagnostics never expose values',()=>{
  for(const key of [...evidence,...Object.keys(safe).filter(k=>!evidence.includes(k))]){
@@ -15,4 +27,12 @@ test('every admin release prerequisite fails closed independently and diagnostic
   const result=checkAdminRelease({env:{...safe,...changes}});assert.equal(result.ready,false,JSON.stringify(Object.keys(changes)));assert.ok(!JSON.stringify(result).includes('must-never-print-this'));assert.ok(!JSON.stringify(result).includes('re_synthetic_leaked_name'));
  }
  assert.equal(checkAdminRelease().ready,false);
+});
+
+test('opaque WorkOS tokens cannot be used as environment variable labels',()=>{
+ const label='sk_'+'SyntheticFixture'.repeat(3);
+ const result=checkAdminRelease({env:{...safe,[label]:''}});
+ assert.equal(result.ready,false);
+ assert.ok(result.blockers.some(message=>message.includes('credential-shaped variable names')));
+ assert.equal(JSON.stringify(result).includes(label),false);
 });

@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 
 export const EXPECTED_MX2OEM_BIKE_ID = 'MX2OEM_2023_Husqvarna_TC_125';
 const header = Buffer.from('c85393451601', 'hex');
-const bikePattern = /^MX2OEM_[A-Za-z0-9_]{1,60}$/;
+const bikePattern = /^MX[12]OEM_[A-Za-z0-9_]{1,60}$/;
 
 export const RECEIVED_SETUP_DRAFTS = Object.freeze([
   Object.freeze({
@@ -44,7 +44,9 @@ export function inspectReceivedStp(bytes) {
   if (!data.subarray(0, header.length).equals(header)) throw new Error('Unknown setup file signature.');
   const end = data.indexOf(0, header.length);
   if (end < 0 || end - header.length > 68) throw new Error('Malformed embedded bike identifier.');
-  const bikeId = data.subarray(header.length, end).toString('ascii');
+  const identifier=data.subarray(header.length,end);
+  if(identifier.some(byte=>byte>127))throw new Error('Invalid embedded bike identifier.');
+  const bikeId = identifier.toString('ascii');
   if (!bikePattern.test(bikeId)) throw new Error('Invalid embedded bike identifier.');
   return Object.freeze({
     embeddedBikeId: bikeId, sizeBytes: data.byteLength,
