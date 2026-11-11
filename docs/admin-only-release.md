@@ -1,5 +1,17 @@
 # Admin-only production candidate: NO-GO until verified
 
+## November 10: owner-approved two-stage verification
+
+The owner approved a controlled non-selling verification rollout because new Production-only secrets are frozen into a Netlify deployment, while real hosted authentication and monitoring evidence can only be collected from that build. This changes the sequence, not the required evidence.
+
+Stage 1 uses `check:admin-predeploy`, also run by `prebuild` on every Netlify production build. It requires the closed-store production configuration, `ADMIN_RELEASE_PHASE=verification` and `WORKOS_KEY_ENVIRONMENT=production`. These are configuration declarations, not verification flags. The preflight uses the actual protected key to read the configured WorkOS organization, then opens the actual restricted database connection with verified TLS in a read-only transaction. It compares the migration ledger against the committed SQL, rejects elevated roles/memberships, verifies immutable and editable permissions, and closes the transaction. It never migrates, changes roles or sends email. Provider errors are reported without credential/PII details. A failure blocks compilation/publication. Local/CI skips are explicitly not production proof.
+
+`WORKOS_STAFF_MFA_POLICY_VERIFIED` describes the independently inspected private organization's required-MFA/invitation policy; it is not hosted login evidence. Existing per-request organization membership, session revocation, TOTP, freshness, authorization and IDOR protections remain unchanged.
+
+Stage 2 keeps `check:admin` strict and unchanged in its required evidence. The verification rollout is **not operationally certified** until owner sign-in/MFA, real saved edits and persistence, session/revocation/least-privilege checks, and release-specific monitoring/source-map/redaction checks pass. Do not set `WORKOS_PRODUCTION_VERIFIED`, `AUTH_PRODUCTION_VERIFIED`, `ERROR_MONITORING_VERIFIED` or other evidence flags merely to permit deployment. The new preflight reports `adminOperational: false` even when successful. Six green CI jobs and the exact owner-approved candidate remain separate deployment prerequisites.
+
+All six payment/refund/transactional-email/marketing-email/waitlist/digital-delivery switches stay false throughout both stages. No data restore, sample-data seeding, setup publication/download, new role grant or paid plan is included. Apply any correction through a reviewed Git change; preserve production data and audit history. A database restore is never the routine code rollback procedure.
+
 ## November 5 continuation
 
 Production WorkOS is now accessible. The inspected production organization list was empty, Google OAuth was unconfigured, and no active environment key existed before the owner created one. Production Google OAuth requires a Google Cloud client ID and client secret. Provider enrollment, private membership, required TOTP, recovery and actual revocation still need verification. No production roles were granted.

@@ -20,6 +20,13 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Two-stage non-selling verification release, November 10, 2026
+
+- The owner approved separating pre-deployment provider/database/security checks from the hosted Admin, session, persistence and monitoring checks that require the deployed build.
+- The preflight may permit only an explicitly configured verification rollout. It must authenticate the actual WorkOS key to the configured staff organization and verify the actual restricted PostgreSQL connection, immutable migration ledger and permissions without writing data.
+- Keep the strict final Admin gate intact. Configuration declarations are not hosted verification evidence. Never mark production authentication, monitoring or operational readiness verified until the corresponding real checks pass.
+- Preserve the five tabs and all six disabled commerce/refund/email/signup/download switches. No paid service or unrelated redesign. Normal development commits retain [skip netlify]; deployment approval remains required for the tested candidate.
+
 ### Full UI polish, November 7, 2026
 
 - Preserve the black/red garage aesthetic and authentic assets. Use shared spacing, typography, control and container tokens; correct measured layout issues rather than globally shrinking type or hiding content.

@@ -8,5 +8,9 @@ export function productionWorkosKey(env){
  if(typeof key!=='string'||key.trim()!==key)return false;
  if(/^sk_live_[A-Za-z0-9]+$/.test(key))return true;
  if(/^sk_(?:test|staging|example)_/.test(key))return false;
- return /^sk_[A-Za-z0-9_-]+$/.test(key)&&env.WORKOS_PRODUCTION_VERIFIED==='true';
+ // Key provenance is separate from successful hosted Admin/session QA. The
+ // verification build authenticates the key to the configured organization;
+ // the final release gate still requires all production QA evidence.
+ const verification=env.ADMIN_RELEASE_PHASE==='verification'&&env.WORKOS_KEY_ENVIRONMENT==='production';
+ return /^sk_[A-Za-z0-9_-]+$/.test(key)&&(env.WORKOS_PRODUCTION_VERIFIED==='true'||verification);
 }

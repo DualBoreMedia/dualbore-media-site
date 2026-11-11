@@ -5,7 +5,7 @@ import {productionWorkosKey} from '../netlify/operations/workos-key.mjs';
 
 // Read-only operating gate. Evidence declarations are operator attestations,
 // not a substitute for provider/browser/database records for this exact release.
-export function checkAdminRelease({env={}}={}){
+export function checkAdminConfiguration({env={}}={}){
  const blockers=[];
  const expected={COMMERCE_ENVIRONMENT:'production',SITE_ORIGIN:'https://dualboremedia.com',AUTH_PROVIDER:'workos',VITE_AUTH_PROVIDER:'workos',AUTH_ACCESS_MODE:'staff-only',VITE_AUTH_ACCESS_MODE:'staff-only',WORKOS_ENVIRONMENT:'production',WORKOS_STAFF_GOOGLE_ENABLED:'true',ERROR_MONITORING_ENABLED:'true',VITE_ERROR_MONITORING_ENABLED:'true'};
  for(const [key,value]of Object.entries(expected))if(env[key]!==value)blockers.push(`${key} must match the reviewed admin-only production configuration.`);
@@ -20,6 +20,10 @@ export function checkAdminRelease({env={}}={}){
  for(const key of ['SENTRY_DSN','VITE_SENTRY_DSN'])try{monitoringOrigin(env[key]);}catch{blockers.push(`${key} must identify the verified monitoring project.`);}
  if(!/^[a-f0-9]{40}$/.test(env.RELEASE_SHA||''))blockers.push('The exact reviewed release SHA is required.');
  if(Object.keys(env).some(key=>/^(?:re_|sk_|(?:rk|pk)_(?:test|live)_)/.test(key)||/^VITE_.*(?:SECRET|PASSWORD|API_KEY|DATABASE_URL|AUTH_TOKEN|WEBHOOK_SECRET)/.test(key)))blockers.push('Remove credential-shaped variable names and client-exposed secrets through the approved rotation procedure.');
+ return blockers;
+}
+export function checkAdminRelease({env={}}={}){
+ const blockers=checkAdminConfiguration({env});
  const evidence={WORKOS_PRODUCTION_VERIFIED:'WorkOS production environment/free-tier setup',WORKOS_STAFF_MFA_POLICY_VERIFIED:'mandatory production organization MFA and bypass checks',ADMIN_OWNERS_VERIFIED:'two explicit individual owner memberships',AUTH_PRODUCTION_VERIFIED:'production sign-in, recovery and sessions',ADMIN_MFA_VERIFIED:'administrator MFA and sensitive step-up',STAFF_MFA_VERIFIED:'employee least privilege and revocation',PRODUCTION_DATABASE_VERIFIED:'clean isolated production database',MIGRATIONS_VERIFIED:'production migration checksums',DATABASE_BACKUP_RESTORE_VERIFIED:'managed production backup/restore rehearsal',SECRETS_SCOPED_VERIFIED:'approved production-only secret scopes and build-output safeguards',SECURITY_REVIEW_PASSED:'security review',REQUIRED_TESTS_PASSED:'required release tests',COVERAGE_THRESHOLDS_PASSED:'enforced measured coverage',BROWSER_E2E_VERIFIED:'browser flows',FRONTEND_PRODUCTION_QA_VERIFIED:'production-shaped non-selling frontend',CODERABBIT_REVIEW_PASSED:'CodeRabbit review',GITHUB_CI_VERIFIED:'six green jobs for this exact SHA',ERROR_MONITORING_VERIFIED:'controlled monitoring event and alert',SOURCEMAPS_VERIFIED:'release source-map resolution',CORRELATION_REDACTION_VERIFIED:'correlation and secret/PII redaction'};
  for(const [key,description]of Object.entries(evidence))if(env[key]!=='true')blockers.push(`Evidence pending: ${description} (${key}).`);
  return {ready:blockers.length===0,blockers,level:'admin-only'};
