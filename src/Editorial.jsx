@@ -1,5 +1,6 @@
 import {FaArrowRight,FaPlay,FaYoutube,FaWrench,FaShirt,FaUsers} from 'react-icons/fa6';
 import {channel,films,merch,previewSizes,projects} from './content.js';
+import {GarmentOptions} from './commerce/GarmentOptions.jsx';
 
 export function GarageStories({onView,onDetails,onPlay,episodes=films}){
  return <>
@@ -16,7 +17,7 @@ export function RelatedEpisodes({film,onPlay,onProject,episodes=films}){
 }
 
 export function ProductReleaseDetails({item}){
- return <section className="product-release-details" aria-label="Drop 01 release details"><div className="preview-price"><strong>${item.previewPrice}</strong><span>USD / Planned release price</span></div><p>Explore the original artwork. Orders are not open yet.</p>{(item.testVariantsEnabled||item.managed)&&<><h3>Planned sizes</h3><div className="planned-sizes" aria-label="Planned sizes, not available to order">{(item.sizes||previewSizes).map(size=><span key={size}>{size}</span>)}</div></>}<p className="fine-print">Fit guidance, specifications and shipping information will be available before ordering opens. No size or stock is reserved by viewing this preview.</p></section>;
+ return <section className="product-release-details" aria-label="Drop 01 release details">{item.managed?<div className="preview-price"><strong>${item.previewPrice}</strong><span>USD / Planned release price</span></div>:<GarmentOptions item={item}/>}<p>Explore the original artwork. Orders are not open yet.</p>{(item.testVariantsEnabled||item.managed)&&<><h3>Planned sizes</h3><div className="planned-sizes" aria-label="Planned sizes, not available to order">{(item.sizes||previewSizes).map(size=><span key={size}>{size}</span>)}</div></>}<p className="fine-print">Fit guidance, specifications and shipping information will be available before ordering opens. No size or stock is reserved by viewing this preview.</p></section>;
 }
 
 export function CrewPrinciples(){
