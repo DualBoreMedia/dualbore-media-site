@@ -142,8 +142,13 @@ try {
         if (!/DualBore Media \| Garage Builds, Films & Merch/.test(await publicPage.title())) throw Error('Public site page title is incorrect');
         const layout = await publicPage.evaluate(() => ({width: innerWidth, documentWidth: document.documentElement.scrollWidth, bodyWidth: document.body.scrollWidth}));
         if (layout.documentWidth > width || layout.bodyWidth > width) throw Error(`Public site overflows horizontally at ${width}px: ${JSON.stringify(layout)}`);
-        const tabLabels=await publicPage.locator('.workspace-nav [role="tab"]>span:not(.mobile-tab-label)').evaluateAll(elements=>elements.filter(element=>getComputedStyle(element).display!=='none'&&element.getBoundingClientRect().width>0).map(element=>element.textContent));
-        if(JSON.stringify(tabLabels)!==JSON.stringify(['Garage Builds','Video Vault','Garage Merch','MX Bikes Setups','About / Pit Crew']))throw Error('Five navigation labels are not painted at '+width+'px: '+JSON.stringify(tabLabels));
+        const tabLabels=await publicPage.locator('.workspace-nav [role="tab"]>span').evaluateAll(elements=>elements.filter(element=>getComputedStyle(element).display!=='none'&&element.getBoundingClientRect().width>0).map(element=>element.textContent));
+        const expectedTabs=width<=700?['Garage Builds','Video Vault','Garage Merch','MX Bikes','Pit Crew']:['Garage Builds','Video Vault','Garage Merch','MX Bikes Setups','About / Pit Crew'];
+        if(JSON.stringify(tabLabels)!==JSON.stringify(expectedTabs))throw Error('Five navigation labels are not painted at '+width+'px: '+JSON.stringify(tabLabels));
+        if(width<=700){
+          const sizes=await publicPage.locator('.workspace-nav [role="tab"]').evaluateAll(elements=>elements.map(element=>element.getBoundingClientRect().width));
+          if(sizes.length!==5||Math.abs(sizes[4]-sizes[0])>1)throw Error('Fifth mobile tab must match the other tab widths at '+width+'px: '+JSON.stringify(sizes));
+        }
         const navigation = await publicPage.evaluate(() => {
           const header = document.querySelector('.header').getBoundingClientRect();
           const garage = document.querySelector('.header-meta .text-link');
