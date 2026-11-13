@@ -46,7 +46,7 @@ test('legacy shipment and hold projection preserve valid tracking and recoverabl
 });
 
 test('package allocation editing is versioned and cannot consume another package or order',async()=>{
- const f=setup();const first=await f.service.mutate(admin,draft),second=await f.service.mutate(admin,draft);
+ const f=setup();const first=await f.service.mutate(admin,draft),second=await f.service.mutate(admin,{...draft,trackingNumber:'SECOND'});
  const edit={action:'shipment-update',shipmentId:first.shipmentId,carrier:'UPS',service:'Ground',trackingNumber:'NEW',trackingUrl:'https://www.ups.com/track',expectedVersion:0,items:[{variantId:'tee-m',quantity:2}]};
  await assert.rejects(f.service.mutate(admin,edit),{code:'over_allocated'});
  await f.service.mutate(admin,{...edit,items:[{variantId:'tee-m',quantity:1}]});

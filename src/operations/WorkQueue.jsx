@@ -1,0 +1,5 @@
+import {label} from './client.js';
+export function WorkQueue({workLists={},reviewOrder}){
+ const rows=[...new Map(['received','making','packing','carrierHandoff'].flatMap(key=>workLists?.[key]||[]).map(o=>[o.orderNumber,o])).values()].sort((a,b)=>(a.shippingReview?.dueDate||a.createdAt).localeCompare(b.shippingReview?.dueDate||b.createdAt)||a.orderNumber.localeCompare(b.orderNumber));
+ return <section className="ops-panel" aria-label="Daily work queue"><h2>Daily work queue</h2><p>{[['To start','received'],['Making','making'],['To pack','packing'],['Handoff due','carrierHandoff']].map(([title,key])=>`${title}: ${(workLists?.[key]||[]).length}`).join(' | ')}</p>{rows.length?<ul className="ops-queue">{rows.map(o=><li key={o.orderNumber}><button onClick={e=>reviewOrder(o.orderNumber,e.currentTarget)}><strong>{o.orderNumber}</strong><span>{label(o.fulfillmentStatus)}</span><span>{(o.items||[]).map(i=>`${i.name} / ${i.size} / Qty ${i.quantity}`).join('; ')}</span><span>Due: {o.shippingReview?.dueDate||'Review deadline'} | {o.ageDays??0} calendar days since payment</span></button></li>)}</ul>:<p>No paid orders awaiting work.</p>}</section>;
+}

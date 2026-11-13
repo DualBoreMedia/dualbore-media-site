@@ -47,3 +47,17 @@ test('PostgreSQL adapter parameterizes writes and rejects unverified image URLs'
  assert.equal(queries.length,3);assert.equal(queries[1][1][0],'latest');assert.equal(queries[2][1][3],1);
  await store.close();assert.equal(closed,true);
 });
+
+test('newer verified cache beats an older durable snapshot without a public provider request',async()=>{
+ const cached={...snapshot,updatedAt:'2026-11-12T10:00:00Z'};
+ const cacheApi={open:async()=>({match:async()=>Response.json(cached)})};
+ assert.deepEqual(await resolvePublicVideoVault({enabled:'true',store:{read:async()=>snapshot},cacheApi}),cached);
+ assert.deepEqual(await resolvePublicVideoVault({enabled:'true',store:{read:async()=>cached},cacheApi:{open:async()=>({match:async()=>Response.json(snapshot)})}}),cached);
+});
+
+test('superseded refresh never reports a write or overwrites a newer cache snapshot',async()=>{
+ let writes=0;const rows=[];const store={save:async()=> 'superseded',record:async r=>rows.push(r)};
+ const result=await runDailyVideoSync({enabled:'true',apiKey:'synthetic',fetcher:youtubeFetcher,store,cacheApi:{open:async()=>({put:async()=>writes++})}});
+ assert.equal(result.reason,'superseded');assert.equal(result.updated,false);assert.equal(result.count,0);assert.equal(writes,0);assert.equal(rows[0].reason,'superseded');
+ const adapter=createVideoStore({databaseUrl:'postgresql://fixture:fixture@127.0.0.1/test',Pool:class{async query(){return{rowCount:0};}async end(){}}});assert.equal(await adapter.save(snapshot),'superseded');await adapter.close();
+});

@@ -1,3 +1,4 @@
+import {goPublic,openPublicNavigation} from './public-navigation-fixture.js';
 import React, {useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {afterEach, beforeEach, expect, test, vi} from 'vitest';
@@ -92,7 +93,7 @@ test('account empty orders, profile and help use customer-only views',async()=>{
 });
 test('admin reviews an order, service attention, audit history and made-to-order inventory',async()=>{
   const order={orderNumber:'DBM-QA-1',createdAt:'2026-10-18T00:00:00Z',status:'paid',paymentStatus:'paid',fulfillmentStatus:'received',totalCents:3995,subtotalCents:3000,shippingCents:995,taxCents:0,shippingName:'Synthetic Recipient',shippingAddress:{line1:'1 Test Way',city:'Test',state:'OH',postal_code:'43013'},items:[{variantId:'e92-tee-m',productId:'e92-tee',name:'E92 Coupe Line-Art Tee',size:'M',quantity:1,lineTotalCents:3000}],shipments:[],timeline:[],emailEvents:[]};
-  const data={orders:[order],pagination:{page:1,total:1,pageSize:25},overview:{paid:1,needsAttention:1},failures:[{type:'email',status:'failed',eventId:'email-qa',orderNumber:order.orderNumber,safeMessage:'Delivery unavailable.'}],variants:[{id:'e92-tee-m',name:order.items[0].name,sku:'E92-M',size:'M',inventoryPolicy:'made_to_order',availableQuantity:0,reservedQuantity:0,soldQuantity:1,active:true,version:0}],audit:[{id:'a-1',action:'paid',actor:'synthetic-staff',orderNumber:order.orderNumber,createdAt:'2026-10-18T00:00:00Z',metadata:{source:'checkout'}}],supportTickets:[]};
+  const data={orders:[order],pagination:{page:1,total:1,pageSize:25},overview:{paid:1,needsAttention:1},failures:[{type:'fulfillment',status:'review',orderNumber:order.orderNumber},{type:'email',status:'failed',eventId:'email-qa',orderNumber:order.orderNumber,safeMessage:'Delivery unavailable.'}],variants:[{id:'e92-tee-m',name:order.items[0].name,sku:'E92-M',size:'M',inventoryPolicy:'made_to_order',availableQuantity:0,reservedQuantity:0,soldQuantity:1,active:true,version:0}],audit:[{id:'a-1',action:'paid',actor:'synthetic-staff',orderNumber:order.orderNumber,createdAt:'2026-10-18T00:00:00Z',metadata:{source:'checkout'}}],supportTickets:[]};
   const fetcher=vi.fn((url,options)=>Promise.resolve(response(options.method==='POST'?{ok:true}:data)));
   mount(<OperationsApp admin auth={{isLoaded:true,isSignedIn:true,getToken:async()=> 'synthetic-browser-token',fetcher}}/>);
   await expect.element(page.getByRole('heading',{name:'Needs attention'})).toBeVisible();
@@ -159,18 +160,18 @@ test('an order return with mismatched purchased items cannot clear the cart',asy
   window.history.replaceState(null,'','/');
 });
 
-test('public garage tabs, filters, details and waitlist remain usable without checkout',async()=>{
-  window.history.replaceState(null,'','/');
+test('public garage navigation, filters, details and paused waitlist remain usable without checkout',async()=>{
+  window.history.replaceState(null,'','/garage');
   mount(<App/>);
   await expect.element(page.getByRole('heading',{name:/Five sections/})).toBeVisible();
   await page.getByRole('button',{name:'Explore BMW N54 platform details'}).click();
   await expect.element(page.getByRole('dialog').getByRole('heading',{name:/BMW N54/})).toBeVisible();
   await page.getByRole('button',{name:'Close details'}).click();
-  await page.getByRole('tab',{name:/Video Vault/}).click();
+  await goPublic('Videos');
   await expect.element(page.getByRole('button',{name:/Play The N54 single-turbo/}).first()).toBeVisible();
-  await page.getByRole('button',{name:'Two-Strokes'}).click();
+  await page.getByRole('combobox',{name:'Build',exact:true}).selectOptions('rd400');
   await expect.element(page.getByRole('button',{name:/Play Into the hills/}).first()).toBeVisible();
-  await page.getByRole('tab',{name:/Drop 01 Merch|Garage Merch/}).click();
+  await goPublic('Merch');
   await expect.element(page.getByText('Coming soon · Orders aren’t open yet.')).toBeVisible();
   await page.getByRole('button',{name:/Quick View E92 Coupe/}).click();
   await expect.element(page.getByRole('dialog').getByRole('region',{name:'Drop 01 release details'}).getByText('$30',{exact:true})).toBeVisible();
@@ -179,23 +180,17 @@ test('public garage tabs, filters, details and waitlist remain usable without ch
   await expect.element(page.getByRole('dialog').getByText(/signups are not open yet/i)).toBeVisible();
   await expect.element(page.getByRole('dialog').getByRole('checkbox')).not.toBeInTheDocument();
   await page.getByRole('button',{name:'Close details'}).click();
-  await page.getByRole('tab',{name:/About|Pit Crew/}).click();
+  await goPublic('Pit Crew');
   await expect.element(page.getByRole('heading',{name:/Two brothers/})).toBeVisible();
   await page.getByRole('button',{name:'Open navigation'}).click();
   await expect.element(page.getByRole('button',{name:'Close navigation',exact:true})).toBeVisible();
-  const backdrop=page.getByRole('button',{name:'Close navigation overlay'});
-  await expect.element(backdrop).toBeVisible();
-  const bounds=backdrop.element().getBoundingClientRect();
-  // The menu covers the center of this full-screen backdrop with real fonts.
-  // Click its visible lower edge, never force a click through the menu.
-  expect(document.elementFromPoint(bounds.left+8,bounds.bottom-8)).toBe(backdrop.element());
-  await backdrop.click({position:{x:8,y:bounds.height-8}});
+  await page.getByRole('button',{name:'Close navigation',exact:true}).click();
   await expect.element(page.getByRole('button',{name:'Open navigation'})).toBeVisible();
 });
 
 test('public merchandise quick view stays a design preview without active purchase-policy promises',async()=>{
   window.history.replaceState(null,'','/');mount(<App/>);
-  await page.getByRole('tab',{name:/Drop 01 Merch|Garage Merch/}).click();
+  await goPublic('Merch');
   await page.getByRole('button',{name:/Quick View E92 Coupe/}).click();
   const dialog=page.getByRole('dialog');
   await expect.element(dialog.getByText(/Design preview\. No orders or payments are being accepted\./)).toBeVisible();

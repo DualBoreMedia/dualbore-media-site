@@ -24,15 +24,15 @@ test('prerendered detail metadata is path-specific and escapes HTML in social ma
 
 
 test('shop and MX Bikes pages are uniquely indexed with their own previews',async()=>{
- assert.deepEqual(sectionPages.map(page=>page.path).sort(),['setups/','shop/']);
- assert.equal(publicPages.length,11);
- assert.equal(new Set(publicPages.map(page=>page.path)).size,11);
+ assert.deepEqual(sectionPages.map(page=>page.path).sort(),['garage/','pit-crew/','setups/','shop/','videos/']);
+ assert.equal(publicPages.length,14);
+ assert.equal(new Set(publicPages.map(page=>page.path)).size,14);
  const template='<html><head><title>Original</title><meta name="description" content="old" /><meta property="og:title" content="old" /><meta property="og:description" content="old" /><meta property="og:url" content="old" /><meta property="og:image" content="old" /><meta name="twitter:title" content="old" /><meta name="twitter:description" content="old" /><meta name="twitter:image" content="old" /><meta name="twitter:image:alt" content="RD400 ride" /><link rel="canonical" href="https://dualboremedia.com/" /></head><body></body></html>';
  const dir=await mkdtemp(join(tmpdir(),'dbm-page-metadata-'));
  try{
   await writeFile(join(dir,'index.html'),template);
-  assert.equal(await prerenderDetails({directory:dir}),11);
-  const sitemap=await readFile(join(dir,'sitemap.xml'),'utf8');
+  assert.equal(await prerenderDetails({directory:dir}),14);
+  const sitemap=await readFile(join(dir,'sitemap-pages.xml'),'utf8');
   for(const page of sectionPages){
    const html=await readFile(join(dir,page.path,'index.html'),'utf8');
    const url='https://dualboremedia.com/'+page.path;

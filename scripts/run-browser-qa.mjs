@@ -1,3 +1,4 @@
+async function goPublic(page,label){const button=page.getByRole('button',{name:'Open navigation',exact:true});if(await button.isVisible())await button.click();await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('link',{name:label,exact:true}).click();}
 import {runProductsBrowserChecks} from '../tests/products.browser.mjs';
 import {setupFilesHttp} from '../netlify/setups/files-http.mjs';
 import {chromium, firefox, webkit, expect} from '@playwright/test';
@@ -130,7 +131,7 @@ try {
       page = publicPage;
       publicPage.setDefaultTimeout(10000);
       const viewportResults = [];
-      for (const width of [320, 375, 390, 414, 701, 768, 1024, 1100, 1440]) {
+      for (const width of [320, 360, 375, 390, 414, 701, 768, 1024, 1100, 1280, 1440, 1920]) {
         await publicPage.setViewportSize({width, height: 900});
         // Reusing one URL across viewport sizes allows browser caches to return
         // 304 Not Modified. That is a successful navigation with cached content,
@@ -138,37 +139,24 @@ try {
         // unique URL so this check measures a fresh public document response.
         const response = await publicPage.goto(`${publicBaseUrl}/?qaViewport=${width}`);
         if (!response?.ok()) throw Error(`Public site returned ${response?.status()} at ${width}px`);
-        await publicPage.getByRole('heading', {name: /Five sections/}).waitFor();
+        await publicPage.getByRole('heading', {name: /From our garage/}).waitFor();
         if (!/DualBore Media \| Garage Builds, Films & Merch/.test(await publicPage.title())) throw Error('Public site page title is incorrect');
         const layout = await publicPage.evaluate(() => ({width: innerWidth, documentWidth: document.documentElement.scrollWidth, bodyWidth: document.body.scrollWidth}));
         if (layout.documentWidth > width || layout.bodyWidth > width) throw Error(`Public site overflows horizontally at ${width}px: ${JSON.stringify(layout)}`);
-        const tabLabels=await publicPage.locator('.workspace-nav [role="tab"]>span').evaluateAll(elements=>elements.filter(element=>getComputedStyle(element).display!=='none'&&element.getBoundingClientRect().width>0).map(element=>element.textContent));
-        const expectedTabs=width<=700?['Garage Builds','Video Vault','Garage Merch','MX Bikes','Pit Crew']:['Garage Builds','Video Vault','Garage Merch','MX Bikes Setups','About / Pit Crew'];
-        if(JSON.stringify(tabLabels)!==JSON.stringify(expectedTabs))throw Error('Five navigation labels are not painted at '+width+'px: '+JSON.stringify(tabLabels));
-        if(width<=700){
-          const sizes=await publicPage.locator('.workspace-nav [role="tab"]').evaluateAll(elements=>elements.map(element=>element.getBoundingClientRect().width));
-          if(sizes.length!==5||Math.abs(sizes[4]-sizes[0])>1)throw Error('Fifth mobile tab must match the other tab widths at '+width+'px: '+JSON.stringify(sizes));
-        }
-        const navigation = await publicPage.evaluate(() => {
-          const header = document.querySelector('.header').getBoundingClientRect();
-          const garage = document.querySelector('.header-meta .text-link');
-          const garageRect = garage?.getBoundingClientRect();
-          const brand = document.querySelector('.brand').getBoundingClientRect();
-          const wordmark = document.querySelector('.brand strong');
-          const wordmarkRect = wordmark.getBoundingClientRect();
-          return {garageVisible: !!garage&&getComputedStyle(garage).display !== 'none' && garageRect.width > 0, garageWithinHeader: !!garageRect&&garageRect.left >= header.left && garageRect.right <= header.right, brandWithinViewport: brand.left >= 0 && brand.right <= innerWidth, wordmarkWithinViewport: wordmarkRect.left >= brand.left && wordmarkRect.right <= innerWidth, wordmark: wordmark.innerText, subscribeLeft:document.querySelector('.header .subscribe').getBoundingClientRect().left, brandRight:brand.right, subscribeFont:getComputedStyle(document.querySelector('.header .subscribe')).fontSize};
-        });
-        if (process.env.VITE_AUTH_ACCESS_MODE==='staff-only'){
-          if(await publicPage.locator('a[href="/account"]').count())throw Error('Admin-only release advertised customer accounts');
-        }else if ([701, 768, 1024, 1100].includes(width) && (!navigation.garageVisible || !navigation.garageWithinHeader)) throw Error(`My Garage is not reachable in the primary header at ${width}px: ${JSON.stringify(navigation)}`);
-        if(width<=700&&(navigation.subscribeFont!=='0px'||navigation.subscribeLeft<navigation.brandRight))throw Error('Compact header actions overlap the brand at '+width+'px');
-        if (width === 320 && (!navigation.brandWithinViewport || !navigation.wordmarkWithinViewport || navigation.wordmark !== 'DUALBOREMEDIA')) throw Error(`Brand logo or complete wordmark is clipped at 320px: ${JSON.stringify(navigation)}`);
+        const menu=publicPage.getByRole('button',{name:'Open navigation',exact:true});
+        if(await menu.isVisible())await menu.click();
+        const navigation=await publicPage.getByRole('navigation',{name:'Primary navigation'}).getByRole('link').evaluateAll(links=>links.map(a=>({label:a.textContent,path:a.getAttribute('href'),width:a.getBoundingClientRect().width,height:a.getBoundingClientRect().height})));
+        if(JSON.stringify(navigation.map(x=>x.path))!==JSON.stringify(['/garage','/videos','/shop','/setups','/pit-crew']))throw Error('Single navigation destinations are incorrect');
+        if(navigation.some(x=>x.height<48||x.width<44))throw Error('Public navigation target is too small at '+width);
+        if(await publicPage.getByRole('tablist').count())throw Error('Duplicate public tab bar is still present');
+        if(process.env.VITE_AUTH_ACCESS_MODE==='staff-only'&&await publicPage.locator('a[href="/account"]').count())throw Error('Admin-only release advertised customer accounts');
+        const brand=await publicPage.locator('.channel-brand').boundingBox();if(!brand||brand.x<0||brand.x+brand.width>width)throw Error('Channel identity clips at '+width);
         // The form-detector route can also be served from the browser cache.
         // A 304 is a valid cached response, but Response.ok() is false for it.
         const formRoute = await publicPage.goto(`${publicBaseUrl}/__forms.html?qaViewport=${width}`);
         if (!formRoute?.ok() || await publicPage.locator('form[name="drop-waitlist"]').count()) throw Error('The paused Netlify Drop 01 detector is still published');
         await publicPage.goto(publicBaseUrl + '/');
-        await publicPage.getByRole('heading', {name: /Five sections/}).waitFor();
+        await publicPage.getByRole('heading', {name: /From our garage/}).waitFor();
         const visualAssets = await publicPage.evaluate(async () => {
           await document.fonts.ready;
           const visibleImages = [...document.images].filter(image => image.getClientRects().length > 0);
@@ -176,17 +164,17 @@ try {
         });
         if (visualAssets.brokenVisibleImages.length) throw Error(`Visible public images failed at ${width}px: ${visualAssets.brokenVisibleImages.join(', ')}`);
         viewportResults.push({width, identity: await publicPage.title(), layout, navigation, visualAssets});
-        const reviewWidth = [320,375,390,414,768,1024,1440].includes(width);
+        const reviewWidth = [320,360,375,390,414,768,1024,1280,1440,1920].includes(width);
         if (reviewWidth) {
           await capturePublic(publicPage, `${output}/${name}-public-${width}.png`);
-          await publicPage.getByRole('tab').filter({hasText:'Video Vault'}).click();
-          await publicPage.getByLabel('Find your next watch').fill('clutch');
-          await publicPage.getByText('1 film',{exact:true}).waitFor();
+          await goPublic(publicPage,'Videos');
+          await publicPage.getByRole('searchbox',{name:'Search videos'}).fill('clutch');
+          await publicPage.getByText('1 film / Episodes',{exact:true}).waitFor();
           await publicPage.getByRole('button',{name:'Clear search',exact:true}).click();
-          if(!await publicPage.getByLabel('Find your next watch').evaluate(element=>element===document.activeElement)) throw Error(`Clearing search lost keyboard focus at ${width}px`);
-          await publicPage.getByText('5 films',{exact:true}).waitFor();
+          if(!await publicPage.getByRole('searchbox',{name:'Search videos'}).evaluate(element=>element===document.activeElement)) throw Error(`Clearing search lost keyboard focus at ${width}px`);
+          await publicPage.getByText('4 films / Episodes',{exact:true}).waitFor();
           await capturePublic(publicPage, `${output}/${name}-vault-${width}.png`);
-          await publicPage.getByRole('tab').filter({hasText:'Garage Merch'}).click();
+          await goPublic(publicPage,'Merch');
           await publicPage.getByRole('button',{name:'Quick View E92 Coupe Line-Art Tee'}).waitFor();
           const cards=await publicPage.locator('.merch-card').evaluateAll(elements=>elements.map(card=>({height:card.getBoundingClientRect().height,priceTop:card.querySelector('.merch-preview-price').getBoundingClientRect().top,quickView:getComputedStyle(card.querySelector('.quick-view-label')).opacity,qualifierFont:Number.parseFloat(getComputedStyle(card.querySelector('.merch-preview-price span')).fontSize)})));
           if(cards.length!==3)throw Error('Expected 3 merch cards, found '+cards.length);
@@ -256,18 +244,18 @@ try {
             if([390,1440].includes(width))await capturePublic(publicPage,`${output}/${name}-${route}-${width}.png`);
           }
           await publicPage.goto(publicBaseUrl+'/');
-          await publicPage.getByRole('heading',{name:/Five sections/}).waitFor();
+          await publicPage.getByRole('heading',{name:/From our garage/}).waitFor();
         }
         if (width === 390) {
           await publicPage.emulateMedia({reducedMotion: 'reduce'});
-          await publicPage.getByRole('tab').filter({hasText: 'Video Vault'}).click();
+          await goPublic(publicPage,'Videos');
           await publicPage.getByRole('button', {name: /Play The N54 single-turbo/}).first().click();
           const frame = publicPage.locator('.video-player iframe');
           await frame.waitFor();
           if (new URL(await frame.getAttribute('src')).searchParams.get('autoplay') === '1') throw Error('Video autoplay ignored reduced-motion preference');
           await publicPage.getByText('Watch on YouTube', {exact: true}).waitFor();
           await publicPage.keyboard.press('Escape');
-          await publicPage.getByRole('tab').filter({hasText: 'Garage Merch'}).click();
+          await goPublic(publicPage,'Merch');
           await publicPage.getByText(/Orders aren’t open yet/).waitFor();
           await publicPage.getByRole('button', {name: 'Release updates',exact:true}).click();
           await publicPage.getByText(/signups are not open yet/i).waitFor();
@@ -281,7 +269,7 @@ try {
           await publicPage.keyboard.press('Escape');
           await publicPage.goto(`${publicBaseUrl}/setups`);
           await expect(publicPage.getByRole('heading',{name:'Choose your bike',exact:true,level:2})).toBeVisible();
-          await expect(publicPage.getByRole('tab',{name:'04 MX Bikes Setups'})).toHaveAttribute('aria-selected','true');
+          const setupMenu=publicPage.getByRole('button',{name:'Open navigation',exact:true});if(await setupMenu.isVisible())await setupMenu.click();await expect(publicPage.getByRole('link',{name:'Setups',exact:true})).toHaveAttribute('aria-current','page');if(await publicPage.getByRole('button',{name:'Close navigation',exact:true}).isVisible())await publicPage.getByRole('button',{name:'Close navigation',exact:true}).press('Escape');
           await publicPage.getByRole('button',{name:'Setup previews',exact:true}).click();
           await expect(publicPage.getByRole('heading',{name:'Setup finder',exact:true})).toBeVisible();
           await expect(publicPage.getByText('The first releases are on the way.',{exact:true})).toBeVisible();

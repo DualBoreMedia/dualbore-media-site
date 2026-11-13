@@ -20,12 +20,14 @@ export function checkWebsite({env = {}, files = {}} = {}) {
   const headers = files['dist/client/_headers'] || '';
   const robots = files['dist/client/robots.txt'] || '';
   const sitemap = files['dist/client/sitemap.xml'] || '';
+  const indexedPages = files['dist/client/sitemap-pages.xml'] || '';
+  const canonicalListed=sitemap.includes(`<loc>${origin}</loc>`)||(sitemap.includes(`<loc>${origin}sitemap-pages.xml</loc>`)&&sitemap.includes(`<loc>${origin}sitemap-videos.xml</loc>`)&&indexedPages.includes(`<loc>${origin}</loc>`));
   const redirects = files['dist/client/_redirects'] || '';
   for (const path of Object.keys(files)) {
     if (/^dist[\\/]client[\\/].+\.map$/i.test(path)) blockers.push(`Private source map is publicly packaged: ${path}.`);
   }
   if (!html.includes(`<link rel="canonical" href="${origin}"`) || !html.includes('<title>DualBore Media')) blockers.push('Canonical domain or page identity is missing.');
-  if (!robots.includes(`Sitemap: ${origin}sitemap.xml`) || !sitemap.includes(`<loc>${origin}</loc>`)) blockers.push('Robots and sitemap do not identify the canonical domain.');
+  if (!robots.includes(`Sitemap: ${origin}sitemap.xml`) || !canonicalListed) blockers.push('Robots and sitemap do not identify the canonical domain.');
   if (!/\/\*\s+\/index\.html\s+200/.test(redirects)) blockers.push('Public routes lack the SPA fallback.');
   for (const directive of ['Content-Security-Policy:', "script-src 'self'", "frame-ancestors 'none'", 'X-Content-Type-Options: nosniff', 'Strict-Transport-Security:']) {
     if (!headers.includes(directive)) blockers.push(`Built security headers missing: ${directive}`);
@@ -34,7 +36,7 @@ export function checkWebsite({env = {}, files = {}} = {}) {
 }
 
 export async function runWebsiteCheck({root = projectRoot, env = process.env} = {}) {
-  const entries = await Promise.all(requiredFiles.map(async name => {
+  const entries = await Promise.all([...requiredFiles,'dist/client/sitemap-pages.xml'].map(async name => {
     try { return [name, await readFile(resolve(root, name), 'utf8')]; }
     catch { return [name, '']; }
   }));

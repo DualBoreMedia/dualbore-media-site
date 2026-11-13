@@ -1,3 +1,4 @@
+import {goPublic,openPublicNavigation} from './public-navigation-fixture.js';
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {afterEach,beforeEach,expect,test,vi} from 'vitest';
@@ -20,34 +21,22 @@ test('late expired responses reuse a rotated session without starting another re
 });
 function key(element,key){element.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true,cancelable:true}));}
 
-test('public tabs wrap with keyboard, legacy hashes work and the skip link moves focus',async()=>{
- root.render(<App/>);const garage=page.getByRole('tab',{name:/Garage Builds/});
- await garage.click();key(document.activeElement,'ArrowLeft');
- await expect.element(page.getByRole('tab',{name:/Pit Crew/})).toHaveFocus();
- key(document.activeElement,'Home');await expect.element(garage).toHaveFocus();
- key(document.activeElement,'ArrowRight');await expect.element(page.getByRole('tab',{name:/Video Vault/})).toHaveFocus();
- await expect.element(page.getByRole('tab',{name:/Video Vault/})).toHaveAttribute('aria-selected','true');
- key(document.activeElement,'ArrowRight');key(document.activeElement,'ArrowRight');await expect.element(page.getByRole('tab',{name:'04 MX Bikes Setups',exact:true})).toHaveFocus();expect(location.pathname).toBe('/');await expect.element(page.getByRole('tab',{name:/Garage Merch/})).toHaveAttribute('aria-selected','true');
- key(document.activeElement,'End');await expect.element(page.getByRole('tab',{name:/Pit Crew/})).toHaveFocus();
- key(document.activeElement,'Enter');await expect.element(page.getByRole('tab',{name:/Pit Crew/})).toHaveFocus();
- history.replaceState(null,'','/#films');window.dispatchEvent(new HashChangeEvent('hashchange'));
- await expect.element(page.getByRole('tab',{name:/Video Vault/})).toHaveAttribute('aria-selected','true');
+test('public links use real routes, legacy hashes still resolve and skip navigation moves focus',async()=>{
+ root.render(<App/>);await goPublic('Garage');expect(location.pathname).toBe('/garage');await goPublic('Videos');expect(location.pathname).toBe('/videos');
+ await openPublicNavigation();await expect.element(page.getByRole('link',{name:'Videos',exact:true})).toHaveAttribute('aria-current','page');
+ history.replaceState(null,'','/#films');window.dispatchEvent(new HashChangeEvent('hashchange'));await expect.element(page.getByRole('button',{name:'Episodes',exact:true})).toBeVisible();
  const skip=document.querySelector('.skip-link');skip.focus();skip.click();expect(document.activeElement.id).toBe('content');
 });
 
-test('mobile drawer dismisses on Escape, navigation and brand action',async()=>{
- root.render(<App/>);const open=page.getByRole('button',{name:'Open navigation',exact:true});
- await open.click();key(document.activeElement,'Escape');await expect.element(open).toHaveFocus();
- await open.click();await page.getByRole('navigation',{name:'Mobile navigation'}).getByRole('button',{name:/Video Vault/}).click();
- await expect.element(open).toHaveAttribute('aria-expanded','false');await expect.element(page.getByRole('tab',{name:/Video Vault/})).toHaveFocus();
- await page.getByRole('button',{name:'DualBore Media home'}).click();await expect.element(page.getByRole('tab',{name:/Garage Builds/})).toHaveFocus();
- await page.getByRole('button',{name:'Explore the video vault'}).click();
- await page.getByRole('button',{name:'All',exact:true}).click();await expect.element(page.getByRole('button',{name:'Dismiss notification'})).toBeVisible();
- await page.getByRole('button',{name:'Dismiss notification'}).click();await expect.element(page.getByRole('button',{name:'Dismiss notification'})).not.toBeInTheDocument();
+test('mobile menu dismisses on Escape and real navigation; brand returns to the homepage',async()=>{
+ root.render(<App/>);await openPublicNavigation();const menu=host.querySelector('.channel-menu');
+ if(getComputedStyle(menu).display!=='none'){key(menu,'Escape');await expect.element(page.getByRole('button',{name:'Open navigation'})).toHaveFocus();}
+ await goPublic('Videos');expect(host.querySelector('.channel-menu').getAttribute('aria-expanded')).toBe('false');
+ await page.getByRole('link',{name:'DualBore Media home',exact:true}).click();await expect.element(page.getByRole('heading',{name:'From our garage. Out for a ride.'})).toBeVisible();expect(location.pathname).toBe('/');
 });
 
 test('build details switch to verified films and dialog Escape restores the original trigger',async()=>{
- root.render(<App/>);const build=page.getByRole('button',{name:'Explore Suzuki SV1000S platform details'});await build.click();
+ history.replaceState(null,'','/garage');root.render(<App/>);const build=page.getByRole('button',{name:'Explore Suzuki SV1000S platform details'});await build.click();
  await page.getByRole('button',{name:'Watch the POV ride'}).click();
  await expect.element(page.getByRole('dialog').getByRole('heading',{level:2})).toBeVisible();
  await expect.element(page.getByRole('dialog').getByTitle(/SV1000S/)).toHaveAttribute('src',expect.stringContaining('XqX31p88MuA'));
@@ -143,48 +132,29 @@ test('sign-out recovers one expired access token and reports a later provider fa
  await page.getByRole('button',{name:'Sign out'}).click();await expect.poll(()=>alert.mock.calls.length).toBe(1);expect(logouts).toBe(2);expect(refreshes).toBe(1);await expect.element(page.getByRole('heading',{name:'No orders found'})).toBeVisible();
 });
 
-test('channel avatar is the visible, accessible motorsport badge and all tab numbers have spoken spacing',async()=>{
- root.render(<App/>);
- const brand=page.getByRole('button',{name:'DualBore Media home'});
- await expect.element(brand).toBeVisible();
- const logo=brand.getByRole('img',{name:'DualBore Media Logo'});
- await expect.element(logo).toHaveAttribute('src','/assets/channel-logo.jpg');
- await expect.element(logo).toHaveAttribute('width','42');
- await expect.element(logo).toHaveAttribute('height','42');
- const logoElement=host.querySelector('.nav-brand__logo');
- expect(logoElement).not.toBeNull();
- const visual={radius:getComputedStyle(logoElement).borderRadius,border:getComputedStyle(logoElement).borderWidth,width:logoElement.getBoundingClientRect().width};
- expect(visual.radius).toBe('50%');expect(visual.border).toBe('2px');expect(visual.width).toBeGreaterThanOrEqual(41);
- for(const [number,label] of [['01','Garage Builds'],['02','Video Vault'],['03','Garage Merch'],['04','MX Bikes Setups'],['05','About / Pit Crew']]){
-  await expect.element(page.getByRole('tab',{name:`${number} ${label}`,exact:true})).toBeVisible();
-  const drawerButton=Array.from(host.querySelectorAll('#mobile-navigation button[aria-label]')).find(button=>button.getAttribute('aria-label')===`${number} ${label}`);
-  expect(drawerButton).toBeTruthy();
- }
- await page.getByRole('tab',{name:'02 Video Vault'}).click();
- await expect.element(page.getByRole('tab',{name:'02 Video Vault'})).toHaveAttribute('aria-selected','true');
- const selectedTab=host.querySelector('#tab-vault');
- const selected={color:getComputedStyle(selectedTab).borderBottomColor,glow:getComputedStyle(selectedTab,'::after').height};
- expect(selected.color).toBe('rgb(255, 42, 59)');
- expect(selected.glow).toBe('2px');
- await brand.click();
- await expect.element(page.getByRole('tab',{name:'01 Garage Builds'})).toHaveAttribute('aria-selected','true');
+test('channel badge stays visible and five ordinary navigation links have clear names',async()=>{
+ root.render(<App/>);const brand=page.getByRole('link',{name:'DualBore Media home'});await expect.element(brand).toBeVisible();
+ await expect.element(brand.getByRole('img',{name:'DualBore Media Logo'})).toHaveAttribute('src','/assets/channel-logo.jpg');
+ const logo=host.querySelector('.channel-brand img');expect(getComputedStyle(logo).borderRadius).toBe('50%');expect(logo.getBoundingClientRect().width).toBeGreaterThanOrEqual(41);
+ await openPublicNavigation();for(const label of ['Garage','Videos','Merch','Setups','Pit Crew'])await expect.element(page.getByRole('navigation',{name:'Primary navigation'}).getByRole('link',{name:label,exact:true})).toBeVisible();
+ await goPublic('Videos');expect(location.pathname).toBe('/videos');await brand.click();expect(location.pathname).toBe('/');
 });
 
 test('verified upload becomes hero and journal feature, while curated builds remain',async()=>{
- const video={id:'aB1cD2eF3gH',title:'Synthetic latest ride',image:'https://i.ytimg.com/vi/aB1cD2eF3gH/hqdefault.jpg',category:'V-Twins',label:'CHANNEL UPLOAD',duration:'0:30'};
+ const video={id:'aB1cD2eF3gH',title:'Synthetic latest ride',image:'https://i.ytimg.com/vi/aB1cD2eF3gH/hqdefault.jpg',category:'V-Twins',label:'CHANNEL UPLOAD',duration:'10:30'};
  vi.stubGlobal('fetch',vi.fn(withPublicCatalog(async()=>json({source:'youtube',items:[video]}))));
  root.render(<App/>);
- await vi.waitFor(()=>expect(host.querySelector('.hero-feature-caption strong')?.textContent).toBe('Synthetic latest ride'));
- expect(host.querySelector('.hero-feature img')?.getAttribute('src')).toBe(video.image);
- expect(host.querySelectorAll('.journal-card').length).toBe(5);
- expect(host.querySelector('.journal-card h3')?.textContent).toBe('Synthetic latest ride');
+ await vi.waitFor(()=>expect(host.querySelector('.home-feature h2')?.textContent).toBe('Synthetic latest ride'));
+ expect(host.querySelector('.home-feature img')?.getAttribute('src')).toBe(video.image);
+ expect(host.querySelectorAll('.home-sessions .film-card').length).toBe(3);
+ expect(host.querySelector('.home-sessions .film-card h3')?.textContent).not.toBe('Synthetic latest ride');
 });
 test('provider failure retains curated hero and makes no live-sync claim',async()=>{
  vi.stubGlobal('fetch',vi.fn(async()=>{throw Error('synthetic outage')}));
  root.render(<App/>);
- await expect.element(page.getByRole('button',{name:/Play Into the hills on the 1977 RD400/})).toBeVisible();
- expect(host.querySelector('.hero-feature-caption strong')?.textContent).toBe('Into the hills.');
- expect(host.querySelector('.hero-feature-caption small')?.textContent).toContain('Featured session');
+ await expect.element(page.getByRole('button',{name:/Play The N54 single-turbo build starts here/})).toBeVisible();
+ expect(host.querySelector('.home-feature h2')?.textContent).toBe('The N54 single-turbo build starts here');
+ expect(host.querySelector('.home-feature button>span')?.textContent).toContain('Featured episode');
 });
 
 test('admin overview places attention first and opens existing orders from bench lists',async()=>{
@@ -192,9 +162,9 @@ test('admin overview places attention first and opens existing orders from bench
  vi.stubGlobal('fetch',vi.fn(async url=>url==='/api/auth/session'?json({signedIn:true}):json({role:'admin',orders:[order],workLists:{making:[order],packing:[],carrierHandoff:[order]},variants:[],failures:[],audit:[],overview:{making:1}})));
  history.replaceState(null,'','/admin');root.render(<WorkosOperations admin/>);
  await expect.element(page.getByRole('heading',{name:'Needs attention'})).toBeVisible();
- const attention=host.querySelector('.ops-attention'),daily=host.querySelector('.ops-daily');
+ const attention=host.querySelector('.ops-attention'),daily=host.querySelector('[aria-label="Daily work queue"]');
  expect(Boolean(attention.compareDocumentPosition(daily)&Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
- const list=host.querySelector('.ops-bench');expect(list.textContent).toContain('Carrier handoff due or overdue');
+ const list=host.querySelector('.ops-queue');expect(list.textContent).toContain('DBM-BENCH');
  const opener=list.querySelector('button');opener.click();
  await expect.element(page.getByRole('heading',{name:'DBM-BENCH'})).toBeVisible();
  await page.getByRole('button',{name:'Close',exact:true}).click();

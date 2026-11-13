@@ -23,13 +23,19 @@ function schema(input,required,optional=[]){if(!input||typeof input!=='object'||
 function checkVersion(record,expected){if(!Number.isSafeInteger(expected)||expected!==version(record))fail('stale_record','This record changed. Reload before saving.',409);}
 function initialFulfillment(order){return order.fulfillmentStatus&&Object.hasOwn(fulfillmentTransitions,order.fulfillmentStatus)?order.fulfillmentStatus:order.fulfilledAt&&order.shippedAt?'shipped':'received';}
 function audit(state,principal,action,target,metadata,now){const id=randomUUID();state.audit[id]={id,actor:principal.userId,action,target,createdAt:now,metadata};return id;}
+const normalizedTracking=value=>String(value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+function uniqueTracking(state,value,exceptId){
+ const candidate=normalizedTracking(value);
+ if(!candidate||Object.values(state.shipments).some(p=>p.id!==exceptId&&normalizedTracking(p.trackingNumber)===candidate)||Object.values(state.orders).some(o=>o.trackingNumber&&normalizedTracking(o.trackingNumber)===candidate&&!Object.values(state.shipments).some(p=>p.id===exceptId&&p.orderId===o.id)))fail('duplicate_tracking','That tracking number is already assigned to a package. Review the existing shipment before continuing.',409);
+}
 // Separate from the paginated/search-filtered order table. Keep these projections
 // small: opening a row fetches its authorized detail through the existing route.
 function adminWorkLists(orders,now){
- const lists={making:[],packing:[],carrierHandoff:[]};
+ const lists={received:[],making:[],packing:[],carrierHandoff:[]};
  for(const order of orders.filter(fulfillable).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.orderNumber.localeCompare(b.orderNumber))){
   const fulfillmentStatus=initialFulfillment(order),review=shippingReview(order,now);
-  const row={orderNumber:order.orderNumber,createdAt:order.createdAt,fulfillmentStatus,shippingReview:review};
+  const row={orderNumber:order.orderNumber,createdAt:order.createdAt,fulfillmentStatus,shippingReview:review,items:(order.items||[]).map(({name,size,quantity})=>({name,size,quantity})),ageDays:Math.max(0,Math.floor((now-new Date(order.paidAt||order.createdAt))/86400000))};
+  if(fulfillmentStatus==='received')lists.received.push(row);
   if(fulfillmentStatus==='making')lists.making.push(row);
   if(fulfillmentStatus==='packing')lists.packing.push(row);
   if(['due_today','cancel_refund_due'].includes(review.status))lists.carrierHandoff.push(row);
@@ -55,7 +61,7 @@ function projection(state,order,admin,at=new Date()){
  if(!shipments.length&&order.shippedAt&&order.trackingUrl)shipments.push({packageNumber:'Earlier shipment',carrier:order.carrier,status:'shipped',trackingNumber:order.trackingNumber,trackingUrl:safeTrackingUrl(order.trackingUrl),shippedAt:order.shippedAt,items:order.items.map(({variantId,quantity})=>({variantId,quantity}))});
  const result={orderNumber:order.orderNumber,status:order.status,paymentStatus:order.refundStatus==='partial'?'partially_refunded':order.status==='fulfilled'?'paid':order.status,fulfillmentStatus:initialFulfillment(order),version:version(order),createdAt:order.createdAt,paidAt:order.paidAt,totalCents:order.totalCents,subtotalCents:order.subtotalCents,shippingCents:order.shippingCents,taxCents:order.taxCents,refundedCents:order.refundedCents||0,items:cleanItems(order.items),shipments,timeline};
  result.shippingReview=shippingReview(order,at);
- if(admin)Object.assign(result,{shippingDelay:order.shipmentDelay||null,shippingTimeZone:order.shippingPromise?.calendar?.timeZone,allowedTransitions:initialFulfillment(order)==='on_hold'?[order.holdPreviousStatus,'cancelled'].filter(Boolean):fulfillmentTransitions[initialFulfillment(order)]||[],customerEmail:order.customerEmail,shippingName:order.shippingName,shippingAddress:order.shippingAddress,notes:history.filter(a=>a.action==='note').map(a=>({text:a.metadata.note,actor:a.actor,createdAt:a.createdAt})),audit:history,sessionId:order.sessionId,paymentIntentId:order.paymentIntentId,emailEvents:Object.values(state.emails).filter(e=>e.orderId===order.id).map(e=>({eventId:e.id,emailType:e.emailType,status:e.status,attemptCount:e.attemptCount,lastError:e.lastError}))});
+ if(admin)Object.assign(result,{...(['paid','fulfilled'].includes(order.status)&&!['shipped','delivered','cancelled'].includes(result.fulfillmentStatus)?{paidAgeDays:Math.max(0,Math.floor((at-new Date(order.paidAt||order.createdAt))/86400000))}:{}),shippingDelay:order.shipmentDelay||null,shippingTimeZone:order.shippingPromise?.calendar?.timeZone,allowedTransitions:initialFulfillment(order)==='on_hold'?[order.holdPreviousStatus,'cancelled'].filter(Boolean):fulfillmentTransitions[initialFulfillment(order)]||[],customerEmail:order.customerEmail,shippingName:order.shippingName,shippingAddress:order.shippingAddress,notes:history.filter(a=>a.action==='note').map(a=>({text:a.metadata.note,actor:a.actor,createdAt:a.createdAt})),audit:history,sessionId:order.sessionId,paymentIntentId:order.paymentIntentId,emailEvents:Object.values(state.emails).filter(e=>e.orderId===order.id).map(e=>({eventId:e.id,emailType:e.emailType,status:e.status,attemptCount:e.attemptCount,lastError:e.lastError}))});
  if(admin&&(['awaiting_consent','refund_required'].includes(order.shipmentDelay?.status)||result.shippingReview.status==='cancel_refund_due'))result.allowedTransitions=[];
  if(admin&&order.shipmentDelay?.status==='consented')result.allowedTransitions=result.allowedTransitions.filter(status=>status!=='cancelled');
  return result;
@@ -209,7 +215,7 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
     if(input.weightOz!==undefined&&(!Number.isFinite(input.weightOz)||input.weightOz<=0||input.weightOz>10000))fail('invalid_weight','Use a positive package weight.');
     if(input.dimensions!==undefined&&(!input.dimensions||Object.keys(input.dimensions).sort().join()!=='height,length,width'||!Object.values(input.dimensions).every(n=>Number.isFinite(n)&&n>0&&n<=200)))fail('invalid_dimensions','Use positive length, width and height in inches.');
     if(input.note!==undefined&&!text(input.note))fail('invalid_note','Enter a valid note.');
-    const id=randomUUID(),shipment={id,packageNumber:'PKG-'+randomUUID().slice(0,8).toUpperCase(),orderId:o.id,status:'draft',version:0,carrier:input.carrier,service:input.service,trackingNumber:input.trackingNumber,trackingUrl:url,items:input.items,createdAt:time,createdByUserId:principal.userId,trackingEnteredByUserId:principal.userId,...(input.weightOz?{weightOz:input.weightOz}:{}),...(input.dimensions?{dimensions:input.dimensions}:{})};s.shipments[id]=shipment;
+    uniqueTracking(s,input.trackingNumber);const id=randomUUID(),shipment={id,packageNumber:'PKG-'+randomUUID().slice(0,8).toUpperCase(),orderId:o.id,status:'draft',version:0,carrier:input.carrier,service:input.service,trackingNumber:input.trackingNumber,trackingUrl:url,items:input.items,createdAt:time,createdByUserId:principal.userId,trackingEnteredByUserId:principal.userId,...(input.weightOz?{weightOz:input.weightOz}:{}),...(input.dimensions?{dimensions:input.dimensions}:{})};s.shipments[id]=shipment;
     for(const item of input.items){const iid=randomUUID();s.shipmentItems[iid]={id:iid,shipmentId:id,...item};}
     audit(s,principal,'shipment-created',o.orderNumber,{packageNumber:shipment.packageNumber,note:input.note||''},time);return {saved:true,shipmentId:id};
    }
@@ -223,7 +229,7 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
      for(const [id,item] of Object.entries(s.shipmentItems))if(item.shipmentId===p.id)delete s.shipmentItems[id];
      for(const item of input.items){const id=randomUUID();s.shipmentItems[id]={id,shipmentId:p.id,...item};}p.items=input.items;
     }
-    Object.assign(p,{carrier:input.carrier,service:input.service,trackingNumber:input.trackingNumber,trackingUrl:url,version:version(p)+1,updatedAt:time,trackingEnteredByUserId:principal.userId});
+    uniqueTracking(s,input.trackingNumber,p.id);Object.assign(p,{carrier:input.carrier,service:input.service,trackingNumber:input.trackingNumber,trackingUrl:url,version:version(p)+1,updatedAt:time,trackingEnteredByUserId:principal.userId});
     audit(s,principal,'shipment-updated',o.orderNumber,{packageNumber:p.packageNumber,version:p.version,itemsChanged:input.items!==undefined},time);return {saved:true};
    }
    if(input.action==='shipment-status'){
@@ -232,7 +238,7 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
     if(input.status==='shipped'&&initialFulfillment(o)!=='ready_to_ship'&&initialFulfillment(o)!=='shipped')fail('not_ready','Mark the order ready to ship first.',409);
     if(input.status==='shipped')assertCarrierHandoff(o,input,now(),env);
     if(input.status==='delivered'&&input.confirmed!==true)fail('confirmation_required','Confirm that delivery was actually recorded.');
-    const previous=p.status;p.status=input.status;p.version=version(p)+1;p[`${input.status}At`]=time;if(input.status==='packed')p.packedByUserId=principal.userId;if(input.status==='shipped'){p.carrierAcceptedAt=time;p.carrierAcceptedByUserId=principal.userId;}
+    const previous=p.status;p.status=input.status;p.version=version(p)+1;p[`${input.status}At`]=time;if(input.status==='packed')p.packedByUserId=principal.userId;if(input.status==='shipped'){uniqueTracking(s,p.trackingNumber,p.id);p.carrierAcceptedAt=time;p.carrierAcceptedByUserId=principal.userId;}
     const source=roleOf(principal)==='admin'?'manual-admin':'manual-employee';const tid=randomUUID();s.trackingEvents[tid]={id:tid,shipmentId:p.id,status:p.status,source,actorUserId:principal.userId,createdAt:time};
     audit(s,principal,'shipment-status',o.orderNumber,{previous,next:p.status,packageNumber:p.packageNumber,source},time);
     const packages=Object.values(s.shipments).filter(x=>x.orderId===o.id);
@@ -245,7 +251,12 @@ export function createOperationsService({repository,stripe,env={},now=()=>new Da
    fail('invalid_action','Select a supported action.');
   });
   if(result.orderId)await send({repository,orderId:result.orderId,env});
-  const {orderId,...publicResult}=result;return publicResult;
+  const {orderId,...publicResult}=result;
+  if(['transition','shipment','shipment-update','shipment-status','note'].includes(input.action)){
+   const update=await repository.transaction(s=>{const o=orderId?s.orders[orderId]:input.orderNumber?Object.values(s.orders).find(o=>o.orderNumber===input.orderNumber):s.orders[s.shipments[input.shipmentId]?.orderId];return o?{order:roleOf(principal)==='admin'?projection(s,o,true,now()):employeeProjection(s,o),...(roleOf(principal)==='admin'?{workLists:adminWorkLists(Object.values(s.orders),now())}:{})}:{};});
+   return {...publicResult,...update};
+  }
+  return publicResult;
  }
  async function refund(principal,input){
   schema(input,['orderNumber','amountCents','requestKey','confirmed']);

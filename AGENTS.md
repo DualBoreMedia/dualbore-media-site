@@ -20,6 +20,16 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Channel browsing and efficient operations, November 13, 2026
+
+- The owner replaces the duplicate numbered tab strip with one public row: Garage, Videos, Merch, Setups and Pit Crew. Each has a real path. Home leads with the newest long episode, then the four builds, separate short clips and compact merch/setup links. Keep the authentic black/red/Teko identity, 16px body copy, real assets and no public hatch/glow treatment. Admin retains its tool styling.
+- Owner confirmed every video under three minutes belongs in Shorts, even without a hashtag. Episodes are the default. Provide newest/oldest/longest sorting and one format/build-aware search. Shelves use exact N54, SV1000S, RD400 and CRF110 identities; MX Bikes and unmatched videos belong in Everything else. Public browsing never calls Google.
+- Overview prioritizes bounded financial/deadline attention and one full deadline-sorted work queue, independent of paginated orders. Show item/size/quantity, deadline and calendar age. Keep saved order rows in place, preserve search and prevent stale reads from replacing saves. Guide printing/packing/carrier handoff; completion may open the next order but never performs its action.
+- Use one Catalog with a merchandise/setup type filter. Routine drafts reuse the server-verified MFA session. Publishing, archiving, file uploads, refunds, inventory/access changes retain their existing sensitive-action verification and authorization.
+- Owner approved only INSERT/UPDATE on public_video_snapshots, INSERT on public_video_sync_runs and USAGE on its ID sequence for dbm_app_runtime. No broad personal-token writes, schema, credentials or customer-data permissions are included. Provider execution and real hosted sync must be separately evidenced.
+- Keep purchases, refunds, all sending, collection and digital delivery closed. Source-only development commits contain [skip netlify]. Do not merge/deploy until the exact tested candidate receives final deployment approval.
+
+
 ### Efficient Admin sessions, November 12, 2026
 
 - Routine private merchandise/MX draft saves use the current server-verified Admin session with completed MFA, without requiring a new ten-minute step-up. Published snapshots, stock and private file versions remain unchanged by draft saves.

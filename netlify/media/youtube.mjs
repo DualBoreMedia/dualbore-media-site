@@ -1,4 +1,5 @@
 import {films} from '../../src/content.js';
+import {videoBuild} from '../../src/video-discovery.js';
 
 const videoId=/^[A-Za-z0-9_-]{11}$/;
 const byId=new Map(films.map(film=>[film.id,film]));
@@ -17,11 +18,7 @@ export function formatYouTubeDuration(value){
 export function categoryForUpload(video){
  const old=byId.get(video.id);if(old)return old.category;
  const title=video.title.toLowerCase();
- if(/\b(n54|335i|bmw|turbo)\b/.test(title))return 'Turbo Cars';
- if(/\b(sv1000s?|suzuki|v.?twin)\b/.test(title))return 'V-Twins';
- if(/\b(rd400|two.?stroke|2.?stroke)\b/.test(title))return 'Two-Strokes';
- if(/\b(crf110|pit.?bike)\b/.test(title))return 'Pit Bikes';
- return 'Channel Uploads';
+ return {n54:'N54',sv1000:'SV1000S',rd400:'RD400',crf110:'CRF110',other:'Everything else'}[videoBuild(video)];
 }
 
 async function youtubeJson(resource,params,{apiKey,fetcher}){

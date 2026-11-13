@@ -9,7 +9,7 @@ export async function runMadeToOrderBrowserChecks({page,baseUrl,evidenceDirector
   await page.route('**/api/products',route=>route.fulfill({json:{products:[],hiddenProductIds:[],setupPreviews:[]}}));
   await page.route('**/api/commerce/catalog',route=>route.fulfill({json:{enabled:true,mode:'production',shippingCents:995,variants:[...variants,stocked]}}));
   const results=[];
-  for(const width of [320,375,390,414,768,1024,1440]) {
+  for(const width of [320,360,375,390,414,768,1024,1280,1440,1920]) {
     await page.setViewportSize({width,height:900});await page.goto(baseUrl+'/shop');
     await page.getByRole('heading',{name:'Wear the garage.',exact:true}).waitFor();
     assert(page.url()===baseUrl+'/shop','Wrong shop URL');

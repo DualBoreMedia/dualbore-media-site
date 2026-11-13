@@ -1,22 +1,16 @@
 import {useEffect,useMemo,useState} from 'react';
 import {channel,films,projects} from './content.js';
 import {PrimaryNavigation} from './PrimaryNavigation.jsx';
+import {videoBuild} from './video-discovery.js';
 import {resolvePublicVideo} from './public-video-route.js';
 
-const patterns={
- n54:/\b(n54|335i|bmw)\b/i,
- sv1000:/\b(sv1000s?|suzuki)\b/i,
- rd400:/\b(rd400|yamaha rd)\b/i,
- crf110:/\b(crf110|pit.?bike)\b/i
-};
 const videoId=/^[A-Za-z0-9_-]{11}$/;
 const youtube=id=>'https://www.youtube.com/watch?v='+id;
 const filmHref=film=>'/videos/'+film.id+'/';
 
 export function episodesForBuild(project,episodes){
  const featured=new Set([project.video,project.relatedVideo].filter(Boolean));
- const pattern=patterns[project.id];
- const matches=episodes.filter(film=>featured.has(film.id)||pattern?.test(film.title));
+ const matches=episodes.filter(film=>featured.has(film.id)||videoBuild(film)===project.id);
  return [...matches].sort((a,b)=>{
   if(featured.has(a.id)&&!featured.has(b.id))return -1;
   if(!featured.has(a.id)&&featured.has(b.id))return 1;
@@ -68,7 +62,7 @@ export function PublicDetail(){
  const title=project?project.name+' | DualBore Media Builds':video?video.title+' | DualBore Media':missing?'Page unavailable | DualBore Media':'Loading video | DualBore Media';
  const description=project?project.description:video?'Watch '+video.title+' on DualBore Media.':'Explore authentic DualBore Media build and video episodes.';
  usePageMetadata(title,description,canonical,missing);
- return <div className="detail-shell"><a className="skip-link" href="#detail-main">Skip to content</a><Header/><PrimaryNavigation active={kind==='builds'?'garage':'vault'}/><main id="detail-main" className="detail-main" tabIndex="-1">
+ return <div className="detail-shell"><a className="skip-link" href="#detail-main">Skip to content</a><PrimaryNavigation active={kind==='builds'?'garage':'vault'}/><main id="detail-main" className="detail-main" tabIndex="-1">
   {project?<>
     <Intro title={project.name} description={project.description} category={project.category}/>
     <div className="detail-hero"><img src={project.image} alt={project.name+' channel project'} width="960" height="720"/><div className="detail-status"><h2>Inside the build</h2><p>{project.tag}</p><dl>{project.specs.map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl><p className="detail-muted">Follow the work as it happens in the build series.</p><a href={channel.url} target="_blank" rel="noopener noreferrer">Follow the next upload on YouTube</a></div></div>

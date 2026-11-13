@@ -50,6 +50,7 @@ export const policyPages={
 };
 export const readPage=()=>{
   const path=window.location.pathname.replace(/\/$/,'');
+  if(['/garage','/videos','/pit-crew','/shop'].includes(path))return null;
   if(Object.hasOwn(policyPages,path.slice(1)))return path.slice(1);
   if(/^\/order\/(success|pending|cancel|test-checkout)$/.test(path))return path.slice(1);
   return path?'not-found':null;

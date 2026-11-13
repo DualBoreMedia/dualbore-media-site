@@ -121,3 +121,6 @@
  .ops-staff-heading h1{font-size:36px}
 }
 @media(max-width:360px){.ops-main{padding-inline:12px}.ops-rail{padding-inline:12px}.ops-daily ol{grid-template-columns:1fr}.ops-pagination span{order:3;flex-basis:100%}.ops-pagination>button{flex:1}}
+
+.ops-queue{list-style:none;margin:16px 0;padding:0}.ops-queue li+li{border-top:1px solid #343a44}.ops-queue button{width:100%;display:grid;grid-template-columns:minmax(100px,1fr) minmax(130px,1fr) minmax(200px,2fr);text-align:left;gap:10px;padding:16px;background:transparent;color:inherit;min-height:48px}.ops-queue button>span:last-child{grid-column:1/-1;color:#bec6d1}
+@media(max-width:760px){.ops-queue button{grid-template-columns:1fr}.ops-queue button>span:last-child{grid-column:auto}}

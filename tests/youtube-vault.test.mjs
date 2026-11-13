@@ -26,15 +26,15 @@ test('YouTube durations and project classification are bounded and specific',()=
  assert.equal(formatYouTubeDuration('PT1H4M9S'),'1:04:09');
  assert.equal(formatYouTubeDuration('PT51S'),'0:51');
  assert.equal(formatYouTubeDuration('untrusted'),'Duration unavailable');
- assert.equal(categoryForUpload({id,title:'New N54 update'}),'Turbo Cars');
- assert.equal(categoryForUpload({id,title:'Updates from our channel'}),'Channel Uploads');
+ assert.equal(categoryForUpload({id,title:'New N54 update'}),'N54');
+ assert.equal(categoryForUpload({id,title:'Updates from our channel'}),'Everything else');
 });
 test('YouTube public upload feed preserves provider ordering, safe IDs and actual duration',async()=>{
  const {fetcher,calls}=fixtureFetcher();
  const result=await loadYouTubeVault({apiKey:'synthetic-key',fetcher,now:()=>new Date('2026-11-01T00:00:00Z')});
  assert.equal(result.source,'youtube');assert.equal(result.updatedAt,'2026-11-01T00:00:00.000Z');
  assert.deepEqual(result.items.map(x=>x.id),[id]);assert.equal(result.items[0].title,'New N54 Test Episode');assert.equal(result.items[0].duration,'1:04:09');
- assert.equal(result.items[0].category,'Turbo Cars');assert.equal(result.items[0].image,'https://i.ytimg.com/vi/'+id+'/hqdefault.jpg');
+ assert.equal(result.items[0].category,'N54');assert.equal(result.items[0].image,'https://i.ytimg.com/vi/'+id+'/hqdefault.jpg');
  assert.equal(calls.length,3);assert.equal(calls[0].searchParams.get('forHandle'),'DualBoreMedia');
 });
 test('provider failure, absent key and mismatched channel never erase curated content',async()=>{

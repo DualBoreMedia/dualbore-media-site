@@ -5,6 +5,7 @@ import "./styles.css";
 import "./product-polish.css";
 import "./public-detail.css";
 import "./ui-polish.css";
+import "./channel-public.css";
 import {ErrorBoundary} from './observability/ErrorBoundary.jsx';
 import {configureBrowserMonitoring,installBrowserErrorHandlers} from './observability/client.js';
 const ManagedOperations=lazy(()=>import('./operations/ManagedOperations.jsx'));

@@ -13,6 +13,9 @@ export const detailPages=[
 
 // Content-first, non-selling pages need their own canonical and social previews.
 export const sectionPages=[
+ {path:'garage/',title:'Garage Builds | DualBore Media',description:'Explore the N54, SV1000S, RD400 and CRF110 garage projects.',image:'/assets/rd400.jpg'},
+ {path:'videos/',title:'Videos | DualBore Media',description:'Browse DualBore Media episodes and short clips by build, search and running time.',image:'/assets/rd400.jpg'},
+ {path:'pit-crew/',title:'Pit Crew | DualBore Media',description:'Meet the two brothers behind the DualBore Media garage and channel.',image:'/assets/channel-logo.jpg'},
  {path:'shop/',title:'Garage Merch Preview | DualBore Media',description:'Explore original DualBore Media apparel designs. Drop 01 is coming soon; orders are not open.',image:'/assets/IMG_5076-768.jpg'},
  {path:'setups/',title:'MX Bikes Setups | DualBore Media',description:'Browse MX Bikes motorcycles and planned motocross, supercross and track-specific setup previews. Purchases and downloads are not open.',image:'/assets/channel-logo.jpg'}
 ];
@@ -37,7 +40,8 @@ export async function prerenderDetails({directory=resolve(root,'dist/client')}={
  const original=await readFile(resolve(directory,'index.html'),'utf8');
  for(const page of publicPages){const target=resolve(directory,page.path,'index.html');await mkdir(dirname(target),{recursive:true});await writeFile(target,renderDetailHtml(original,page),'utf8');}
  const sitemap='<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+[origin,...publicPages.map(page=>origin+page.path)].map(url=>'  <url><loc>'+escapeHtml(url)+'</loc></url>').join('\n')+'\n</urlset>\n';
- await writeFile(resolve(directory,'sitemap.xml'),sitemap,'utf8');
+ await writeFile(resolve(directory,'sitemap-pages.xml'),sitemap,'utf8');
+ await writeFile(resolve(directory,'sitemap.xml'),'<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><sitemap><loc>https://dualboremedia.com/sitemap-pages.xml</loc></sitemap><sitemap><loc>https://dualboremedia.com/sitemap-videos.xml</loc></sitemap></sitemapindex>','utf8');
  return publicPages.length;
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))console.log('Generated '+await prerenderDetails()+' public build/video pages.');

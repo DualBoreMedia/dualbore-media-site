@@ -1,3 +1,4 @@
+import {goPublic,openPublicNavigation} from './public-navigation-fixture.js';
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {afterEach,beforeEach,expect,test,vi} from 'vitest';
@@ -15,8 +16,8 @@ async function boot(path){
  dispose=first?await module.applicationReady:await module.start(host);first=false;
 }
 test('real application bootstrap renders the public garage and disposes its listeners',async()=>{
- await boot('/');await expect.element(page.getByRole('heading',{name:/Five sections/})).toBeVisible();
- await page.getByRole('tab',{name:/Video Vault/}).click();await expect.element(page.getByRole('button',{name:'Turbo Cars'})).toBeVisible();
+ await boot('/');await expect.element(page.getByRole('heading',{name:/From our garage/})).toBeVisible();
+ await goPublic('Videos');await expect.element(page.getByRole('button',{name:'Episodes',exact:true})).toBeVisible();
 });
 test('real lazy store entry keeps both sales and signup paused',async()=>{
  await boot('/shop');await expect.element(page.getByRole('heading',{name:'Drop 01 is coming soon.'})).toBeVisible();
@@ -26,7 +27,7 @@ test('real lazy store entry keeps both sales and signup paused',async()=>{
 
 test('staff-only release hides customer account entry while keeping private staff sign-in',async()=>{
  vi.stubEnv('VITE_AUTH_ACCESS_MODE','staff-only');
- await boot('/');await expect.element(page.getByRole('heading',{name:/Five sections/})).toBeVisible();
+ await boot('/');await expect.element(page.getByRole('heading',{name:/From our garage/})).toBeVisible();
  await expect.element(page.getByRole('link',{name:'My Garage',exact:true})).not.toBeInTheDocument();dispose();dispose=undefined;
  history.replaceState(null,'','/account');dispose=await module.start(host);
  await expect.element(page.getByRole('heading',{name:'Customer accounts are not open yet.'})).toBeVisible();
