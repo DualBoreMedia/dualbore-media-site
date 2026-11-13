@@ -42,8 +42,9 @@ export default function OperationsApp({admin=false,auth={}}){
    if(result.result?.reason!=='updated'||result.result?.recorded===false){setError('Video refresh was not fully saved. The previous verified feed remains available. Review the sync history before trying again.');return false;}
    setNotice(result.result.count+' public videos refreshed.');return true;
   }
-  if(result.order){setSelectedOrder(result.order);setData(previous=>({...updateOrderPage(previous,result.order,queryRef.current),...(result.workLists?{workLists:result.workLists}:{})}));setLastChecked(new Date());
+  if(result.order){setSelectedOrder(result.order);setData(previous=>({...updateOrderPage(previous,result.order,queryRef.current),...(result.workLists?{workLists:result.workLists}:{}),...(Array.isArray(result.failures)?{failures:result.failures}:{})}));setLastChecked(new Date());
    if(payload.action==='shipment-status'&&payload.status==='shipped'&&previousStatus!=='shipped'&&result.order.fulfillmentStatus==='shipped'&&selectedRef.current===result.order.orderNumber){const next=[...new Map(Object.values(result.workLists||{}).flat().map(o=>[o.orderNumber,o])).values()].filter(o=>o.orderNumber!==result.order.orderNumber).sort((a,b)=>(a.shippingReview?.dueDate||a.createdAt).localeCompare(b.shippingReview?.dueDate||b.createdAt))[0];setSelected(next?.orderNumber||null);}
+   if(admin&&(!result.workLists||!Array.isArray(result.failures)))await load();
   }else await load();
   setNotice(message);return true;
  }catch(e){setError(e.message);return false;}finally{setBusy(false);}};
