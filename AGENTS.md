@@ -20,6 +20,11 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 
 ## Durable project decisions
 
+### Efficient Admin sessions, November 12, 2026
+
+- Routine private merchandise/MX draft saves use the current server-verified Admin session with completed MFA, without requiring a new ten-minute step-up. Published snapshots, stock and private file versions remain unchanged by draft saves.
+- Publishing, hiding, archiving, imports, private uploads, staff/access changes and other existing sensitive actions retain fresh MFA. Keep server-side membership/revocation checks, secure cookies and bounded token refresh; do not extend sessions indefinitely or enable commerce.
+
 ### Two-stage non-selling verification release, November 10, 2026
 
 - The owner approved separating pre-deployment provider/database/security checks from the hosted Admin, session, persistence and monitoring checks that require the deployed build.

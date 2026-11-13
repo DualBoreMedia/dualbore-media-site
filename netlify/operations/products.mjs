@@ -59,7 +59,10 @@ export function publicSetupPreviews(state){return Object.values(state.products||
 export function createProductManager({repository,now=()=>new Date()}){
  const atTime=()=>now().toISOString();
  return {async mutate(principal,input){
-  requireAdmin(principal);requireFreshMfa(principal);
+  requireAdmin(principal);
+  // Saving edits changes only the private draft, never the published snapshot,
+  // inventory, attached file or delivery. Keep step-up for all other actions.
+  if(input?.action!=='product-save')requireFreshMfa(principal);
   if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!['action','productId','expectedVersion','product','priceApproved'].includes(k))||!['product-save','product-publish','product-unpublish','product-archive','product-import','product-import-setups','product-preview-publish','product-preview-unpublish'].includes(input.action))fail('Choose a product action.');
   if(typeof principal.userId!=='string'||!principal.userId)fail('Sign in again.','unauthorized',401);
   return repository.transaction(s=>{

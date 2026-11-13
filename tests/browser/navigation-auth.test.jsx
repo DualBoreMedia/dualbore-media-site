@@ -12,6 +12,12 @@ let root,host;
 beforeEach(()=>{vi.stubGlobal('fetch',withPublicCatalog());host=document.createElement('div');document.body.append(host);root=createRoot(host);history.replaceState(null,'','/');});
 afterEach(()=>{root.unmount();host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();history.replaceState(null,'','/');});
 const json=(body,status=200)=>Response.json(body,{status});
+test('late expired responses reuse a rotated session without starting another refresh',async()=>{
+ let releaseSlow,refreshes=0;const counts={};const slow=new Promise(resolve=>{releaseSlow=resolve;});
+ const fetcher=vi.fn(async url=>{if(url==='/api/auth/refresh'){refreshes++;return json({ok:true});}counts[url]=(counts[url]||0)+1;if(counts[url]===1){if(url==='/slow')await slow;return json({},401);}return json({ok:true});});
+ const first=workosSessionFetch('/fast',{},fetcher),second=workosSessionFetch('/slow',{},fetcher);
+ expect((await first).status).toBe(200);releaseSlow();expect((await second).status).toBe(200);expect(refreshes).toBe(1);
+});
 function key(element,key){element.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true,cancelable:true}));}
 
 test('public tabs wrap with keyboard, legacy hashes work and the skip link moves focus',async()=>{
