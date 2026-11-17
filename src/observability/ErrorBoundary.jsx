@@ -5,7 +5,10 @@ export class ErrorBoundary extends React.Component {
  state={failed:false,reference:null};
  static getDerivedStateFromError(){return {failed:true};}
  componentDidCatch(error){
-  const reference=crypto.randomUUID();
+  // A diagnostic reference is optional. Older browsers or restricted contexts
+  // must still render recovery and report the original exception.
+  let reference=null;
+  try{reference=globalThis.crypto?.randomUUID?.()||null;}catch{}
   this.setState({reference});
   reportBrowserError(error,{reference});
  }

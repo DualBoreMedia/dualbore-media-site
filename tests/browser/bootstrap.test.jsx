@@ -4,6 +4,7 @@ import {createRoot} from 'react-dom/client';
 import {afterEach,beforeEach,expect,test,vi} from 'vitest';
 import {page} from 'vitest/browser';
 import {ErrorBoundary} from '../../src/observability/ErrorBoundary.jsx';
+import {configureBrowserMonitoring} from '../../src/observability/client.js';
 
 let host,dispose,module,first=true;
 const response=(body,status=200)=>Response.json(body,{status});
@@ -63,4 +64,27 @@ test('render exception produces a useful boundary with a reference and preserves
  await expect.element(page.getByRole('button',{name:'Reload the garage'})).toBeVisible();
  await expect.element(page.getByRole('link',{name:'Return to DualBore Media'})).toHaveAttribute('href','/');
  expect(localStorage.getItem('dbm-store-cart-v1')).toBe('saved-cart-fixture');expect(errors).toHaveBeenCalled();
+});
+
+test.each([
+ ['missing crypto',undefined],
+ ['missing randomUUID',{}],
+ ['throwing randomUUID',{randomUUID(){throw new TypeError('UUID unavailable');}}],
+])('render recovery still reports the original error with %s',async(_name,cryptoValue)=>{
+ const captured=[],uncaught=[];
+ configureBrowserMonitoring({init(){},withScope(fn){fn({setTags(){}});},captureException(error){captured.push(error);}},{enabled:true,dsn:'test-only'});
+ vi.stubGlobal('crypto',cryptoValue);
+ vi.spyOn(console,'error').mockImplementation(()=>{});
+ localStorage.setItem('dbm-store-cart-v1','preserved-cart-fixture');
+ const original=new Error('DBM_SYNTHETIC_ORIGINAL_RENDER_EXCEPTION');
+ function Broken(){throw original;}
+ const root=createRoot(host,{onUncaughtError(error){uncaught.push(error);}});dispose=()=>root.unmount();
+ root.render(<ErrorBoundary><Broken/></ErrorBoundary>);
+ await expect.element(page.getByRole('heading',{name:'The garage hit a snag'})).toBeVisible();
+ await expect.element(page.getByRole('button',{name:'Reload the garage'})).toBeVisible();
+ await expect.element(page.getByRole('link',{name:'Return to DualBore Media'})).toHaveAttribute('href','/');
+ expect(uncaught).toEqual([]);
+ expect(captured).toEqual([original]);
+ expect(localStorage.getItem('dbm-store-cart-v1')).toBe('preserved-cart-fixture');
+ expect(page.getByRole('alert').element().textContent).not.toContain('Reference:');
 });

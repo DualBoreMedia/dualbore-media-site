@@ -9,7 +9,7 @@ import '../../src/styles.css';
 let root,host;
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
 beforeEach(()=>{host=document.createElement('div');document.body.append(host);root=createRoot(host);});
-afterEach(()=>{root.unmount();host.remove();vi.restoreAllMocks();});
+afterEach(()=>{root.unmount();host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();});
 function fixture(){
  const order={orderNumber:'DBM-OPS-QA',createdAt:'2026-10-18T00:00:00Z',status:'paid',paymentStatus:'paid',fulfillmentStatus:'received',version:4,
   totalCents:6995,subtotalCents:6000,shippingCents:995,taxCents:0,shippingName:'Synthetic Buyer',customerEmail:'synthetic@example.invalid',shippingAddress:{line1:'1 Synthetic Way',city:'Test',state:'OH',postal_code:'43013'},sessionId:'cs_test_fixture',paymentIntentId:'pi_fixture',
@@ -56,6 +56,15 @@ test('deadline work queue and bounded actionable attention retain all matching o
  await page.getByRole('region',{name:'Daily work queue'}).getByRole('button',{name:/DBM-OPS-QA/}).click();await expect.element(page.getByRole('heading',{name:'DBM-OPS-QA'})).toBeVisible();
 });
 async function openOrder(f){await page.getByRole('button',{name:'Orders',exact:true}).click();await page.getByRole('button',{name:new RegExp(f.order.orderNumber)}).click();await expect.element(page.getByRole('heading',{name:f.order.orderNumber})).toHaveFocus();await page.getByText('Exceptions, support and manual actions',{exact:true}).click();}
+
+test('paid order remains readable without browser crypto and refund fails closed',async()=>{
+ const f=fixture();vi.stubGlobal('crypto',{});vi.spyOn(window,'confirm').mockReturnValue(true);
+ root.render(<OperationsApp admin auth={f.auth}/>);await openOrder(f);
+ await page.getByText('Refund payment',{exact:true}).click();await page.getByLabelText('Refund amount (USD)').fill('10');
+ await page.getByRole('button',{name:'Review and refund'}).click();
+ await expect.element(page.getByRole('alert')).toHaveTextContent('secure request');expect(posted(f,'refund')).toBeUndefined();
+ await expect.element(page.getByRole('heading',{name:f.order.orderNumber})).toBeVisible();
+});
 
 test('admin filters and paginates orders using server query parameters',async()=>{
  const f=fixture();root.render(<OperationsApp admin auth={f.auth}/>);
