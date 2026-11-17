@@ -1,5 +1,6 @@
 import {FaArrowRight,FaPlay,FaYoutube,FaWrench,FaShirt,FaUsers} from 'react-icons/fa6';
 import {channel,films,merch,previewSizes,projects} from './content.js';
+import {GarmentOptions} from './commerce/GarmentOptions.jsx';
 
 export function GarageStories({onView,onDetails,onPlay,episodes=films}){
  return <>
@@ -16,7 +17,7 @@ export function RelatedEpisodes({film,onPlay,onProject,episodes=films}){
 }
 
 export function ProductReleaseDetails({item}){
- return <section className="product-release-details" aria-label="Drop 01 release details"><div className="preview-price"><strong>${item.previewPrice}</strong><span>USD / Planned release price</span></div><p>Explore the original artwork. Orders are not open yet.</p>{(item.testVariantsEnabled||item.managed)&&<><h3>Planned sizes</h3><div className="planned-sizes" aria-label="Planned sizes, not available to order">{(item.sizes||previewSizes).map(size=><span key={size}>{size}</span>)}</div></>}<p className="fine-print">Fit guidance, specifications and shipping information will be available before ordering opens. No size or stock is reserved by viewing this preview.</p></section>;
+ return <section className="product-release-details" aria-label="Drop 01 release details"><div className="preview-price"><strong>${item.previewPrice}</strong><span>{item.managed?'USD / Planned release price':'USD / Original mockup planned price'}</span></div>{!item.managed&&<GarmentOptions item={item}/>}<p>Explore the original artwork. Orders are not open yet.</p>{(item.testVariantsEnabled||item.managed)&&<><h3>Planned sizes</h3><div className="planned-sizes" aria-label="Planned sizes, not available to order">{(item.sizes||previewSizes).map(size=><span key={size}>{size}</span>)}</div></>}<p className="fine-print">Fit guidance, specifications and shipping information will be available before ordering opens. No size or stock is reserved by viewing this preview.</p></section>;
 }
 
 export function CrewPrinciples(){
@@ -27,7 +28,7 @@ export function CrewPrinciples(){
 export function PublicFooter({onView,policies,staffOnly=false}){
  return <footer className="footer public-footer">
   <div className="footer-columns">
-   <div className="footer-story"><img src="/assets/channel-logo.jpg" alt="DualBore Media Logo" width="56" height="56" loading="lazy"/><h2>Built. Ridden.<br/><span>Repeat.</span></h2><p>Two brothers. Four platforms. The work behind the ride.</p></div>
+   <div className="footer-story"><img src="/assets/channel-logo.jpg" alt="DualBore Media Logo" width="56" height="56" loading="lazy"/><h2>Built. Ridden.<br/><span>Repeat.</span></h2><p>Two brothers. Five sections. The work behind the ride.</p></div>
    <nav aria-label="Explore the garage"><h3>Inside the garage</h3><button onClick={()=>onView('garage',true)}>Garage Builds</button><button onClick={()=>onView('vault',true)}>Video Vault</button><button onClick={()=>onView('merch',true)}>Drop 01 Preview</button><a href="/setups">MX Bikes Setups</a><button onClick={()=>onView('crew',true)}>Pit Crew</button>{!staffOnly&&<a href="/account">My Garage</a>}</nav>
    <nav aria-label="Customer information"><h3>Visitor information</h3>{Object.entries(policies).map(([path,policy])=><a key={path} href={'/'+path}>{policy.title}</a>)}</nav>
    <nav aria-label="Follow DualBore Media"><h3>Keep up with the crew</h3><p>Watch the builds and follow what comes next. Drop 01 is coming soon.</p><a href={channel.url} target="_blank" rel="noopener noreferrer" aria-label="Open the DualBore Media YouTube channel (opens in a new tab)"><FaYoutube aria-hidden="true"/> Watch the channel <FaArrowRight aria-hidden="true"/></a><a href={channel.community} target="_blank" rel="noopener noreferrer" aria-label="Read DualBore Media community updates (opens in a new tab)">Community updates <FaArrowRight aria-hidden="true"/></a></nav>

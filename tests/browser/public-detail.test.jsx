@@ -1,3 +1,4 @@
+import {goPublic,openPublicNavigation} from './public-navigation-fixture.js';
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {beforeEach,afterEach,expect,test,vi} from 'vitest';
@@ -47,8 +48,8 @@ test('Netlify lowercase episode paths preserve the real case-sensitive YouTube I
 });
 
 test('garage and vault expose crawlable links to actual individual pages',async()=>{
- root.render(<App/>);
+ history.replaceState(null,'','/garage');root.render(<App/>);
  await expect.element(page.getByRole('link',{name:'Yamaha RD400 build log'})).toHaveAttribute('href','/builds/rd400/');
- await page.getByRole('tab',{name:/Video Vault/}).click();
- await expect.element(page.getByRole('link',{name:/Into the hills on the 1977 RD400 video page/})).toHaveAttribute('href','/videos/c7gF1jjT9YQ/');
+ await goPublic('Videos');
+ await expect.element(page.getByRole('link',{name:/Episode page: Into the hills on the 1977 RD400/})).toHaveAttribute('href','/videos/c7gF1jjT9YQ/');
 });

@@ -1,10 +1,15 @@
 // One bounded refresh per request; concurrent requests share token rotation.
 const refreshing=new WeakMap();
+const rotations=new WeakMap();
 export async function workosSessionFetch(url,options={},fetcher=fetch){
+ const startedAtRotation=rotations.get(fetcher)||0;
  const response=await fetcher(url,{...options,credentials:'same-origin',cache:'no-store'});
  if(response.status!==401)return response;
+ // A slower request can return its old 401 after another request already
+ // rotated the cookie. Reuse that session rather than rotating it again.
+ if((rotations.get(fetcher)||0)!==startedAtRotation)return fetcher(url,{...options,credentials:'same-origin',cache:'no-store'});
  let pending=refreshing.get(fetcher);
- if(!pending){pending=fetcher('/api/auth/refresh',{method:'POST',credentials:'same-origin',cache:'no-store'}).finally(()=>refreshing.delete(fetcher));refreshing.set(fetcher,pending);}
+ if(!pending){pending=fetcher('/api/auth/refresh',{method:'POST',credentials:'same-origin',cache:'no-store'}).then(result=>{if(result.ok)rotations.set(fetcher,(rotations.get(fetcher)||0)+1);return result;}).finally(()=>refreshing.delete(fetcher));refreshing.set(fetcher,pending);}
  const refresh=await pending;
  if(!refresh.ok){
   if(refresh.status===401)return response;

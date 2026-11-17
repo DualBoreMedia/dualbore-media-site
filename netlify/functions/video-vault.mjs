@@ -11,8 +11,8 @@ const cacheHeaders={
 export async function resolvePublicVideoVault({enabled,cacheApi,store}={}){
  if(enabled!=='true')return loadYouTubeVault({});
  const durable=await store?.read();
- if(durable)return durable;
  const cached=await readVideoSnapshot(cacheApi);
+ if(durable&&(!cached||(Date.parse(durable.updatedAt)||0)>=(Date.parse(cached.updatedAt)||0)))return durable;
  if(cached)return cached;
  // Public traffic must never trigger provider work or write snapshots.
  return loadYouTubeVault({});
@@ -24,7 +24,7 @@ export default async function videoVault(request){
  let result;
  try{result=await resolvePublicVideoVault({enabled:process.env.YOUTUBE_SYNC_ENABLED,cacheApi:globalThis.caches,store});}
  finally{if(store)try{await store.close();}catch{}}
- const cache=result.source==='youtube'?'public, max-age=86400, stale-while-revalidate=604800':'public, max-age=180';
+ const cache=result.source==='youtube'?'public, max-age=300, stale-while-revalidate=300':'public, max-age=180';
  return new Response(request.method==='HEAD'?null:JSON.stringify(result),{
   status:200,headers:{...cacheHeaders,'Cache-Control':'public, max-age=60','Netlify-CDN-Cache-Control':cache}
  });

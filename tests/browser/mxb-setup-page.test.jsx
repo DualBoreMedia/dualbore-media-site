@@ -1,3 +1,4 @@
+import {openPublicNavigation} from './public-navigation-fixture.js';
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {beforeEach,afterEach,expect,test,vi} from 'vitest';
@@ -9,8 +10,8 @@ afterEach(()=>{root.unmount();host.remove();vi.unstubAllGlobals();vi.restoreAllM
 test('default bike-first destination has five accessible navigation entries and closed setup slots',async()=>{
  const push=vi.spyOn(history,'pushState');
  root.render(<SetupShop/>);await expect.element(page.getByRole('heading',{name:'Choose your bike',level:2})).toBeVisible();
- await expect.element(page.getByRole('tab',{name:'04 MX Bikes Setups'})).toHaveAttribute('aria-selected','true');
- await expect.element(page.getByRole('tab',{name:'05 About / Pit Crew'})).toHaveAttribute('href','/#crew');
+ await openPublicNavigation();await expect.element(page.getByRole('link',{name:'Setups',exact:true})).toHaveAttribute('aria-current','page');
+ await expect.element(page.getByRole('link',{name:'Pit Crew',exact:true})).toHaveAttribute('href','/pit-crew');
  await expect.element(page.getByText('53 motorcycles found')).toBeVisible();
  await expect.element(page.getByRole('heading',{name:'Browse by manufacturer'})).toBeVisible();
  expect(host.querySelector('.mxb-exact-bike select').options).toHaveLength(54);

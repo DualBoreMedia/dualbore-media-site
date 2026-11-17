@@ -1,0 +1,14 @@
+.garment-options{display:grid;gap:9px;min-width:0;margin:16px 0;color:var(--muted)}
+.garment-options__heading{margin:0;font-size:12px;line-height:1.55;font-weight:650;color:#e4eaf3}
+.garment-options__choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;min-width:0}
+.garment-options__choices button{min-width:0;min-height:44px;padding:8px 5px;border:1px solid #566173;border-radius:4px;background:#111720;color:#e3eaf5;font:600 11px/1.3 Inter,Arial,sans-serif;overflow-wrap:break-word;transition:border-color .15s,background .15s}
+.garment-options__choices button[aria-pressed="true"]{border-color:var(--cyan);background:#00f0ff14;color:#f8fdff;box-shadow:inset 0 -2px 0 var(--cyan)}
+.garment-options__choices button:hover{border-color:#a2e8f0}
+.garment-options__choices button:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+.garment-options__status{font-size:11px;line-height:1.7;min-height:70px;margin:0;color:#c3ccda}
+.garment-options__status strong{color:#f0f5fb}
+.garment-options__notice{font-size:11px;font-weight:600;margin:0;color:#ff99a4}
+.garment-options--compact .garment-options__heading{font-size:11px}
+.garment-options--compact .garment-options__status{font-size:10px}
+@media(max-width:380px){.garment-options__choices button{font-size:10px;padding:9px 3px}}
+@media(prefers-reduced-motion:reduce){.garment-options__choices button{transition:none}}

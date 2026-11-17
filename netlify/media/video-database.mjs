@@ -11,9 +11,9 @@ export function createVideoStore({databaseUrl=process.env.DATABASE_URL,Pool=pg.P
   },
   async save(data){
    if(!validVideoSnapshot(data))return false;
-   await pool.query("INSERT INTO public_video_snapshots (id, payload, updated_at) VALUES ($1,$2::jsonb,$3) ON CONFLICT (id) DO UPDATE SET payload=EXCLUDED.payload,updated_at=EXCLUDED.updated_at",
+   const result=await pool.query("INSERT INTO public_video_snapshots (id, payload, updated_at) VALUES ($1,$2::jsonb,$3) ON CONFLICT (id) DO UPDATE SET payload=EXCLUDED.payload,updated_at=EXCLUDED.updated_at WHERE public_video_snapshots.updated_at <= EXCLUDED.updated_at",
     ['latest',JSON.stringify(data),data.updatedAt]);
-   return true;
+   return result.rowCount===0?'superseded':true;
   },
   async record({time,updated,reason,count}){
    await pool.query("INSERT INTO public_video_sync_runs (attempted_at,updated,reason,item_count) VALUES ($1,$2,$3,$4)",

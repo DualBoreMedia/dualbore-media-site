@@ -14,7 +14,7 @@ export async function runStaffBrowserChecks({page,baseUrl,evidenceDirectory,serv
   }catch(error){await route.fulfill({status:error.status||503,json:{code:error.code,error:error.message}});}
  });
  const results=[],focusTransitions=[];
- for(const width of [320,375,390,414,768,1024,1440]){
+ for(const width of [320,360,375,390,414,768,1024,1280,1440,1920]){
   await page.setViewportSize({width,height:900});await page.goto(baseUrl+'/.tools/operations-qa/staff.html');
   await page.getByRole('heading',{name:'Fulfillment workspace',exact:true}).waitFor();
   assert((await page.title())==='Staff | DualBore Media','Staff page title');

@@ -7,13 +7,14 @@ export async function runDailyVideoSync({enabled,apiKey,fetcher,cacheApi,store,n
  let status={updated:false,count:0,reason:'disabled'};
  try{
   if(enabled==='true'&&apiKey){
-   const result=await loadYouTubeVault({apiKey,fetcher});
+   const result=await loadYouTubeVault({apiKey,fetcher,now});
    if(result.source!=='youtube')status={updated:false,count:0,reason:'provider_unavailable'};
    else{
-    let durable=false;
-    if(store)try{durable=await store.save(result);}catch{status={updated:false,count:0,reason:'database_unavailable'};}
-    const cached=await writeVideoSnapshot(result,cacheApi);
-    if(durable||cached)status={updated:true,count:result.items.length,reason:durable?'updated':'cache_only'};
+    let durable=false,superseded=false;
+    if(store)try{const saved=await store.save(result);durable=saved===true;superseded=saved==='superseded';}catch{status={updated:false,count:0,reason:'database_unavailable'};}
+    const cached=superseded?false:await writeVideoSnapshot(result,cacheApi);
+    if(superseded)status={updated:false,count:0,reason:'superseded'};
+    else if(durable||cached)status={updated:true,count:result.items.length,reason:durable?'updated':'cache_only'};
     else if(status.reason!=='database_unavailable')status={updated:false,count:0,reason:'cache_unavailable'};
    }
   }
@@ -29,7 +30,7 @@ export default async function dailyVideoSync(){
    cacheApi:globalThis.caches,store
   });
   // Never log provider payloads, keys, customer data or signatures.
-  if(!status.updated&&status.reason!=='disabled')console.warn('Public video refresh unavailable: '+status.reason);
+  if(!['updated','disabled','superseded'].includes(status.reason))console.warn('Public video refresh is not durable: '+status.reason);
   if(status.recorded===false)console.warn('Public video refresh outcome could not be persisted.');
   return new Response(null,{status:204});
  }finally{if(store)try{await store.close();}catch{}}

@@ -16,7 +16,7 @@ export function MxBikes({products=[],auth={},reload}){
  const change=(key,value)=>setDraft(p=>({...p,[key]:value}));
  const act=async action=>{setBusy(true);setError('');setNotice('');try{
   const result=await operationsRequest(auth.getToken,{action,...record?{productId:record.id,expectedVersion:record.version}:{},...action==='product-save'?{product:draft}:{}},{fetcher:auth.fetcher});
-  if(result.product)open(result.product);await reload();setNotice({'product-preview-publish':'Public preview approved. Sales, downloads and sending stay closed.','product-preview-unpublish':'Public preview removed.','product-archive':'Setup archived. Its public preview is hidden.','product-import-setups':'Received setup drafts are ready. Existing records were preserved.'}[action]||'Setup draft saved.');
+  if(result.product)open(result.product);await reload(result);setNotice({'product-preview-publish':'Public preview approved. Sales, downloads and sending stay closed.','product-preview-unpublish':'Public preview removed.','product-archive':'Setup archived. Its public preview is hidden.','product-import-setups':'Received setup drafts are ready. Existing records were preserved.'}[action]||'Setup draft saved.');
  }catch(e){setError(e.message);}finally{setBusy(false);}};
  return <section className="ops-products" aria-label="MX Bikes manager">
 <header className="ops-panel ops-product-heading">
@@ -95,7 +95,7 @@ export function MxBikes({products=[],auth={},reload}){
 </fieldset>
 <div className="ops-actions ops-editor-actions">
 <button className="ops-primary" disabled={busy||record?.status==='archived'} onClick={()=>act('product-save')}>Save setup draft</button>{dirty&&<span className="ops-muted">Save before attaching a file or approving a preview.</span>}</div>
-<SetupFile key={record?.id||'new'} record={record} dirty={dirty} busy={busy} auth={auth} onBusyChange={setBusy} onSaved={async row=>{open(row);await reload();}}/>{record?.setupFileHistory?.length>0&&<details className="ops-file-history">
+<SetupFile key={record?.id||'new'} record={record} dirty={dirty} busy={busy} auth={auth} onBusyChange={setBusy} onSaved={async row=>{open(row);await reload({product:row});}}/>{record?.setupFileHistory?.length>0&&<details className="ops-file-history">
 <summary>Previous private file versions ({record.setupFileHistory.length})</summary>
 <ul>{record.setupFileHistory.map(file=>
 <li key={file.version} className="ops-wrap">Version {file.version}: {file.filename}<br/>

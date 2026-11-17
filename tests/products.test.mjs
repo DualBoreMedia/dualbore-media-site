@@ -12,6 +12,21 @@ const productFilters=products=>({categories:[...new Set(products.map(p=>p.catego
 const admin={userId:'qa-owner',email:'qa@example.invalid',role:'admin',mfa:true,mfaFresh:true};
 const physical=()=>({name:'Synthetic tee',type:'physical',category:'Synthetic apparel',audience:'Synthetic audience',sku:'QA-TEE',priceCents:3000,description:'Synthetic product for testing only.',images:['/assets/IMG_5076.jpg'],fulfillment:'made_to_order',sizes:['S','M']});
 const setup=()=>({...physical(),sku:'QA-SETUP',type:'mx_setup',fulfillment:'digital',sizes:[],images:[],oemBike:'Synthetic OEM',bikeVersion:'Synthetic version',gameVersion:'Synthetic game',discipline:'MX',compatibility:'verified'});
+test('routine draft editing retains session MFA while every publication/status/import action requires fresh verification',async()=>{
+ const repository=createMemoryRepository(),manager=createProductManager({repository}),signedIn={...admin,mfaFresh:false};
+ let {product:p}=await manager.mutate(signedIn,{action:'product-save',product:physical()});
+ ({product:p}=await manager.mutate(admin,{action:'product-publish',productId:p.id,expectedVersion:p.version,priceApproved:true}));
+ const before=await repository.transaction(s=>structuredClone(s));
+ await manager.mutate(signedIn,{action:'product-save',productId:p.id,expectedVersion:p.version,product:{...p.draft,name:'Private changed name',priceCents:4000}});
+ const after=await repository.transaction(s=>structuredClone(s));
+ assert.deepEqual(publicProducts(after),publicProducts(before));assert.deepEqual(after.variants,before.variants);
+ assert.equal(after.products[p.id].draft.name,'Private changed name');
+ for(const action of ['product-publish','product-unpublish','product-archive','product-preview-publish','product-preview-unpublish','product-import','product-import-setups']){
+  await assert.rejects(manager.mutate(signedIn,{action,productId:p.id,expectedVersion:after.products[p.id].version,priceApproved:true}),{code:'step_up_required'});
+ }
+ const {product:digital}=await manager.mutate(signedIn,{action:'product-save',product:setup()});assert.equal(digital.status,'draft');
+ for(const actor of [{...signedIn,mfa:false},{...signedIn,role:'employee'},{...signedIn,role:'customer'}])await assert.rejects(manager.mutate(actor,{action:'product-save',product:{type:'physical'}}));
+});
 function fixture(){const repository=createMemoryRepository();const manager=createProductManager({repository});const save=product=>manager.mutate(admin,{action:'product-save',product});const action=(row,action,extra={})=>manager.mutate(admin,{action:'product-'+action,productId:row.id,expectedVersion:row.version,...extra});return {repository,manager,save,action};}
 test('product lifecycle separates drafts from publication, preserves order counters and records immutable actor attribution',async()=>{
  const f=fixture();let {product:p}=await f.save(physical());assert.equal(p.status,'draft');await assert.rejects(f.action(p,'unpublish'),{code:'invalid_product'});assert.equal(await f.repository.transaction(s=>publicProducts(s).length),0);
@@ -46,7 +61,7 @@ test('server rejects unknown fields, invalid values, files, prices, size collisi
  await f.repository.transaction(s=>{s.variants.old={id:'old',productId:'old-product',sku:'QA-OLD'};});await assert.rejects(f.save({...physical(),sku:'QA-OLD'}),{code:'duplicate_sku'});
 });
 test('customer, employee, missing/fresh MFA and malformed actions cannot manage products; concurrent edits reject stale versions',async()=>{
- const f=fixture();for(const actor of [{...admin,role:'customer'},{...admin,role:'employee'},{...admin,mfa:false},{...admin,mfaFresh:false},{...admin,userId:''}])await assert.rejects(f.manager.mutate(actor,{action:'product-save',product:physical()}));
+ const f=fixture();for(const actor of [{...admin,role:'customer'},{...admin,role:'employee'},{...admin,mfa:false},{...admin,userId:''}])await assert.rejects(f.manager.mutate(actor,{action:'product-save',product:physical()}));
  for(const payload of [null,[],{action:'product-hack'},{action:'product-save',product:physical(),priceCents:1},{action:'product-publish'},{action:'product-save',productId:'missing',product:physical()}])await assert.rejects(f.manager.mutate(admin,payload));
  const {product:p}=await f.save(physical());const update={action:'product-save',productId:p.id,expectedVersion:0,product:physical()};const results=await Promise.allSettled([f.manager.mutate(admin,update),f.manager.mutate(admin,update)]);assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(results.find(r=>r.status==='rejected').reason.code,'stale_record');
  const service=createOperationsService({repository:f.repository});assert.equal((await service.read(admin,{admin:true})).products.length,1);assert.equal((await service.read({...admin,role:'customer'})).products,undefined);

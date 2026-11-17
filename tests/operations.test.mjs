@@ -129,7 +129,7 @@ test('split package packing attribution comes from authenticated staff and remai
  for(const [i,status]of ['making','packing','ready_to_ship'].entries())await service.mutate(admin,{action:'transition',orderNumber:'DBM-TEST',status,expectedVersion:i});
  const employee={userId:'workos:packer-two',role:'employee',email:'packer@example.invalid',mfa:true,mfaFresh:true,sessionId:'packer-session'};
  const input={action:'shipment',orderNumber:'DBM-TEST',carrier:'USPS',service:'Ground',trackingNumber:'TEST123',trackingUrl:'https://tools.usps.com/',items:[{variantId:'tee-m',quantity:1}]};
- const a=await service.mutate(admin,input),b=await service.mutate(employee,input);
+ const a=await service.mutate(admin,input),b=await service.mutate(employee,{...input,trackingNumber:'TEST456'});
  await assert.rejects(service.mutate(employee,{action:'shipment-status',shipmentId:a.shipmentId,status:'packed',expectedVersion:0,packedByUserId:'spoofed'}),{code:'invalid_input'});
  for(const [shipmentId,principal]of [[a.shipmentId,admin],[b.shipmentId,employee]])await service.mutate(principal,{action:'shipment-status',shipmentId,status:'packed',expectedVersion:0});
  await service.mutate(employee,{action:'shipment-status',shipmentId:a.shipmentId,status:'shipped',carrierAccepted:true,expectedVersion:1});
@@ -178,7 +178,7 @@ test('Admin work lists include all eligible paid orders independently of table p
  assert.equal(first.workLists.making.length,30);assert.equal(first.workLists.packing.length,30);assert.equal(first.workLists.carrierHandoff.length,30);
  assert.equal(first.overview.making,first.workLists.making.length);assert.equal(first.overview.packing,first.workLists.packing.length);
  assert.ok(first.workLists.making.some(o=>o.orderNumber==='MAKING-29'));assert.ok(first.workLists.packing.some(o=>o.orderNumber==='PACKING-29'));assert.ok(first.workLists.carrierHandoff.some(o=>o.orderNumber==='DUE-29'));
- assert.deepEqual(Object.keys(first.workLists.making[0]).sort(),['createdAt','fulfillmentStatus','orderNumber','shippingReview']);
+ assert.deepEqual(Object.keys(first.workLists.making[0]).sort(),['ageDays','createdAt','fulfillmentStatus','items','orderNumber','shippingReview']);
  const second=await service.read(admin,{admin:true,page:2,search:'FILLER-'});assert.equal(second.orders.length,5);assert.equal(second.pagination.total,30);assert.deepEqual(second.workLists,first.workLists);
  assert.equal((await service.read(admin,{admin:true,orderNumber:'MAKING-29'})).orders.length,1);
  assert.equal((await service.read(customer)).workLists,undefined);

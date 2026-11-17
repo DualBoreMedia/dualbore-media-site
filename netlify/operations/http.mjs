@@ -1,6 +1,7 @@
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {authenticate,AuthError} from './auth.mjs';
-import {requireStaff} from './permissions.mjs';
+import {requireStaff,requireAdmin} from './permissions.mjs';
+import {runDailyVideoSync} from '../functions/daily-video-sync.mjs';
 import {createOperationsService} from './service.mjs';
 import {operationsRuntime} from './runtime.mjs';
 import {CommerceError} from '../commerce/service.mjs';
@@ -16,11 +17,11 @@ export async function consumeLimit(repository,identity,scope,{limit=60,windowMs=
   if(typeof repository.consumeRateLimit==='function')return repository.consumeRateLimit(id,{limit,windowMs,now});
  return repository.transaction(s=>{for(const [key,row]of Object.entries(s.limits))if(row.expiresAt<=now)delete s.limits[key];const row=s.limits[id]??={id,count:0,expiresAt:now+windowMs};row.count++;return row.count<=limit;});
 }
-export async function operationsHttp(request,{env=process.env,runtime=operationsRuntime,auth=authenticate,clientIp='unavailable',clerkClient}={}){
+export async function operationsHttp(request,{env=process.env,runtime=operationsRuntime,auth=authenticate,clientIp='unavailable',clerkClient,videoSync=runDailyVideoSync,videoStore=createVideoStore}={}){
  const reporter=await serverErrorReporter(env);
- return observeHttp(r=>operationsHandler(r,{env,runtime,auth,clientIp,clerkClient,reporter}),{scope:'operations',env,reporter})(request);
+ return observeHttp(r=>operationsHandler(r,{env,runtime,auth,clientIp,clerkClient,reporter,videoSync,videoStore}),{scope:'operations',env,reporter})(request);
 }
-async function operationsHandler(request,{env,runtime,auth,clientIp,clerkClient,reporter}){
+async function operationsHandler(request,{env,runtime,auth,clientIp,clerkClient,reporter,videoSync,videoStore}){
  try {
   if(!['GET','POST'].includes(request.method))return json({error:'Use GET or POST.'},405);
   const url=new URL(request.url);
@@ -45,6 +46,17 @@ async function operationsHandler(request,{env,runtime,auth,clientIp,clerkClient,
    }
   if(request.headers.get('Content-Type')?.split(';')[0]!=='application/json')return json({error:'Use JSON.'},415);
   let input;try{input=JSON.parse((await readBounded(request,16384)).toString('utf8'));}catch{return json({error:'Check the information and try again.'},400);}
+  if(input?.action==='refresh-videos'){
+   requireAdmin(principal);
+   if(Object.keys(input).length!==1)return json({code:'invalid_input',error:'Choose the video refresh action only.'},400);
+   if(env.YOUTUBE_SYNC_ENABLED!=='true'||!env.YOUTUBE_API_KEY)return json({code:'video_sync_disabled',error:'Video refresh is not enabled.'},503);
+   if(!await consumeLimit(r.repository,'public-video-refresh','maintenance',{limit:1,windowMs:300000}))return json({code:'rate_limited',error:'Video refresh was recently requested. Wait five minutes.'},429);
+   const store=videoStore({databaseUrl:env.DATABASE_URL});
+   try{const result=await videoSync({enabled:env.YOUTUBE_SYNC_ENABLED,apiKey:env.YOUTUBE_API_KEY,store,cacheApi:globalThis.caches});
+    await r.repository.transaction(s=>{const id=randomUUID();s.audit[id]={id,actor:principal.userId,action:'video-refresh',target:'youtube-public-feed',createdAt:new Date().toISOString(),metadata:{reason:result.reason,count:result.count}};});
+    return json({saved:result.updated,publicVideoSync:store?await store.status():null,result});
+   }finally{if(store)try{await store.close();}catch{}}
+  }
   if(typeof input?.action==='string'&&input.action.startsWith('staff-'))return json(await createStaffManagement({repository:r.repository,env,client:clerkClient}).mutate(principal,input));
   return json(await service.mutate(principal,input));
  }catch(error){

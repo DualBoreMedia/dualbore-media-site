@@ -1,3 +1,4 @@
+import {createVideoStore} from '../netlify/media/video-database.mjs';
 import {createProductManager,publicSetupPreviews} from '../netlify/operations/products.mjs';
 import {createSetupFileManager} from '../netlify/setups/file-manager.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import pg from 'pg';import {randomBytes,randomUUID}from'node:crypto';
@@ -19,8 +20,16 @@ test('real PostgreSQL operations lifecycle, split packages, immutable audit and 
   const service=createOperationsService({repository,send:async()=>{}});
   for(const [i,status]of ['making','packing','ready_to_ship'].entries())await service.mutate(actor,{action:'transition',orderNumber:'DBM-OPS-QA',status,expectedVersion:i});
   for(let n=0;n<2;n++){const p=await service.mutate(actor,{action:'shipment',orderNumber:'DBM-OPS-QA',carrier:'USPS',service:'Ground',trackingNumber:'TEST'+n,trackingUrl:'https://tools.usps.com/go/TrackConfirmAction',items:[{variantId:'e92-tee-m',quantity:1}]});await service.mutate(actor,{action:'shipment-status',shipmentId:p.shipmentId,status:'packed',expectedVersion:0});await service.mutate(actor,{action:'shipment-status',shipmentId:p.shipmentId,status:'shipped',carrierAccepted:true,expectedVersion:1});await service.mutate(actor,{action:'shipment-status',shipmentId:p.shipmentId,status:'delivered',expectedVersion:2,confirmed:true});}
+  // Independent repository instances share the transaction lock: the same tracking
+  // identifier cannot be attached to two simultaneous packages.
+  await repository.transaction(s=>{for(const id of ['race-a','race-b'])s.orders[id]={...s.orders.qa,id,orderNumber:'DBM-'+id,version:0,fulfillmentStatus:'packing'};});
+  const shipmentRace={action:'shipment',carrier:'USPS',service:'Ground',trackingNumber:'PG-RACE-TRACK',trackingUrl:'https://tools.usps.com/track',items:[{variantId:'e92-tee-m',quantity:1}]};
+  const otherService=createOperationsService({repository:createPostgresRepository(pool),send:async()=>{throw Error('Sending prohibited');}});
+  const raced=await Promise.allSettled([service.mutate(actor,{...shipmentRace,orderNumber:'DBM-race-a'}),otherService.mutate(actor,{...shipmentRace,orderNumber:'DBM-race-b'})]);
+  assert.equal(raced.filter(r=>r.status==='fulfilled').length,1);assert.equal(raced.find(r=>r.status==='rejected').reason.code,'duplicate_tracking');
+  // Separate fixtures below inspect just the original split packages.
   const customer={userId:'qa-customer',email:'customer@example.invalid',sessionId:'qa-customer-session'};const result=await service.read(customer);assert.equal(result.orders[0].fulfillmentStatus,'delivered');assert.equal(result.orders[0].shipments.length,2);assert.equal(result.orders[0].shipments[0].shipmentId,undefined);
-  const reloaded=await createPostgresRepository(pool).transaction(s=>s);for(const shipment of Object.values(reloaded.shipments)){assert.equal(shipment.packedByUserId,actor.userId);assert.ok(shipment.packedAt);assert.equal(shipment.createdByUserId,actor.userId);assert.equal(shipment.trackingEnteredByUserId,actor.userId);}assert.ok(Object.values(reloaded.trackingEvents).every(e=>e.actorUserId===actor.userId));const normalized=(await pool.query('SELECT packed_by_user_id, packed_at FROM shipments')).rows;assert.ok(normalized.every(p=>p.packed_by_user_id===actor.userId&&p.packed_at));assert.equal(Object.keys(reloaded.shipments).length,2);assert.equal(Object.keys(reloaded.shipmentItems).length,2);assert.equal(Object.values(reloaded.emails).filter(e=>e.emailType.startsWith('lifecycle-shipped:')).length,2);assert.equal(new Set(Object.values(reloaded.emails).filter(e=>e.emailType.startsWith('lifecycle-shipped:')).map(e=>e.emailType)).size,2);assert.equal(Object.keys(reloaded.trackingEvents).length,6);assert.equal(Object.keys(reloaded.emails).length,5);
+  const reloaded=await createPostgresRepository(pool).transaction(s=>s);for(const shipment of Object.values(reloaded.shipments).filter(p=>p.orderId==='qa')){assert.equal(shipment.packedByUserId,actor.userId);assert.ok(shipment.packedAt);assert.equal(shipment.createdByUserId,actor.userId);assert.equal(shipment.trackingEnteredByUserId,actor.userId);}assert.ok(Object.values(reloaded.trackingEvents).every(e=>e.actorUserId===actor.userId));const normalized=(await pool.query("SELECT packed_by_user_id, packed_at FROM shipments WHERE data->>'orderId'='qa'")).rows;assert.ok(normalized.every(p=>p.packed_by_user_id===actor.userId&&p.packed_at));assert.equal(Object.keys(reloaded.shipments).length,3);assert.equal(Object.keys(reloaded.shipmentItems).length,3);assert.equal(Object.values(reloaded.emails).filter(e=>e.emailType.startsWith('lifecycle-shipped:')).length,2);assert.equal(new Set(Object.values(reloaded.emails).filter(e=>e.emailType.startsWith('lifecycle-shipped:')).map(e=>e.emailType)).size,2);assert.equal(Object.keys(reloaded.trackingEvents).length,6);assert.equal(Object.keys(reloaded.emails).length,5);
   const first=Object.values(reloaded.audit)[0];await assert.rejects(pool.query('UPDATE audit_events SET actor=$1 WHERE id=$2',['tampered',first.id]));await assert.rejects(pool.query('DELETE FROM audit_events WHERE id=$1',[first.id]));
   await assert.rejects(repository.transaction(s=>{s.audit[first.id].metadata={tampered:true};}));await assert.rejects(repository.transaction(s=>{delete s.audit[first.id];}));
   await repository.transaction(s=>{s.orders.qa.paymentIntentId='pi_real_database_fixture';});
@@ -72,5 +81,11 @@ test('real PostgreSQL operations lifecycle, split packages, immutable audit and 
   await assert.rejects(files.attach(actor,{productId:canonical.id,expectedVersion:canonical.version,filename:'Wrong-year.stp',bytes:wrongBike}),{code:'bike_file_mismatch'});
   assert.equal((await freshRepository.transaction(s=>s.products[canonical.id])).version,canonical.version);
   await manager.mutate(actor,{action:'product-preview-unpublish',productId:canonical.id,expectedVersion:canonical.version});assert.deepEqual(await freshRepository.transaction(publicSetupPreviews),[]);
+  const videos=createVideoStore({databaseUrl:accountDatabase.href});
+  try{
+   const id='aB1cD2eF3gH',snapshot={source:'youtube',updatedAt:'2026-11-13T10:00:00.000Z',items:[{id,title:'Synthetic public metadata',image:'https://i.ytimg.com/vi/'+id+'/hqdefault.jpg'}]};
+   assert.equal(await videos.save(snapshot),true);assert.equal(await videos.save({...snapshot,updatedAt:'2026-11-13T09:00:00.000Z'}),'superseded');assert.equal((await videos.read()).updatedAt,snapshot.updatedAt);
+   await videos.record({time:snapshot.updatedAt,updated:true,reason:'updated',count:1});assert.equal((await videos.status()).savedItemCount,1);
+  }finally{await videos.close();}
  }finally{await pool?.end();await adminPool.query('DROP SCHEMA '+schema+' CASCADE');await adminPool.end();}
 });

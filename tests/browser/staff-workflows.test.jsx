@@ -8,7 +8,7 @@ import '../../src/styles.css';
 let root,host;
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
 beforeEach(()=>{host=document.createElement('div');document.body.append(host);root=createRoot(host);});
-afterEach(()=>{root.unmount();host.remove();vi.restoreAllMocks();});
+afterEach(()=>{root.unmount();host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();});
 function fixture(){
  const order={orderNumber:'DBM-STAFF-QA',createdAt:'2026-10-18T00:00:00Z',fulfillmentStatus:'received',version:3,
   shippingName:'Synthetic Recipient',shippingAddress:{line1:'1 Synthetic Way',city:'Test',state:'OH',postal_code:'43013'},
@@ -28,6 +28,21 @@ function fixture(){
  return {auth,order,data,staff,posts,fetcher};
 }
 const posted=(f,action)=>f.posts.findLast(p=>p.action===action);
+
+test('staff management stays readable without browser crypto and rejects changes before sending',async()=>{
+ const f=fixture();vi.stubGlobal('crypto',{});vi.spyOn(window,'confirm').mockReturnValue(true);
+ root.render(<StaffApp auth={f.auth}/>);await page.getByRole('button',{name:'Employees',exact:true}).click();
+ await expect.element(page.getByText('Synthetic Employee',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Set admin'}).click();
+ await expect.element(page.getByRole('alert')).toHaveTextContent('secure request');expect(f.posts).toHaveLength(0);
+});
+
+test('staff mutations use secure browser entropy when randomUUID is unavailable',async()=>{
+ const f=fixture(),getRandomValues=crypto.getRandomValues.bind(crypto);vi.stubGlobal('crypto',{getRandomValues});vi.spyOn(window,'confirm').mockReturnValue(true);
+ root.render(<StaffApp auth={f.auth}/>);await page.getByRole('button',{name:'Employees',exact:true}).click();
+ await page.getByRole('button',{name:'Set admin'}).click();
+ await expect.poll(()=>posted(f,'staff-role')?.requestKey).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
+});
 
 test('staff searches, paginates and filters the queue before opening and closing an order',async()=>{
  const f=fixture();root.render(<StaffApp auth={f.auth}/>);

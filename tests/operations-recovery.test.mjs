@@ -46,7 +46,7 @@ test('legacy shipment and hold projection preserve valid tracking and recoverabl
 });
 
 test('package allocation editing is versioned and cannot consume another package or order',async()=>{
- const f=setup();const first=await f.service.mutate(admin,draft),second=await f.service.mutate(admin,draft);
+ const f=setup();const first=await f.service.mutate(admin,draft),second=await f.service.mutate(admin,{...draft,trackingNumber:'SECOND'});
  const edit={action:'shipment-update',shipmentId:first.shipmentId,carrier:'UPS',service:'Ground',trackingNumber:'NEW',trackingUrl:'https://www.ups.com/track',expectedVersion:0,items:[{variantId:'tee-m',quantity:2}]};
  await assert.rejects(f.service.mutate(admin,edit),{code:'over_allocated'});
  await f.service.mutate(admin,{...edit,items:[{variantId:'tee-m',quantity:1}]});
@@ -153,4 +153,9 @@ test('refund mode, binding and full-refund limits reject unverified changes',asy
  const f=setup();for(const patch of [{confirmed:false},{amountCents:0},{requestKey:'invalid'}])await assert.rejects(f.service.mutate(admin,{action:'refund',orderNumber:'DBM-RECOVERY',amountCents:1000,requestKey:randomUUID(),confirmed:true,...patch}),{code:'invalid_refund'});
  await f.repository.transaction(s=>{s.orders['order-fixture'].status='checkout_pending';});
  await assert.rejects(f.service.mutate(admin,{action:'refund',orderNumber:'DBM-RECOVERY',amountCents:1000,requestKey:randomUUID(),confirmed:true}),{code:'invalid_refund'});
+});
+
+test('order save returns fresh full work lists and attention after carrier handoff resolves a stale order',async()=>{
+ const f=setup();await f.repository.transaction(s=>{s.orders['order-fixture'].fulfillmentStatus='ready_to_ship';});const before=await f.service.read(admin,{admin:true});assert.ok(before.failures.some(v=>v.type==='fulfillment'));
+ const created=await f.service.mutate(admin,{...draft,items:[{variantId:'tee-m',quantity:2}]});await f.service.mutate(admin,{action:'shipment-status',shipmentId:created.shipmentId,status:'packed',expectedVersion:0});const result=await f.service.mutate(admin,{action:'shipment-status',shipmentId:created.shipmentId,status:'shipped',expectedVersion:1,carrierAccepted:true});assert.equal(result.order.fulfillmentStatus,'shipped');assert.ok(!result.failures.some(v=>v.type==='fulfillment'&&v.orderNumber==='DBM-RECOVERY'));assert.ok(!Object.values(result.workLists).flat().some(o=>o.orderNumber==='DBM-RECOVERY'));
 });

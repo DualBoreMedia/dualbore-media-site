@@ -1,3 +1,4 @@
+import {goPublic,openPublicNavigation} from './public-navigation-fixture.js';
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {afterEach,beforeEach,expect,test,vi} from 'vitest';
@@ -14,27 +15,17 @@ let root,host;
 beforeEach(()=>{vi.stubGlobal('fetch',withPublicCatalog());host=document.createElement('div');document.body.append(host);root=createRoot(host);history.replaceState(null,'','/');localStorage.clear();});
 afterEach(()=>{root.unmount();host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();history.replaceState(null,'','/');});
 
-test('homepage connects the channel story, featured episodes and first merch design',async()=>{
- root.render(<App/>);await expect.element(page.getByRole('heading',{name:/The work. The ride./})).toBeVisible();
- await page.getByRole('button',{name:'Meet the pit crew'}).click();await expect.element(page.getByRole('tab',{name:/Pit Crew/})).toHaveFocus();
- await expect.element(page.getByRole('heading',{name:'From machine to design'})).toBeVisible();
- await page.getByRole('button',{name:'DualBore Media home'}).click();await page.getByRole('button',{name:/Watch featured episode: The N54/}).click();
- await expect.element(page.getByRole('dialog').getByTitle(/The N54/)).toHaveAttribute('src',expect.stringContaining('LOOSFHJGUPM'));
- await page.getByRole('button',{name:'Close details'}).click();await page.getByRole('button',{name:'See the E92 design'}).click();
- await expect.element(page.getByRole('dialog').getByRole('region',{name:'Drop 01 release details'})).toBeVisible();
- await page.getByRole('button',{name:'Close details'}).click();await page.getByRole('button',{name:'Explore Drop 01',exact:true}).click();
- await expect.element(page.getByRole('tab',{name:/Drop 01 Merch|Garage Merch/})).toHaveFocus();
+test('homepage leads to a real episode, the crew page and the paused original merchandise preview',async()=>{
+ root.render(<App/>);await expect.element(page.getByRole('heading',{name:'From our garage. Out for a ride.'})).toBeVisible();
+ await page.getByRole('button',{name:'Play The N54 single-turbo build starts here'}).click();await expect.element(page.getByRole('dialog').getByTitle(/The N54/)).toHaveAttribute('src',expect.stringContaining('LOOSFHJGUPM'));await page.getByRole('button',{name:'Close details'}).click();
+ await goPublic('Pit Crew');await expect.element(page.getByRole('heading',{name:'From machine to design'})).toBeVisible();await goPublic('Merch');await page.getByRole('button',{name:'Quick View E92 Coupe Line-Art Tee'}).click();await expect.element(page.getByRole('dialog').getByRole('region',{name:'Drop 01 release details'})).toBeVisible();
 });
 
-test('episode search combines with categories, announces counts and recovers from no matches',async()=>{
- root.render(<App/>);await page.getByRole('tab',{name:/Video Vault/}).click();expect(document.title).toBe('Video Vault | DualBore Media');
- await page.getByLabelText('Find your next watch').fill(' clutch ');await expect.element(page.getByText('1 film',{exact:true})).toBeVisible();
- const card=host.querySelector('.film-card');expect(card.querySelectorAll('.video-duration')).toHaveLength(1);expect(card.querySelector('.video-duration').textContent).toMatch(/\d+:\d+/);expect(card.querySelector('.card-copy .eyebrow').textContent).toBe('V-Twins');
- await page.getByLabelText('Find your next watch').fill('SV1000S');await expect.element(page.getByText('2 films',{exact:true})).toBeVisible();
- await page.getByRole('button',{name:'Two-Strokes',exact:true}).click();await expect.element(page.getByRole('heading',{name:'No matching episodes.'})).toBeVisible();
- await expect.element(page.getByText('0 films',{exact:true})).toBeVisible();
- await page.getByRole('button',{name:'Show all episodes'}).click();await expect.element(page.getByText('5 films',{exact:true})).toBeVisible();await expect.element(page.getByLabelText('Find your next watch')).toHaveValue('');
- await page.getByLabelText('Find your next watch').fill('RD400');await page.getByRole('button',{name:'Clear search'}).click();await expect.element(page.getByText('5 films',{exact:true})).toBeVisible();await expect.element(page.getByLabelText('Find your next watch')).toHaveFocus();
+test('episode search combines with exact builds, announces counts and recovers from no matches',async()=>{
+ root.render(<App/>);await goPublic('Videos');expect(document.title).toBe('Video Vault | DualBore Media');
+ await page.getByRole('searchbox',{name:'Search videos'}).fill('clutch');await expect.element(page.getByRole('status').filter({hasText:'1 film / Episodes'})).toBeVisible();
+ const card=host.querySelector('.channel-vault .film-card');expect(card.querySelectorAll('.video-duration')).toHaveLength(1);expect(card.querySelector('.card-copy .video-duration')).toBeNull();
+ await page.getByRole('searchbox',{name:'Search videos'}).fill('SV1000S');await expect.element(page.getByText('2 films / Episodes',{exact:true})).toBeVisible();await page.getByRole('combobox',{name:'Build',exact:true}).selectOptions('rd400');await expect.element(page.getByRole('heading',{name:'No matching videos.'})).toBeVisible();await page.getByRole('button',{name:'Clear search and build'}).click();await expect.element(page.getByText('4 films / Episodes',{exact:true})).toBeVisible();
 });
 
 test('player links a related SV1000S episode and its actual project without leaving the dialog',async()=>{
@@ -64,7 +55,7 @@ test('merch uses approved preview prices and a size plan without fake measuremen
 test('pointer-activated dialogs restore their actual opener when the browser does not focus clicked buttons',async()=>{
  history.replaceState(null,'','/#merch');root.render(<App/>);
  await expect.element(page.getByRole('button',{name:'Quick View E92 Coupe Line-Art Tee'})).toBeVisible();
- const panel=host.querySelector('[role="tabpanel"]');
+ const panel=host.querySelector('[aria-label="Garage merch"]');
  for(const label of ['Quick View E92 Coupe Line-Art Tee','Release details for E92 Coupe Line-Art Tee','Release updates']){
   const trigger=Array.from(host.querySelectorAll('button')).find(button=>(button.getAttribute('aria-label')||button.textContent.trim())===label);
   panel.focus();trigger.click();
@@ -94,7 +85,7 @@ test('closed shop still presents the three original designs without a purchase b
 
 test('unknown public route has a useful recovery page and policy navigation restores tab identity',async()=>{
  history.replaceState(null,'','/not-a-page');root.render(<App/>);await expect.element(page.getByRole('heading',{name:'Page not found.'})).toBeVisible();
- await page.getByRole('button',{name:'Explore Drop 01',exact:true}).click();await expect.element(page.getByRole('tab',{name:/Drop 01 Merch|Garage Merch/})).toHaveFocus();expect(document.title).toBe('Drop 01 Preview | DualBore Media');
+ await page.getByRole('button',{name:'Explore Drop 01',exact:true}).click();expect(location.pathname).toBe('/shop');await expect.element(page.getByRole('main')).toHaveFocus();expect(document.title).toBe('Drop 01 Preview | DualBore Media');
 });
 
 for(const status of [500,503])test('account refresh '+status+' shows retry instead of a misleading sign-in action',async()=>{
@@ -105,8 +96,8 @@ for(const status of [500,503])test('account refresh '+status+' shows retry inste
 test('organized footer provides real visitor links and restores keyboard focus when exploring every view',async()=>{
  root.render(<App/>);const footer=page.getByRole('contentinfo');
  const explore=footer.getByRole('navigation',{name:'Explore the garage'});
- for(const [button,tab] of [['Video Vault',/Video Vault/],['Drop 01 Preview',/Drop 01 Merch|Garage Merch/],['Pit Crew',/Pit Crew/],['Garage Builds',/Garage Builds/]]){
-  await explore.getByRole('button',{name:button,exact:true}).click();await expect.element(page.getByRole('tab',{name:tab})).toHaveFocus();await expect.element(page.getByRole('tab',{name:tab})).toHaveAttribute('aria-selected','true');
+ for(const [button,path] of [['Video Vault','/videos'],['Drop 01 Preview','/shop'],['Pit Crew','/pit-crew'],['Garage Builds','/garage']]){
+  await explore.getByRole('button',{name:button,exact:true}).click();expect(location.pathname).toBe(path);await expect.poll(()=>document.activeElement.id).toBe('content');
  }
  const info=footer.getByRole('navigation',{name:'Customer information'});
  for(const [label,path]of [['Privacy','privacy'],['Shipping','shipping'],['Returns & Exchanges','returns'],['Terms & Conditions','terms'],['Contact & Support','contact']])await expect.element(info.getByRole('link',{name:label,exact:true})).toHaveAttribute('href','/'+path);

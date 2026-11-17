@@ -24,10 +24,7 @@ export default function SetupShop() {
 
   return <main id="content" className="mxb-page">
     <a href="#mxb-main" className="skip-link">Skip to setup finder</a>
-    <header className="mxb-header">
-      <a className="mxb-brand" href="/#garage"><img src="/assets/channel-logo.jpg" alt="" width="42" height="42"/> <span>DUALBORE <em>MEDIA</em></span></a>
-      <nav aria-label="Website navigation"><a href="/#vault">Videos</a><a href="/shop">Merch</a>{!staffOnly&&<a href="/account">My Garage</a>}</nav>
-    </header>
+
 
     <PrimaryNavigation active="setups" panelId="panel-setups"/>
     <div className="mxb-shell" id="panel-setups" role="tabpanel" aria-labelledby="tab-setups"><div id="mxb-main"/>
