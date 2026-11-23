@@ -4,15 +4,16 @@ import {createRoot} from 'react-dom/client';
 import {afterEach,beforeEach,expect,test,vi} from 'vitest';
 import {page} from 'vitest/browser';
 import {ErrorBoundary} from '../../src/observability/ErrorBoundary.jsx';
+import {projects} from '../../src/content.js';
 import {configureBrowserMonitoring} from '../../src/observability/client.js';
 
 let host,dispose,module,first=true;
 const response=(body,status=200)=>Response.json(body,{status});
 beforeEach(()=>{host=document.createElement('div');host.id='root';document.body.append(host);localStorage.clear();sessionStorage.clear();});
 afterEach(()=>{dispose?.();dispose=undefined;host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();vi.unstubAllEnvs();history.replaceState(null,'','/');});
-async function boot(path){
+async function boot(path,{offline=false}={}){
  history.replaceState(null,'',path);
- vi.stubGlobal('fetch',vi.fn(url=>Promise.resolve(url==='/api/commerce/catalog'?response({enabled:false,variants:[]}):response({signedIn:false},401))));
+ vi.stubGlobal('fetch',vi.fn(url=>offline?Promise.reject(new TypeError('Synthetic provider offline')):Promise.resolve(url==='/api/commerce/catalog'?response({enabled:false,variants:[]}):response({signedIn:false},401))));
  module=await import('../../src/main.jsx');
  dispose=first?await module.applicationReady:await module.start(host);first=false;
 }
@@ -89,4 +90,45 @@ test.each([
  expect(captured).toEqual([original]);
  expect(localStorage.getItem('dbm-store-cart-v1')).toBe('preserved-cart-fixture');
  expect(page.getByRole('alert').element().textContent).not.toContain('Reference:');
+});
+
+// A static search snippet may refer to an older production release. Reproduce
+// current route behavior from a *cold* app start with failed background APIs
+// before claiming any particular code path is the source of a render crash.
+test.each(projects.flatMap(project=>[
+ ['/builds/'+project.id+'/',project.name],
+ ['/builds/'+project.id,project.name]
+]))('cold deep link %s renders its build without an ErrorBoundary, even offline',async(route,title)=>{
+ vi.stubGlobal('localStorage',{getItem(){throw new Error('Storage denied');},setItem(){throw new Error('Storage denied');},removeItem(){throw new Error('Storage denied');}});
+ await boot(route,{offline:true});
+ await expect.element(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
+ await expect.element(page.getByRole('heading',{name:'The garage hit a snag'})).not.toBeInTheDocument();
+ expect(document.querySelector('link[rel="canonical"]')?.href).toBe('https://dualboremedia.com/builds/'+route.split('/')[2]+'/');
+});
+
+test.each([
+ ['/shop/','Drop 01 is coming soon.'],
+ ['/shop','Drop 01 is coming soon.'],
+ ['/setups/','Your bike. Your setup.'],
+ ['/setups','Your bike. Your setup.']
+])('cold public section %s renders when video/catalog providers are offline',async(route,heading)=>{
+ await boot(route,{offline:true});
+ await expect.element(page.getByRole('heading',{name:heading,exact:true})).toBeVisible();
+ await expect.element(page.getByRole('heading',{name:'The garage hit a snag'})).not.toBeInTheDocument();
+});
+
+test('error fallback discourages indexing, contains no inactive-cart claims and cleans up head metadata',async()=>{
+ const originalRobots=document.head.querySelector('meta[name="robots"]');
+ const previous=originalRobots?.getAttribute('content');
+ vi.spyOn(console,'error').mockImplementation(()=>{});
+ const root=createRoot(host);dispose=()=>root.unmount();
+ function Broken(){throw new Error('SYNTHETIC_NO_INDEX_ERROR');}
+ root.render(<ErrorBoundary><Broken/></ErrorBoundary>);
+ await expect.element(page.getByRole('heading',{name:'The garage hit a snag'})).toBeVisible();
+ await expect.poll(()=>document.head.querySelector('meta[name="robots"]')?.content).toBe('noindex, nofollow');
+ expect(host.textContent).not.toContain('Your saved cart stays on this device');
+ dispose();dispose=undefined;
+ const actual=document.head.querySelector('meta[name="robots"]');
+ if(originalRobots)expect(actual?.getAttribute('content')).toBe(previous);
+ else expect(actual).toBeNull();
 });

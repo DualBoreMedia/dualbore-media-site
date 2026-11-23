@@ -44,3 +44,20 @@ test('shop and MX Bikes pages are uniquely indexed with their own previews',asyn
   }
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+
+
+test('the built sitemap index points at the canonical public-pages and video sitemaps',async()=>{
+ const template='<html><head><title>Home</title><meta name="description" content="old" /><meta property="og:title" content="old" /><meta property="og:description" content="old" /><meta property="og:url" content="old" /><meta property="og:image" content="old" /><meta name="twitter:title" content="old" /><meta name="twitter:description" content="old" /><meta name="twitter:image" content="old" /><link rel="canonical" href="https://dualboremedia.com/" /></head><body></body></html>';
+ const dir=await mkdtemp(join(tmpdir(),'dbm-sitemap-index-'));
+ try{
+  await writeFile(join(dir,'index.html'),template);
+  await prerenderDetails({directory:dir});
+  const index=await readFile(join(dir,'sitemap.xml'),'utf8'),pages=await readFile(join(dir,'sitemap-pages.xml'),'utf8');
+  assert.match(index,/<sitemapindex/);
+  assert.ok(index.includes('https://dualboremedia.com/sitemap-pages.xml'));
+  assert.ok(index.includes('https://dualboremedia.com/sitemap-videos.xml'));
+  for(const path of ['builds/n54/','shop/','setups/','garage/','videos/','pit-crew/'])assert.ok(pages.includes('<loc>https://dualboremedia.com/'+path+'</loc>'),path);
+  assert.ok(!pages.includes('/admin'));
+  assert.ok(!pages.includes('/api/'));
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
