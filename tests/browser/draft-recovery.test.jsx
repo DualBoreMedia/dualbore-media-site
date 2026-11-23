@@ -27,9 +27,10 @@ test('unsaved merch name/description survives a simulated crash and is restored 
  await expect.element(page.getByLabelText('Product name')).toHaveValue('');
  await page.getByRole('button',{name:'Restore unsaved text'}).click();
  await expect.element(page.getByLabelText('Product name')).toHaveValue('Unpublished artwork name');
- // Keep a stable textarea locator after a value is inserted: the browser's
- // exact-label matcher can include textarea text in its matching semantics.
- await expect.element(page.locator('.ops-product-fields textarea').first()).toHaveValue('Owner notes only. No file bytes or passwords.');
+ // Read the actual mounted textarea after the name assertion flushes React:
+ // the runner's page object has no locator() method and its exact-label
+ // matcher is unreliable with filled textarea text.
+ expect(host.querySelector('.ops-product-fields textarea')?.value).toBe('Owner notes only. No file bytes or passwords.');
  await expect.element(page.getByRole('status',{name:'Product editing status'})).toHaveTextContent('Unsaved changes');
 });
 test('discarding recovered merch text clears it without changing the saved draft',async()=>{
@@ -55,7 +56,7 @@ test('MX Bikes draft recovery restores text only; private .stp payload is never 
  await page.getByRole('button',{name:'Create setup draft'}).click();
  await page.getByRole('button',{name:'Restore unsaved text'}).click();
  await expect.element(page.getByLabelText('Setup name')).toHaveValue('TC125 private practice setup');
- await expect.element(page.locator('.ops-product-fields textarea').first()).toHaveValue('MX test metadata');
+ expect(host.querySelector('.ops-product-fields textarea')?.value).toBe('MX test metadata');
 });
 test('draft recovery is scoped to the authenticated owner, never another browser login',async()=>{
  root.render(<Products products={[]} auth={auth} reload={async()=>{}}/>);
