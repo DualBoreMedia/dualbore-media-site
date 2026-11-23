@@ -3,22 +3,35 @@ import {BIKE_PLACEHOLDERS,BIKE_ROSTER_VERSION,filterBikePlaceholders} from '../s
 import {canonicalBike,setupStage} from '../setups/identity.js';
 import {operationsRequest,date} from './client.js';
 import {SetupFile} from './SetupFile.jsx';
+import {saveTextRecovery,readTextRecovery,clearTextRecovery} from './draft-recovery.js';
 import './products.css';
 const brands=[...new Set(BIKE_PLACEHOLDERS.map(b=>b.brand))];
 const blank={type:'mx_setup',name:'',sku:'',category:'MX Bikes setups',audience:'',priceCents:200,description:'',images:[],sizes:[],fulfillment:'digital',bikeId:'',oemBike:'',bikeVersion:'',gameVersion:'',discipline:'MX',track:'',compatibility:'unverified'};
 export function MxBikes({products=[],auth={},reload,onEditingStateChange}){
- const [record,setRecord]=useState(null),[draft,setDraft]=useState(null),[brand,setBrand]=useState('all'),[query,setQuery]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
+ const [record,setRecord]=useState(null),[draft,setDraft]=useState(null),[localRecovery,setLocalRecovery]=useState(null),[brand,setBrand]=useState('all'),[query,setQuery]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
+ const ownerId=auth.user?.id;
+ const recoveryArgs=row=>({ownerId,editor:'mx_setup',productId:row?.id||'new',expectedVersion:row?.version??null});
  const rows=products.filter(p=>p.draft.type==='mx_setup'),bikes=filterBikePlaceholders({brand,query});
- const open=row=>{setRecord(row);const bike=row&&canonicalBike(row.draft);setDraft({...blank,...row?.draft,...bike?{bikeId:bike.id,oemBike:bike.name}:{}});setError('');setNotice('');};
+ const open=row=>{setLocalRecovery(readTextRecovery(recoveryArgs(row)));setRecord(row);const bike=row&&canonicalBike(row.draft);setDraft({...blank,...row?.draft,...bike?{bikeId:bike.id,oemBike:bike.name}:{}});setError('');setNotice('');};
  const baseline=record?{...blank,...record.draft,...canonicalBike(record.draft)?{bikeId:canonicalBike(record.draft).id,oemBike:canonicalBike(record.draft).name}:{}}:blank;
  const dirty=!!draft&&JSON.stringify(draft)!==JSON.stringify(baseline);
+ useEffect(()=>{
+  if(!draft||localRecovery||!ownerId)return;
+  const textChanged=draft.name!==baseline.name||draft.description!==baseline.description;
+  if(textChanged)saveTextRecovery({...recoveryArgs(record),text:{name:draft.name,description:draft.description}});
+  else clearTextRecovery(recoveryArgs(record));
+ },[draft,record,ownerId,localRecovery]);
  // Browsing away from this editor must not silently discard a setup draft.
- useEffect(()=>{onEditingStateChange?.({dirty,busy});},[dirty,busy,onEditingStateChange]);
- const leave=row=>{if(!dirty||window.confirm('Discard unsaved setup edits?'))open(row);};
+ useEffect(()=>{onEditingStateChange?.({dirty,busy,editor:'mx_setup',recordId:record?.id||'new'});},[dirty,busy,record?.id,onEditingStateChange]);
+ const leave=row=>{
+  if(dirty&&!window.confirm('Discard unsaved setup edits?'))return;
+  if(dirty)clearTextRecovery(recoveryArgs(record));
+  open(row);
+ };
  const change=(key,value)=>setDraft(p=>({...p,[key]:value}));
  const act=async action=>{setBusy(true);setError('');setNotice('');try{
   const result=await operationsRequest(auth.getToken,{action,...record?{productId:record.id,expectedVersion:record.version}:{},...action==='product-save'?{product:draft}:{}},{fetcher:auth.fetcher});
-  if(result.product)open(result.product);await reload(result);setNotice({'product-preview-publish':'Public preview approved. Sales, downloads and sending stay closed.','product-preview-unpublish':'Public preview removed.','product-archive':'Setup archived. Its public preview is hidden.','product-import-setups':'Received setup drafts are ready. Existing records were preserved.'}[action]||'Setup draft saved.');
+  if(result.product){clearTextRecovery(recoveryArgs(record));clearTextRecovery(recoveryArgs(result.product));open(result.product);}await reload(result);setNotice({'product-preview-publish':'Public preview approved. Sales, downloads and sending stay closed.','product-preview-unpublish':'Public preview removed.','product-archive':'Setup archived. Its public preview is hidden.','product-import-setups':'Received setup drafts are ready. Existing records were preserved.'}[action]||'Setup draft saved.');
  }catch(e){setError(e.message);}finally{setBusy(false);}};
  return <section className="ops-products" aria-label="MX Bikes manager">
 <header className="ops-panel ops-product-heading">
@@ -52,6 +65,7 @@ export function MxBikes({products=[],auth={},reload,onEditingStateChange}){
 <h3>{record?'Edit setup':'New setup draft'}</h3>
 <span className="ops-status">{record?setupStage(record):'Draft'}</span>
 </div>
+{localRecovery&&<aside aria-label="Local draft recovery" className="ops-message ops-recovery"><p>Unsaved setup name or description found in this browser tab. This is not a server save. Restore only the text, or discard it.</p><div className="ops-actions"><button type="button" onClick={()=>{setDraft(current=>({...current,name:localRecovery.name,description:localRecovery.description}));setLocalRecovery(null);}}>Restore unsaved text</button><button type="button" onClick={()=>{clearTextRecovery(recoveryArgs(record));setLocalRecovery(null);}}>Discard local text</button></div></aside>}
 <div className="ops-editor-status" role="status" aria-label="Setup editing status" data-dirty={dirty}>
 <strong>{busy?'Saving or updating...':dirty?'Unsaved changes':record?'Saved draft':'Not saved yet'}</strong>
 <span>{record?.setupPreview&&record.status!=='archived'?'Public preview visible: saved snapshot':'Public preview hidden'}</span>

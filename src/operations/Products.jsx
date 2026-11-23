@@ -2,17 +2,35 @@ import {useEffect,useState} from 'react';
 import {operationsRequest,money} from './client.js';
 import './products.css';
 import {SetupFile} from './SetupFile.jsx';
+import {saveTextRecovery,readTextRecovery,clearTextRecovery} from './draft-recovery.js';
 
 const blank={name:'',type:'physical',category:'',audience:'',sku:'',priceCents:null,description:'',images:[],sizes:[],fulfillment:'',oemBike:'',bikeVersion:'',gameVersion:'',track:'',discipline:'',compatibility:'unverified'};
 export function Products({products=[],auth={},reload,onEditingStateChange}){
  const [imagesText,setImagesText]=useState(''),[sizesText,setSizesText]=useState('');
+ const [localRecovery,setLocalRecovery]=useState(null);
+ const ownerId=auth.user?.id;
+ // Only the two owner-facing, non-secret text fields qualify for recovery.
+ const recoveryId=record=>record?.id||'new';
+ const recoveryArgs=record=>({ownerId,editor:'merch',productId:recoveryId(record),expectedVersion:record?.version??null});
  const [record,setRecord]=useState(null),[draft,setDraft]=useState(null),[preview,setPreview]=useState(false),[approved,setApproved]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const open=row=>{setImagesText((row?.draft.images||[]).join('\n'));setSizesText((row?.draft.sizes||[]).join(', '));setRecord(row);setDraft(structuredClone({...blank,...row?.draft}));setPreview(false);setApproved(false);setError('');setNotice('');};
+ const open=row=>{setLocalRecovery(readTextRecovery(recoveryArgs(row)));setImagesText((row?.draft.images||[]).join('\n'));setSizesText((row?.draft.sizes||[]).join(', '));setRecord(row);setDraft(structuredClone({...blank,...row?.draft}));setPreview(false);setApproved(false);setError('');setNotice('');};
  const update=(key,value)=>{setDraft(p=>({...p,[key]:value}));setApproved(false);};
  const dirty=!!draft&&JSON.stringify(draft)!==JSON.stringify({...blank,...record?.draft});
+ useEffect(()=>{
+  if(!draft||localRecovery||!ownerId)return;
+  const baseline={...blank,...record?.draft};
+  const textChanged=draft.name!==baseline.name||draft.description!==baseline.description;
+  if(textChanged)saveTextRecovery({...recoveryArgs(record),text:{name:draft.name,description:draft.description}});
+  else clearTextRecovery(recoveryArgs(record));
+ },[draft,record,ownerId,localRecovery]);
+ const switchRecord=row=>{
+  if(dirty&&!window.confirm('Discard unsaved product edits?'))return;
+  if(dirty)clearTextRecovery(recoveryArgs(record));
+  open(row);
+ };
  // Notify the shared navigation guard; save-in-progress is never safe to abandon.
- useEffect(()=>{onEditingStateChange?.({dirty,busy});},[dirty,busy,onEditingStateChange]);
- const act=async action=>{setBusy(true);setError('');setNotice('');try{const result=await operationsRequest(auth.getToken,{action,...record?{productId:record.id,expectedVersion:record.version}:{},...action==='product-save'?{product:draft}:{},...action==='product-publish'?{priceApproved:approved}:{}},{fetcher:auth.fetcher});if(result.product){setImagesText((result.product.draft.images||[]).join('\n'));setSizesText((result.product.draft.sizes||[]).join(', '));setRecord(result.product);setDraft(structuredClone({...blank,...result.product.draft}));}setApproved(false);await reload(result);setNotice({'product-publish':'Listing published. Orders and email collection remain paused.','product-unpublish':'Listing hidden. Existing orders are preserved.','product-archive':'Product archived. Its listing is hidden.','product-import':'Drop 01 drafts are ready. Existing records were preserved.','product-import-setups':'Received setup drafts are ready. Existing records were preserved.'}[action]||'Product saved. No payment or email settings changed.');}catch(e){setError(e.message);}finally{setBusy(false);}};
+ useEffect(()=>{onEditingStateChange?.({dirty,busy,editor:'merch',recordId:record?.id||'new'});},[dirty,busy,record?.id,onEditingStateChange]);
+ const act=async action=>{setBusy(true);setError('');setNotice('');try{const result=await operationsRequest(auth.getToken,{action,...record?{productId:record.id,expectedVersion:record.version}:{},...action==='product-save'?{product:draft}:{},...action==='product-publish'?{priceApproved:approved}:{}},{fetcher:auth.fetcher});if(result.product){clearTextRecovery(recoveryArgs(record));clearTextRecovery(recoveryArgs(result.product));setLocalRecovery(null);setImagesText((result.product.draft.images||[]).join('\n'));setSizesText((result.product.draft.sizes||[]).join(', '));setRecord(result.product);setDraft(structuredClone({...blank,...result.product.draft}));}setApproved(false);await reload(result);setNotice({'product-publish':'Listing published. Orders and email collection remain paused.','product-unpublish':'Listing hidden. Existing orders are preserved.','product-archive':'Product archived. Its listing is hidden.','product-import':'Drop 01 drafts are ready. Existing records were preserved.','product-import-setups':'Received setup drafts are ready. Existing records were preserved.'}[action]||'Product saved. No payment or email settings changed.');}catch(e){setError(e.message);}finally{setBusy(false);}};
  const field=(key,title,props={})=>
 <label className="ops-field" key={key}>{title}<input value={draft[key]||''} maxLength={120} onChange={e=>update(key,e.target.value)} {...props}/>
 </label>;
@@ -28,7 +46,7 @@ export function Products({products=[],auth={},reload,onEditingStateChange}){
 <h2>Products</h2>
 <p>Prepare merchandise and MX Bikes setups. Publishing a listing never enables checkout or signups.</p>
 </div>
-<button className="ops-primary" disabled={busy} onClick={()=>{if(!dirty||window.confirm('Discard unsaved product edits?'))open(null);}}>Create Product</button>
+<button className="ops-primary" disabled={busy} onClick={()=>switchRecord(null)}>Create Product</button>
 </header>
 <div role="status" className="ops-product-notice">{notice}</div>{error&&<p role="alert" className="ops-message ops-error">{error}</p>}<div className="ops-product-layout">
 <section className="ops-panel ops-product-catalog">
@@ -39,7 +57,7 @@ export function Products({products=[],auth={},reload,onEditingStateChange}){
 <h3>Catalog <span className="ops-muted">{products.length}</span>
 </h3>{!products.length&&<p>No managed products yet. Existing Drop 01 previews are preserved. Create a draft using confirmed details only.</p>}<ul className="ops-product-list">{products.map(p=>
 <li key={p.id}>
-<button disabled={busy} aria-pressed={record?.id===p.id} onClick={()=>{if(!dirty||window.confirm('Discard unsaved product edits?'))open(p);}}>
+<button disabled={busy} aria-pressed={record?.id===p.id} onClick={()=>switchRecord(p)}>
 <strong>{p.draft.name||'Untitled draft'}</strong>
 <span>{p.draft.type==='mx_setup'?'MX Bikes setup':'Merchandise'} / {p.status}</span>
 <small>{p.draft.sku||'SKU pending'} | {money(p.draft.priceCents)}</small>
@@ -54,6 +72,7 @@ export function Products({products=[],auth={},reload,onEditingStateChange}){
 <h3>{record?'Edit Product':'Create Product'}</h3>
 <span className="ops-status">{record?.status||'New draft'}</span>
 </div>
+{localRecovery&&<aside aria-label="Local draft recovery" className="ops-message ops-recovery"><p>Unsaved product name or description found in this browser tab. This is not a server save. Restore only the text, or discard it.</p><div className="ops-actions"><button type="button" onClick={()=>{setDraft(current=>({...current,name:localRecovery.name,description:localRecovery.description}));setLocalRecovery(null);}}>Restore unsaved text</button><button type="button" onClick={()=>{clearTextRecovery(recoveryArgs(record));setLocalRecovery(null);}}>Discard local text</button></div></aside>}
 <div className="ops-editor-status" role="status" aria-label="Product editing status" data-dirty={dirty}>
 <strong>{busy?'Saving or updating...':dirty?'Unsaved changes':record?'Saved draft':'Not saved yet'}</strong>
 <span>{record?.status==='published'?'Listing visible: saved snapshot':'Listing hidden'}</span>

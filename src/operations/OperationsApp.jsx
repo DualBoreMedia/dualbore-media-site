@@ -5,6 +5,7 @@ import {Products} from './Products.jsx';
 import {MxBikes} from './MxBikes.jsx';
 import {rememberOperationsView} from './workos-session.js';
 import {createRequestKey} from './request-key.js';
+import {clearTextRecovery} from './draft-recovery.js';
 import {attentionQueue} from './attention.js';
 import {ShippingCompliance} from './ShippingCompliance.jsx';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
@@ -28,7 +29,9 @@ export default function OperationsApp({admin=false,auth={}}){
  // and the surrounding Admin rail; otherwise a click destroys unsaved work.
  const leaveCatalog=()=>{
   if(catalogEditing.busy){setNotice('Finish the current catalog save before navigating.');return false;}
-  return !catalogEditing.dirty||window.confirm('Discard unsaved catalog edits?');
+  if(catalogEditing.dirty&&!window.confirm('Discard unsaved catalog edits?'))return false;
+  if(catalogEditing.dirty)clearTextRecovery({ownerId:user?.id,editor:catalogEditing.editor,productId:catalogEditing.recordId});
+  return true;
  };
  const navigateSection=item=>{
   if(item===section)return;

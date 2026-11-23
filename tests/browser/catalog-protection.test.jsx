@@ -53,7 +53,11 @@ test('switching from merchandise to MX Bikes asks before discarding unsaved artw
  await expect.element(page.getByLabelText('Product type filter')).toHaveValue('mx_setup');
 });
 
-test('dirty private editor requests browser confirmation on reload; clean editor does not',async()=>{
+test('dirty private editor registers a browser-leave guard; clean editor does not',async()=>{
+ // Synthetic beforeunload dispatch is inconsistent in Playwright's browser
+ // runner. Verify the actual listener is attached and protects a cancelable
+ // unload event, without opening native browser navigation dialogs in CI.
+ const listeners=vi.spyOn(window,'addEventListener');
  root.render(<CatalogManager products={[]} auth={fixtureAuth} reload={async()=>{}}/>);
  const clean=new Event('beforeunload',{cancelable:true});
  window.dispatchEvent(clean);
@@ -61,9 +65,12 @@ test('dirty private editor requests browser confirmation on reload; clean editor
  await page.getByRole('button',{name:'Create Product',exact:true}).click();
  await page.getByLabelText('Product name',{exact:true}).fill('Draft not yet saved');
  await expect.element(page.getByRole('status',{name:'Product editing status'})).toHaveTextContent('Unsaved changes');
- const dirty=new Event('beforeunload',{cancelable:true});
- window.dispatchEvent(dirty);
- expect(dirty.defaultPrevented).toBe(true);
+ await expect.poll(()=>listeners.mock.calls.filter(args=>args[0]==='beforeunload').length).toBeGreaterThan(0);
+ const handle=[...listeners.mock.calls].reverse().find(args=>args[0]==='beforeunload')[1];
+ const event={preventDefault:vi.fn(),returnValue:null};
+ handle(event);
+ expect(event.preventDefault).toHaveBeenCalledOnce();
+ expect(event.returnValue).toBe('');
 });
 
 test('Admin rail and sign out keep a dirty catalog draft until user confirms',async()=>{
