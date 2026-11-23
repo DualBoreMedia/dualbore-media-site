@@ -1,5 +1,6 @@
 import {reportBrowserError} from '../observability/client.js';
 import {workosSessionFetch} from './workos-session.js';
+import {validateSetupFileChoice} from './setup-file-validation.js';
 export const fulfillmentLabels = Object.freeze({received:'Order received',making:'Making your order',packing:'Packing',ready_to_ship:'Ready to ship',shipped:'Shipped',delivered:'Delivered',cancelled:'Cancelled',on_hold:'On hold',unfulfilled:'Not started'});
 export const fulfillmentSteps = ['received','making','packing','ready_to_ship','shipped','delivered'];
 export const label = value => fulfillmentLabels[value] || String(value || 'Pending').replaceAll('_',' ');
@@ -25,7 +26,8 @@ export async function operationsRequest(getToken,payload,{signal,admin=false,sta
 }
 
 export async function uploadSetupFile(getToken,{productId,expectedVersion,file},{fetcher=fetch}={}) {
- if(!file||!Number.isSafeInteger(file.size)||file.size<48||file.size>2*1024*1024||!/^[A-Za-z0-9][A-Za-z0-9 ._()-]{0,119}\.stp$/i.test(file.name))throw new Error('Choose a supported .stp file, no larger than 2 MB, with a simple filename.');
+ const validationError=validateSetupFileChoice(file);
+ if(validationError)throw new Error(validationError);
  const token=await getToken?.(),cookieAuth=getToken?.cookieSession===true;
  if(!token&&!cookieAuth)throw new Error(messages.unauthorized);
  let response;

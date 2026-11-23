@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 import {BIKE_PLACEHOLDERS,BIKE_ROSTER_VERSION,filterBikePlaceholders} from '../setups/bike-roster.js';
 import {canonicalBike,setupStage} from '../setups/identity.js';
 import {operationsRequest,date} from './client.js';
@@ -6,12 +6,14 @@ import {SetupFile} from './SetupFile.jsx';
 import './products.css';
 const brands=[...new Set(BIKE_PLACEHOLDERS.map(b=>b.brand))];
 const blank={type:'mx_setup',name:'',sku:'',category:'MX Bikes setups',audience:'',priceCents:200,description:'',images:[],sizes:[],fulfillment:'digital',bikeId:'',oemBike:'',bikeVersion:'',gameVersion:'',discipline:'MX',track:'',compatibility:'unverified'};
-export function MxBikes({products=[],auth={},reload}){
+export function MxBikes({products=[],auth={},reload,onEditingStateChange}){
  const [record,setRecord]=useState(null),[draft,setDraft]=useState(null),[brand,setBrand]=useState('all'),[query,setQuery]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const rows=products.filter(p=>p.draft.type==='mx_setup'),bikes=filterBikePlaceholders({brand,query});
  const open=row=>{setRecord(row);const bike=row&&canonicalBike(row.draft);setDraft({...blank,...row?.draft,...bike?{bikeId:bike.id,oemBike:bike.name}:{}});setError('');setNotice('');};
  const baseline=record?{...blank,...record.draft,...canonicalBike(record.draft)?{bikeId:canonicalBike(record.draft).id,oemBike:canonicalBike(record.draft).name}:{}}:blank;
  const dirty=!!draft&&JSON.stringify(draft)!==JSON.stringify(baseline);
+ // Browsing away from this editor must not silently discard a setup draft.
+ useEffect(()=>{onEditingStateChange?.({dirty,busy});},[dirty,busy,onEditingStateChange]);
  const leave=row=>{if(!dirty||window.confirm('Discard unsaved setup edits?'))open(row);};
  const change=(key,value)=>setDraft(p=>({...p,[key]:value}));
  const act=async action=>{setBusy(true);setError('');setNotice('');try{

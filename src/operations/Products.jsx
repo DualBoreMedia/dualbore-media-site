@@ -1,15 +1,17 @@
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 import {operationsRequest,money} from './client.js';
 import './products.css';
 import {SetupFile} from './SetupFile.jsx';
 
 const blank={name:'',type:'physical',category:'',audience:'',sku:'',priceCents:null,description:'',images:[],sizes:[],fulfillment:'',oemBike:'',bikeVersion:'',gameVersion:'',track:'',discipline:'',compatibility:'unverified'};
-export function Products({products=[],auth={},reload}){
+export function Products({products=[],auth={},reload,onEditingStateChange}){
  const [imagesText,setImagesText]=useState(''),[sizesText,setSizesText]=useState('');
  const [record,setRecord]=useState(null),[draft,setDraft]=useState(null),[preview,setPreview]=useState(false),[approved,setApproved]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const open=row=>{setImagesText((row?.draft.images||[]).join('\n'));setSizesText((row?.draft.sizes||[]).join(', '));setRecord(row);setDraft(structuredClone({...blank,...row?.draft}));setPreview(false);setApproved(false);setError('');setNotice('');};
  const update=(key,value)=>{setDraft(p=>({...p,[key]:value}));setApproved(false);};
  const dirty=!!draft&&JSON.stringify(draft)!==JSON.stringify({...blank,...record?.draft});
+ // Notify the shared navigation guard; save-in-progress is never safe to abandon.
+ useEffect(()=>{onEditingStateChange?.({dirty,busy});},[dirty,busy,onEditingStateChange]);
  const act=async action=>{setBusy(true);setError('');setNotice('');try{const result=await operationsRequest(auth.getToken,{action,...record?{productId:record.id,expectedVersion:record.version}:{},...action==='product-save'?{product:draft}:{},...action==='product-publish'?{priceApproved:approved}:{}},{fetcher:auth.fetcher});if(result.product){setImagesText((result.product.draft.images||[]).join('\n'));setSizesText((result.product.draft.sizes||[]).join(', '));setRecord(result.product);setDraft(structuredClone({...blank,...result.product.draft}));}setApproved(false);await reload(result);setNotice({'product-publish':'Listing published. Orders and email collection remain paused.','product-unpublish':'Listing hidden. Existing orders are preserved.','product-archive':'Product archived. Its listing is hidden.','product-import':'Drop 01 drafts are ready. Existing records were preserved.','product-import-setups':'Received setup drafts are ready. Existing records were preserved.'}[action]||'Product saved. No payment or email settings changed.');}catch(e){setError(e.message);}finally{setBusy(false);}};
  const field=(key,title,props={})=>
 <label className="ops-field" key={key}>{title}<input value={draft[key]||''} maxLength={120} onChange={e=>update(key,e.target.value)} {...props}/>

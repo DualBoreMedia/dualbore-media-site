@@ -1,5 +1,6 @@
 import {useRef,useState} from 'react';
 import {uploadSetupFile} from './client.js';
+import {validateSetupFileChoice} from './setup-file-validation.js';
 
 export function SetupFile({record,dirty,busy,auth,onSaved,onBusyChange}) {
  const [file,setFile]=useState(null),[uploading,setUploading]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');
@@ -15,7 +16,14 @@ export function SetupFile({record,dirty,busy,auth,onSaved,onBusyChange}) {
   <p>Attach an original .stp file, up to 2 MB. It stays in private storage. Uploading does not publish it or enable sales or email.</p>
   {record?.setupFile?<dl><dt>Attached file</dt><dd>{record.setupFile.filename}</dd><dt>Embedded bike ID</dt><dd>{record.setupFile.embeddedBikeId}</dd><dt>SHA-256</dt><dd>{record.setupFile.sha256}</dd></dl>:<p>No file attached.</p>}
   <p className="ops-muted">The file format and checksum are checked. In-game compatibility, exact OEM pack version and MX Bikes version still need real testing. Replacing a file preserves older versions for existing orders.</p>
-  <fieldset disabled={disabled}><legend>Attach or replace file</legend><label className="ops-field">Choose .stp file<input ref={input} key={record?.id||'new'} type="file" accept=".stp" onChange={e=>{setFile(e.target.files?.[0]||null);setError('');setMessage('');}}/></label><button disabled={!file} onClick={upload}>{uploading?'Saving private file...':'Save private file'}</button></fieldset>
+  <fieldset disabled={disabled}><legend>Attach or replace file</legend><label className="ops-field">Choose .stp file<input ref={input} key={record?.id||'new'} type="file" accept=".stp" onChange={e=>{
+   const selected=e.target.files?.[0]||null;
+   // Local validation improves feedback. The same rules are checked again in
+   // uploadSetupFile and on the server; this is never an authorization gate.
+   const message=selected?validateSetupFileChoice(selected):null;
+   setFile(message?null:selected);setError(message||'');setMessage('');
+   if(message)e.target.value='';
+  }}/></label><button disabled={!file} onClick={upload}>{uploading?'Saving private file...':'Save private file'}</button></fieldset>
   {(!record||dirty)&&<p>Save Draft before attaching a file.</p>}
   <p role="status">{message}</p>{error&&<p role="alert" className="ops-error">{error}</p>}
  </section>;
