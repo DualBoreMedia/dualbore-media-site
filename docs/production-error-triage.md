@@ -44,3 +44,36 @@ If a future authorized release fails before publication, the prior deploy
 remains live. For a published regression, prepare a reviewed fix-forward or
 source revert through the normal release gate; never restore the database
 merely to roll back UI code.
+
+## November 22, 2026 — alert investigation and deployed-fix reconciliation
+
+The November 17 Sentry production alert DUALBOREMEDIA-WEB-3 (issue
+https://dualboremedia.sentry.io/issues/7851905217/) occurred at 04:49:24 UTC
+and identifies **release `6522f5acf28f3fe759ce3c50362f441f9bb7e92c`**.
+The email names a TypeError in the old `_vite/index-DSDfQt5B.js` bundle.
+Comparing source by release confirms the older ErrorBoundary did call
+`crypto.randomUUID()` unguarded inside `componentDidCatch`.
+That is an identifiable **secondary crash in error recovery**, not proof of
+what caused React's original render failure. Because event content was
+redacted, no specific original component/data defect can responsibly be
+claimed from this email alone.
+
+The newer source catches missing/throwing Web Crypto and reports the original
+exception without an obligatory reference. It shipped with production release
+`201f963e380b5cf99b1db2fbdd7cd33e71b571a0`, Netlify deploy
+`6afbe9f09bcbcd0888c52027`, published November 17 at 05:46:29 UTC,
+**after** the older alert. The November 14–21 Sentry report lists one web
+issue/error and no function errors, but does not prove the original initiating
+exception is eliminated for every user. This code path has coverage for
+missing crypto, missing randomUUID, a throwing method and a throwing getter;
+never replace a missing UUID with an insecure Math.random() fallback.
+
+Operational follow-up: inspect any NEW event with release equal to the actual
+current production SHA, preserving stack coordinates/source-map debug IDs while
+scrubbing user/request data. If new render failures recur, trace the original
+exception from Sentry with the exact release's private source maps; reproduce
+in isolated tests before fixing the causal component. Do not alter Sentry
+privacy protections, silence alerts, or mark old synthetic validation alerts
+as live regressions. Changes in this investigation are documentation,
+comments and regression hardening only; deployment still requires separate
+approval under AGENTS.md.

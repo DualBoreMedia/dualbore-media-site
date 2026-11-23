@@ -5,8 +5,12 @@ export class ErrorBoundary extends React.Component {
  state={failed:false,reference:null};
  static getDerivedStateFromError(){return {failed:true};}
  componentDidCatch(error){
-  // A diagnostic reference is optional. Older browsers or restricted contexts
-  // must still render recovery and report the original exception.
+  // Incident 2026-11-17 (Sentry WEB-3, older release 6522f5a): an unguarded
+  // crypto.randomUUID() could itself throw while handling an earlier render
+  // failure. The *earlier* exception is unknown from the redacted alert.
+  // The support reference is optional, never a prerequisite for recovery.
+  // Keep this catch narrow: always forward the ORIGINAL error to the privacy-
+  // preserving reporter and render Reload/Return even without Web Crypto.
   let reference=null;
   try{reference=globalThis.crypto?.randomUUID?.()||null;}catch{}
   this.setState({reference});

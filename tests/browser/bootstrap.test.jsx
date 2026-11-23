@@ -70,6 +70,8 @@ test.each([
  ['missing crypto',undefined],
  ['missing randomUUID',{}],
  ['throwing randomUUID',{randomUUID(){throw new TypeError('UUID unavailable');}}],
+ ['throwing randomUUID getter',{get randomUUID(){throw new TypeError('UUID property unavailable');}}],
+ ['empty randomUUID reference',{randomUUID(){return '';}}],
 ])('render recovery still reports the original error with %s',async(_name,cryptoValue)=>{
  const captured=[],uncaught=[];
  configureBrowserMonitoring({init(){},withScope(fn){fn({setTags(){}});},captureException(error){captured.push(error);}},{enabled:true,dsn:'test-only'});

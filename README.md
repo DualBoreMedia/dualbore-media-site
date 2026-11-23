@@ -1,6 +1,21 @@
 # DualBore Media
 
-## Current operating state: October 31, 2026
+## Current operating state: November 22, 2026
+
+The non-selling five-destination website is live at https://dualboremedia.com.
+Last independently verified production release: `201f963e380b5cf99b1db2fbdd7cd33e71b571a0`;
+Netlify deploy `6afbe9f09bcbcd0888c52027` (published November 17, 2026).
+YouTube's server-side daily schedule is registered; private Admin login still
+requires a real authorized owner session to verify the full hosted workflow.
+**Payments, refunds, customer emails, Drop Alert collection and digital
+downloads remain disabled.** No new deployment is authorized by this document.
+
+Start with [the dated maintenance / rollback runbook](docs/MAINTENANCE-RUNBOOK.md)
+and [the November 17 frontend alert triage](docs/production-error-triage.md).
+Read [AGENTS.md](AGENTS.md) before edits. The older October 31 notes below are
+historical foundation details, **not a current production status**.
+
+## Historical operating state: October 31, 2026
 
 The live site remains the approved non-selling release. Development is on `codex/commerce-test-foundation`; no deployment or main merge is authorized. Payments, refunds, automated emails and signup collection stay disabled. The selected authentication provider is WorkOS AuthKit; real staging Google plus authenticator and session/step-up checks are documented in [WorkOS QA](docs/workos-session-qa.md). Production remains separate and unverified.
 
