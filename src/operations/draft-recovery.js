@@ -8,6 +8,8 @@ const safeId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(value
 const safeText=data=>data&&typeof data==='object'&&!Array.isArray(data)&&
  typeof data.name==='string'&&data.name.length<=120&&
  typeof data.description==='string'&&data.description.length<=3000;
+// JSON may escape each UTF-16 code unit as six characters; allow all valid fields.
+const MAX_RECOVERY_JSON_LENGTH=6*(120+3000)+256;
 const validVersion=value=>value===null||(Number.isSafeInteger(value)&&value>=0);
 function key(ownerId,editor,productId){
  if(!safeId(ownerId)||!['merch','mx_setup'].includes(editor)||!safeId(productId))return null;
@@ -35,12 +37,13 @@ export function saveTextRecovery({ownerId,editor,productId,expectedVersion=null,
  try{const api=store(storage);if(!api)return false;api.setItem(k,JSON.stringify(payload));return true;}catch{return false;}
 }
 export function readTextRecovery({ownerId,editor,productId,expectedVersion=null,storage,now=Date.now()}){
- const k=key(ownerId,editor,productId);if(!k||!validVersion(expectedVersion))return null;
+ const k=key(ownerId,editor,productId);if(!k||!validVersion(expectedVersion)||!Number.isFinite(now))return null;
  try{
   const api=store(storage),raw=api?.getItem(k);
   if(!raw)return null;
-  if(raw.length>4096){api.removeItem(k);return null;}
-  const data=JSON.parse(raw);
+  if(raw.length>MAX_RECOVERY_JSON_LENGTH){api.removeItem(k);return null;}
+  let data;
+  try{data=JSON.parse(raw);}catch{api.removeItem(k);return null;}
   if(!data||data.format!==1||data.expectedVersion!==expectedVersion||
      !safeText(data)||!Number.isFinite(data.createdAt)||data.createdAt>now||
      now-data.createdAt>TEXT_RECOVERY_AGE_MS){api.removeItem(k);return null;}

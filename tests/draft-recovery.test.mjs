@@ -50,3 +50,23 @@ test('logout clears this owner only, leaving other owners drafts untouched',()=>
  assert.equal(readTextRecovery({...args,ownerId:'user_other',storage:s,now:11})?.name,text.name);
  assert.equal(s.length,1);
 });
+
+test('maximal valid escaped text can be restored; serialized size is not the field length',()=>{
+ const s=storage();
+ const text={name:'"'.repeat(120),description:'\\\n'.repeat(1500)};
+ assert.equal(saveTextRecovery({...args,text,storage:s,now:10}),true);
+ assert.ok(s.entries()[0][1].length>4096);
+ assert.deepEqual(readTextRecovery({...args,storage:s,now:11}),text);
+ const worst={name:'\u0001'.repeat(120),description:'\u0001'.repeat(3000)};
+ assert.equal(saveTextRecovery({...args,text:worst,storage:s,now:12}),true);
+ assert.deepEqual(readTextRecovery({...args,storage:s,now:13}),worst);
+});
+test('corrupt or oversized serialized drafts are removed; invalid read clock cannot restore data',()=>{
+ const s=storage();const text={name:'Test',description:''};
+ saveTextRecovery({...args,text,storage:s,now:10});const [key,value]=s.entries()[0];
+ assert.equal(readTextRecovery({...args,storage:s,now:NaN}),null);
+ assert.equal(s.getItem(key),value);
+ for(const raw of ['{broken','x'.repeat(20000)]){
+  s.setItem(key,raw);assert.equal(readTextRecovery({...args,storage:s,now:11}),null);assert.equal(s.length,0);
+ }
+});
