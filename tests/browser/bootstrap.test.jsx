@@ -103,7 +103,8 @@ test.each(projects.flatMap(project=>[
  await boot(route,{offline:true});
  await expect.element(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
  await expect.element(page.getByRole('heading',{name:'The garage hit a snag'})).not.toBeInTheDocument();
- expect(document.querySelector('link[rel="canonical"]')?.href).toBe('https://dualboremedia.com/builds/'+route.split('/')[2]+'/');
+ // The heading can paint before the passive metadata effect runs on a cold lazy mount.
+ await expect.poll(()=>document.querySelector('link[rel="canonical"]')?.href).toBe('https://dualboremedia.com/builds/'+route.split('/')[2]+'/');
 });
 
 test.each([
